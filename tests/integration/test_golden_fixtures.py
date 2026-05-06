@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,13 +18,17 @@ from mapu.models.lineage import SupersessionEdge
 from mapu.models.proposition import Proposition
 from mapu.repos.attestation import AttestationRepo
 from mapu.repos.lineage import SupersessionEdgeRepo
-from mapu.truth.policy import EvidenceRecord, TruthEvidenceProvider, TruthPolicyConfig, TruthPolicyV1
+from mapu.truth.policy import (
+    EvidenceRecord,
+    TruthPolicyConfig,
+    TruthPolicyV1,
+)
 from mapu.types import Stance
 from tests.fixtures.golden_examples import ALL_EXAMPLES, GoldenExample
 
 pytestmark = pytest.mark.integration
 
-NOW = datetime.now(timezone.utc)
+NOW = datetime.now(UTC)
 
 
 class SeededExample:

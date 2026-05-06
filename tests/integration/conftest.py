@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -71,7 +71,7 @@ async def corpus_a(session: AsyncSession) -> Corpus:
         name="test_corpus_a",
         description="Integration test corpus A",
         metadata_={},
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     session.add(c)
     await session.flush()
@@ -85,7 +85,7 @@ async def corpus_b(session: AsyncSession) -> Corpus:
         name="test_corpus_b",
         description="Integration test corpus B",
         metadata_={},
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     session.add(c)
     await session.flush()

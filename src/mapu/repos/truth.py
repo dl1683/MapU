@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, text, update
 
@@ -30,7 +30,7 @@ class TruthStateRepo(CorpusScopedRepo[PropositionState]):
         self, proposition_id: uuid.UUID, situation_id: uuid.UUID
     ) -> None:
         """Close the current open state by setting upper bound of effective_range."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             update(PropositionState)
             .where(
@@ -39,7 +39,10 @@ class TruthStateRepo(CorpusScopedRepo[PropositionState]):
                 PropositionState.corpus_id == self.corpus_id,
                 func.upper(PropositionState.effective_range).is_(None),
             )
-            .values(effective_range=text(f"tstzrange(lower(effective_range), '{now.isoformat()}'::timestamptz, '[)')"))
+            .values(effective_range=text(
+                f"tstzrange(lower(effective_range), "
+                f"'{now.isoformat()}'::timestamptz, '[)')"
+            ))
         )
         await self.session.execute(stmt)
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 
@@ -26,7 +26,7 @@ class ChangesetRepo(CorpusScopedRepo[Changeset]):
         stmt = (
             update(Changeset)
             .where(Changeset.id == changeset_id, Changeset.corpus_id == self.corpus_id)
-            .values(status="applied", applied_at=datetime.now(timezone.utc))
+            .values(status="applied", applied_at=datetime.now(UTC))
         )
         await self.session.execute(stmt)
 

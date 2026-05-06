@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from mapu.config import DatabaseSettings
 
 
 def build_engine(settings: DatabaseSettings) -> tuple[
-    "AsyncEngine",  # noqa: F821
+    AsyncEngine,
     async_sessionmaker[AsyncSession],
 ]:
     engine = create_async_engine(settings.url, echo=settings.echo)

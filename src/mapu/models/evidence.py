@@ -1,4 +1,4 @@
-"""Evidence layer models: DocumentWork, DocumentExpression, StructureNode, TextSpan, Chunk, ChunkEmbedding."""
+"""Evidence layer models."""
 
 from __future__ import annotations
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 
@@ -65,7 +65,7 @@ class AttestationRepo(CorpusScopedRepo[Attestation]):
         stmt = (
             update(Attestation)
             .where(Attestation.id == attestation_id, Attestation.corpus_id == self.corpus_id)
-            .values(system_invalidated=datetime.now(timezone.utc))
+            .values(system_invalidated=datetime.now(UTC))
         )
         await self.session.execute(stmt)
 

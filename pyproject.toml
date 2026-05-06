@@ -54,6 +54,12 @@ src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "SIM"]
+ignore = ["UP046"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/mapu/db/migrations/**/*.py" = ["E501"]
+"tests/fixtures/**/*.py" = ["E501"]
+"tests/integration/**/*.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

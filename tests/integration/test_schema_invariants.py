@@ -8,14 +8,14 @@ proposition_state temporal constraints.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mapu.models.attestation import Attestation, AttestationSituation
+from mapu.models.attestation import Attestation
 from mapu.models.authority import SourcePolicyEval
 from mapu.models.context import Situation
 from mapu.models.corpus import Corpus
@@ -27,7 +27,7 @@ from mapu.models.proposition import Proposition
 
 pytestmark = pytest.mark.integration
 
-NOW = datetime.now(timezone.utc)
+NOW = datetime.now(UTC)
 
 
 def _make_doc_work(corpus_id: uuid.UUID) -> DocumentWork:

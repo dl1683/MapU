@@ -6,7 +6,11 @@ import uuid
 
 import pytest
 
-from mapu.truth.policy import EvidenceRecord, TruthEvidenceProvider, TruthPolicyConfig, TruthPolicyV1
+from mapu.truth.policy import (
+    EvidenceRecord,
+    TruthPolicyConfig,
+    TruthPolicyV1,
+)
 from mapu.types import Stance
 
 

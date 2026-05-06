@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from dataclasses import dataclass, field
-from typing import Protocol, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Protocol
 
 from mapu.types import Stance, TruthBasisRole, TruthStatus
 
@@ -140,7 +141,8 @@ class TruthPolicyV1:
             basis = tuple(
                 TruthBasisRef(e.attestation_id, TruthBasisRole.SUPPORTING) for e in asserting
             )
-            return TruthResult(TruthStatus.ACCEPTED, basis, self._hash(evidence), "uncontested_assert")
+            h = self._hash(evidence)
+            return TruthResult(TruthStatus.ACCEPTED, basis, h, "uncontested_assert")
 
         if denying and not asserting:
             basis = tuple(
@@ -171,19 +173,23 @@ class TruthPolicyV1:
         a_class = self._highest_authority_class(asserting)
         d_class = self._highest_authority_class(denying)
 
+        h = self._hash(all_evidence)
+
         if a_class and (
             not d_class
             or AUTHORITY_OVERRIDE_CLASSES[a_class] > AUTHORITY_OVERRIDE_CLASSES.get(d_class, 0)
         ):
             basis = self._opposition_basis(asserting, denying)
-            return TruthResult(TruthStatus.ACCEPTED, basis, self._hash(all_evidence), f"authority_override:{a_class}")
+            reason = f"authority_override:{a_class}"
+            return TruthResult(TruthStatus.ACCEPTED, basis, h, reason)
 
         if d_class and (
             not a_class
             or AUTHORITY_OVERRIDE_CLASSES[d_class] > AUTHORITY_OVERRIDE_CLASSES.get(a_class, 0)
         ):
             basis = self._opposition_basis(denying, asserting)
-            return TruthResult(TruthStatus.DENIED, basis, self._hash(all_evidence), f"authority_override:{d_class}")
+            reason = f"authority_override:{d_class}"
+            return TruthResult(TruthStatus.DENIED, basis, h, reason)
 
         # 7. Five-dimension dominance
         a_strength = self._evidence_strength(asserting)
@@ -196,7 +202,7 @@ class TruthPolicyV1:
             self.config.min_dominance_dimensions,
         ):
             basis = self._opposition_basis(asserting, denying)
-            return TruthResult(TruthStatus.ACCEPTED, basis, self._hash(all_evidence), "dominance_assert")
+            return TruthResult(TruthStatus.ACCEPTED, basis, h, "dominance_assert")
 
         if d_strength.dominates(
             a_strength,
@@ -205,11 +211,11 @@ class TruthPolicyV1:
             self.config.min_dominance_dimensions,
         ):
             basis = self._opposition_basis(denying, asserting)
-            return TruthResult(TruthStatus.DENIED, basis, self._hash(all_evidence), "dominance_deny")
+            return TruthResult(TruthStatus.DENIED, basis, h, "dominance_deny")
 
         # Neither dominates
         basis = self._opposition_basis(asserting, denying)
-        return TruthResult(TruthStatus.CONTESTED, basis, self._hash(all_evidence), "no_dominance")
+        return TruthResult(TruthStatus.CONTESTED, basis, h, "no_dominance")
 
     def _highest_authority_class(self, evidence: list[EvidenceRecord]) -> str | None:
         best_class: str | None = None

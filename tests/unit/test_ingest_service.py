@@ -11,7 +11,7 @@ from mapu.evidence.chunking import SpanAwareChunker
 from mapu.evidence.ingest import IngestionService
 from mapu.evidence.parsers import ParserRegistry
 from mapu.evidence.plaintext import PlaintextParser
-from mapu.evidence.types import DocumentBlob
+from mapu.evidence.types import DocumentBlob, ParsedDocument, ParsedNode, ParsedSpan
 from mapu.providers.embedding_local import HashEmbeddingProvider
 
 
@@ -114,3 +114,57 @@ class TestIngestionService:
         assert result.span_count == 0
         assert result.chunk_count == 0
         assert result.embedding_count == 0
+
+
+class TestIngestIndexValidation:
+    @pytest.fixture
+    def chunker(self) -> SpanAwareChunker:
+        return SpanAwareChunker(max_tokens=100, overlap_tokens=10)
+
+    @pytest.fixture
+    def corpus_id(self) -> uuid.UUID:
+        return uuid.uuid4()
+
+    def _make_bad_parser(self, parsed: ParsedDocument) -> ParserRegistry:
+        class BadParser:
+            parser_id = "bad"
+            supported_mime_types = frozenset({"text/bad"})
+
+            async def parse(self, _blob: DocumentBlob) -> ParsedDocument:
+                return parsed
+
+        registry = ParserRegistry()
+        registry.register(BadParser())  # type: ignore[arg-type]
+        return registry
+
+    async def test_negative_parent_index_rejected(
+        self, chunker: SpanAwareChunker, corpus_id: uuid.UUID
+    ) -> None:
+        parsed = ParsedDocument(
+            parser_id="bad",
+            nodes=(ParsedNode(node_type="section", ordinal=0, text="x", parent_index=-1),),
+            spans=(),
+            full_text="x",
+        )
+        registry = self._make_bad_parser(parsed)
+        session = _make_mock_session()
+        service = IngestionService(session, corpus_id, registry, chunker)
+        blob = DocumentBlob(content=b"x", mime_type="text/bad", source_uri="test://bad")
+        with pytest.raises(ValueError, match="invalid parent_index"):
+            await service.ingest(blob)
+
+    async def test_out_of_range_node_index_rejected(
+        self, chunker: SpanAwareChunker, corpus_id: uuid.UUID
+    ) -> None:
+        parsed = ParsedDocument(
+            parser_id="bad",
+            nodes=(ParsedNode(node_type="section", ordinal=0, text="x"),),
+            spans=(ParsedSpan(text="x", start_char=0, end_char=1, node_index=5),),
+            full_text="x",
+        )
+        registry = self._make_bad_parser(parsed)
+        session = _make_mock_session()
+        service = IngestionService(session, corpus_id, registry, chunker)
+        blob = DocumentBlob(content=b"x", mime_type="text/bad", source_uri="test://bad")
+        with pytest.raises(ValueError, match="invalid node_index"):
+            await service.ingest(blob)

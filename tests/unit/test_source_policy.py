@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import uuid
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from mapu.authority.source_policy import SourcePolicyEvaluatorV1, SourcePolicyInput
@@ -79,3 +82,45 @@ class TestSourcePolicyScoring:
         for doc_type in types:
             score = evaluator.score(SourcePolicyInput(document_type=doc_type))
             assert 0.0 <= score <= 1.0, f"Bad score for {doc_type}: {score}"
+
+
+class TestSourcePolicyPersistValidation:
+    @pytest.fixture
+    def evaluator(self) -> SourcePolicyEvaluatorV1:
+        session = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+        return SourcePolicyEvaluatorV1(session, uuid.uuid4())
+
+    async def test_invalid_document_type_rejected(
+        self, evaluator: SourcePolicyEvaluatorV1
+    ) -> None:
+        with pytest.raises(ValueError, match="Invalid document_type"):
+            await evaluator.evaluate_and_persist(
+                uuid.uuid4(),
+                SourcePolicyInput(document_type="invented_type"),
+            )
+
+    async def test_invalid_publication_context_rejected(
+        self, evaluator: SourcePolicyEvaluatorV1
+    ) -> None:
+        with pytest.raises(ValueError, match="Invalid publication_context"):
+            await evaluator.evaluate_and_persist(
+                uuid.uuid4(),
+                SourcePolicyInput(
+                    document_type="contract",
+                    publication_context="invented_context",
+                ),
+            )
+
+    async def test_invalid_attestation_type_rejected(
+        self, evaluator: SourcePolicyEvaluatorV1
+    ) -> None:
+        with pytest.raises(ValueError, match="Invalid attestation_type"):
+            await evaluator.evaluate_and_persist(
+                uuid.uuid4(),
+                SourcePolicyInput(
+                    document_type="contract",
+                    attestation_type="invented_type",
+                ),
+            )

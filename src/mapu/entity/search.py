@@ -103,4 +103,4 @@ class HandleSearchService:
             top_k=top_k + 1,
             min_score=min_score,
         )
-        return [c for c in candidates if c.handle_id != handle_id]
+        return [c for c in candidates if c.handle_id != handle_id][:top_k]

@@ -83,6 +83,24 @@ class IngestionService:
 
         result = IngestResult(document_id=doc.id, expression_id=expr.id)
 
+        for i, node in enumerate(parsed.nodes):
+            if (
+                node.parent_index is not None
+                and (node.parent_index < 0 or node.parent_index >= i)
+            ):
+                raise ValueError(
+                    f"Node {i} has invalid parent_index {node.parent_index}"
+                )
+
+        for i, span in enumerate(parsed.spans):
+            if (
+                span.node_index is not None
+                and (span.node_index < 0 or span.node_index >= len(parsed.nodes))
+            ):
+                raise ValueError(
+                    f"Span {i} has invalid node_index {span.node_index}"
+                )
+
         node_models: list[StructureNode] = []
         for node in parsed.nodes:
             parent_id = node_models[node.parent_index].id if node.parent_index is not None else None
@@ -119,6 +137,24 @@ class IngestionService:
         await self._session.flush()
 
         candidates = self._chunker.chunk(parsed)
+
+        span_count = len(parsed.spans)
+        for i, candidate in enumerate(candidates):
+            if (
+                candidate.start_span_index is not None
+                and (candidate.start_span_index < 0 or candidate.start_span_index >= span_count)
+            ):
+                raise ValueError(
+                    f"Chunk {i} has invalid start_span_index {candidate.start_span_index}"
+                )
+            if (
+                candidate.end_span_index is not None
+                and (candidate.end_span_index < 0 or candidate.end_span_index >= span_count)
+            ):
+                raise ValueError(
+                    f"Chunk {i} has invalid end_span_index {candidate.end_span_index}"
+                )
+
         chunk_texts: list[str] = []
         chunk_models: list[Chunk] = []
 

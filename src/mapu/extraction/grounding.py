@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.extraction.abstention import AbstentionDecision, AbstentionResult
@@ -68,6 +69,8 @@ class CandidateGrounder:
             valid_range=frame.valid_range,
         )
 
+        db_valid_range = _to_pg_range(frame.valid_range)
+
         prop, created = await self._get_or_create_proposition(
             frame_type=frame.frame_type.value,
             subject_handle_id=subject_handle.id,
@@ -76,7 +79,7 @@ class CandidateGrounder:
             value=frame.value,
             polarity=frame.polarity,
             modality=frame.modality,
-            valid_range=frame.valid_range,
+            valid_range=db_valid_range,
             normalized_text=frame.normalized_text,
             qualifiers=frame.qualifiers,
             semantic_key=semantic_key,
@@ -104,7 +107,6 @@ class CandidateGrounder:
             system_created=datetime.now(UTC),
         )
         self._session.add(att)
-        await self._session.flush()
 
         if default_situation_id is not None:
             assn = AttestationSituation(
@@ -115,7 +117,8 @@ class CandidateGrounder:
                 assignment_basis="default_document_situation",
             )
             self._session.add(assn)
-            await self._session.flush()
+
+        await self._session.flush()
 
         return MaterializedExtraction(
             proposition_id=prop.id,
@@ -162,7 +165,7 @@ class CandidateGrounder:
         value: dict[str, Any] | None,
         polarity: bool,
         modality: str | None,
-        valid_range: tuple[datetime | None, datetime | None] | None,
+        valid_range: Range[datetime] | None,
         normalized_text: str,
         qualifiers: dict[str, Any],
         semantic_key: str,
@@ -198,6 +201,14 @@ class CandidateGrounder:
         self._session.add(prop)
         await self._session.flush()
         return prop, True
+
+
+def _to_pg_range(
+    valid_range: tuple[datetime | None, datetime | None] | None,
+) -> Range[datetime] | None:
+    if valid_range is None:
+        return None
+    return Range(valid_range[0], valid_range[1], bounds="[)")
 
 
 def _compute_semantic_key(

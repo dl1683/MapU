@@ -161,10 +161,11 @@ class AmendmentExtractor:
         signals: list[ExtractionSignal] = []
         frames: list[PropositionFrameCandidate] = []
 
+        all_refs = list(_CROSS_REF_PATTERN.finditer(ctx.text))
+
         for pattern in _AMENDMENT_PATTERNS:
             for match in pattern.finditer(ctx.text):
-                all_refs = list(_CROSS_REF_PATTERN.finditer(ctx.text[:match.start()]))
-                ref_match = all_refs[-1] if all_refs else None
+                ref_match = _nearest_preceding_ref(all_refs, match.start())
                 target_ref = ref_match.group() if ref_match else None
 
                 signals.append(ExtractionSignal(
@@ -208,6 +209,17 @@ class AmendmentExtractor:
                     ))
 
         return ExtractorOutput(frames=tuple(frames), signals=tuple(signals))
+
+
+def _nearest_preceding_ref(
+    refs: list[re.Match[str]], position: int
+) -> re.Match[str] | None:
+    result: re.Match[str] | None = None
+    for ref in refs:
+        if ref.start() >= position:
+            break
+        result = ref
+    return result
 
 
 def _find_sentence_end(text: str, start: int) -> int:

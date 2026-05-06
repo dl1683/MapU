@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass, field
 
@@ -70,7 +71,9 @@ class ExtractionService:
         for span in spans:
             base_parse = None
             if self._spacy is not None:
-                base_parse = self._spacy.parse(span.text)
+                base_parse = await asyncio.to_thread(
+                    self._spacy.parse, span.text
+                )
 
             ctx = ExtractionContext(
                 corpus_id=self._corpus_id,

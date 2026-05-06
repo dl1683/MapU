@@ -423,7 +423,7 @@ B5 = GoldenExample(
             semantic_key="treatment_y:cures:condition_z",
         ),
         PropositionFixture(
-            frame_type="retraction",
+            frame_type="status",
             predicate="retracted",
             normalized_text="Retraction notice: Treatment Y cures Condition Z has been retracted",
             semantic_key="treatment_y:cures:condition_z:retraction",

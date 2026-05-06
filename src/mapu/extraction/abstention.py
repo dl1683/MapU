@@ -44,6 +44,10 @@ class AbstentionGate:
         results: list[AbstentionResult] = []
         for frame in frames:
             conf = frame.extraction_confidence
+            if not 0.0 <= conf <= 1.0:
+                raise ValueError(
+                    f"extraction_confidence must be in [0.0, 1.0], got {conf}"
+                )
             if conf >= self._auto_accept_min:
                 decision = AbstentionDecision.ACCEPTED
             elif conf >= self._candidate_min:

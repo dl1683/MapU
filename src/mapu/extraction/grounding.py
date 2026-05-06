@@ -65,6 +65,7 @@ class CandidateGrounder:
             value=frame.value,
             polarity=frame.polarity,
             modality=frame.modality,
+            valid_range=frame.valid_range,
         )
 
         prop, created = await self._get_or_create_proposition(
@@ -188,6 +189,7 @@ class CandidateGrounder:
             value=value,
             polarity=polarity,
             modality=modality,
+            valid_range=valid_range,
             normalized_text=normalized_text,
             qualifiers=qualifiers,
             semantic_key=semantic_key,
@@ -207,8 +209,14 @@ def _compute_semantic_key(
     value: dict[str, Any] | None,
     polarity: bool,
     modality: str | None,
+    valid_range: tuple[datetime | None, datetime | None] | None = None,
 ) -> str:
     """Deterministic semantic key from grounded content only."""
+    range_str = ""
+    if valid_range is not None:
+        start = valid_range[0].isoformat() if valid_range[0] else ""
+        end = valid_range[1].isoformat() if valid_range[1] else ""
+        range_str = f"{start}-{end}"
     parts = [
         frame_type,
         str(subject_handle_id),
@@ -217,6 +225,7 @@ def _compute_semantic_key(
         str(sorted(value.items())) if value else "",
         str(polarity),
         modality or "",
+        range_str,
     ]
     content = "|".join(parts)
     digest = hashlib.sha256(content.encode()).hexdigest()[:16]

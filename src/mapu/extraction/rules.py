@@ -119,7 +119,7 @@ class DefinedTermExtractor:
             term = match.group(1)
             definition_start = match.end()
             definition_end = _find_sentence_end(ctx.text, definition_start)
-            definition_text = ctx.text[match.start():definition_end].strip()
+            definition_text = ctx.text[definition_start:definition_end].strip()
 
             subject = EntityMention(
                 text=term,
@@ -163,7 +163,8 @@ class AmendmentExtractor:
 
         for pattern in _AMENDMENT_PATTERNS:
             for match in pattern.finditer(ctx.text):
-                ref_match = _CROSS_REF_PATTERN.search(ctx.text[:match.start()])
+                all_refs = list(_CROSS_REF_PATTERN.finditer(ctx.text[:match.start()]))
+                ref_match = all_refs[-1] if all_refs else None
                 target_ref = ref_match.group() if ref_match else None
 
                 signals.append(ExtractionSignal(

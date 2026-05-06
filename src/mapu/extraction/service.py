@@ -14,10 +14,11 @@ from mapu.extraction.merge import CandidateMergeEngine
 from mapu.extraction.spacy_base import SpacyBaseParser
 from mapu.extraction.types import (
     ExtractionContext,
+    ExtractionSignal,
     Extractor,
     ExtractorOutput,
 )
-from mapu.models.evidence import TextSpan
+from mapu.models.evidence import DocumentExpression, TextSpan
 
 
 @dataclass
@@ -61,6 +62,7 @@ class ExtractionService:
         source_policy_eval_id: uuid.UUID,
         default_situation_id: uuid.UUID | None = None,
     ) -> ExtractionResult:
+        document_id = await self._get_document_id(expression_id)
         spans = await self._load_spans(expression_id)
 
         result = ExtractionResult(expression_id=expression_id)
@@ -72,7 +74,7 @@ class ExtractionService:
 
             ctx = ExtractionContext(
                 corpus_id=self._corpus_id,
-                document_id=uuid.UUID(int=0),
+                document_id=document_id,
                 expression_id=expression_id,
                 span_id=span.id,
                 node_id=span.node_id,
@@ -82,9 +84,23 @@ class ExtractionService:
                 base_parse=base_parse,
             )
 
+            accumulated_signals: list[ExtractionSignal] = []
             outputs: list[ExtractorOutput] = []
             for extractor in self._extractors:
+                ctx = ExtractionContext(
+                    corpus_id=ctx.corpus_id,
+                    document_id=ctx.document_id,
+                    expression_id=ctx.expression_id,
+                    span_id=ctx.span_id,
+                    node_id=ctx.node_id,
+                    text=ctx.text,
+                    start_char=ctx.start_char,
+                    end_char=ctx.end_char,
+                    base_parse=ctx.base_parse,
+                    prior_signals=tuple(accumulated_signals),
+                )
                 output = await extractor.extract(ctx)
+                accumulated_signals.extend(output.signals)
                 outputs.append(output)
 
             merged = self._merge.merge(outputs)
@@ -114,6 +130,17 @@ class ExtractionService:
             result.spans_processed += 1
 
         return result
+
+    async def _get_document_id(self, expression_id: uuid.UUID) -> uuid.UUID:
+        stmt = select(DocumentExpression.document_id).where(
+            DocumentExpression.id == expression_id,
+            DocumentExpression.corpus_id == self._corpus_id,
+        )
+        r = await self._session.execute(stmt)
+        row = r.scalar_one_or_none()
+        if row is None:
+            raise ValueError(f"Expression {expression_id} not found")
+        return row
 
     async def _load_spans(self, expression_id: uuid.UUID) -> list[TextSpan]:
         stmt = select(TextSpan).where(

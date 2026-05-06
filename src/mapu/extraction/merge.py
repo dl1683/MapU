@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from mapu.extraction.types import (
@@ -53,7 +54,7 @@ def _frame_dedup_key(frame: PropositionFrameCandidate) -> str:
         frame.subject.text.lower().strip(),
         frame.predicate.lower().strip(),
         frame.object.text.lower().strip() if frame.object else "",
-        str(frame.value) if frame.value else "",
+        json.dumps(frame.value, sort_keys=True) if frame.value else "",
         str(frame.polarity),
         frame.modality or "",
         str(frame.valid_range) if frame.valid_range else "",

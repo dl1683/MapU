@@ -38,6 +38,8 @@ class CandidateGrounder:
     ) -> None:
         self._session = session
         self._corpus_id = corpus_id
+        self._handle_cache: dict[tuple[str, str], Handle] = {}
+        self._proposition_cache: dict[str, Proposition] = {}
 
     async def materialize(
         self,
@@ -129,6 +131,11 @@ class CandidateGrounder:
 
     async def _resolve_handle(self, mention: EntityMention) -> Handle:
         """Get or create a handle for an entity mention."""
+        cache_key = (mention.text, mention.kind)
+        cached = self._handle_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         from sqlalchemy import select
 
         stmt = select(Handle).where(
@@ -140,6 +147,7 @@ class CandidateGrounder:
         result = await self._session.execute(stmt)
         existing = result.scalar_one_or_none()
         if existing is not None:
+            self._handle_cache[cache_key] = existing
             return existing
 
         handle = Handle(
@@ -152,7 +160,7 @@ class CandidateGrounder:
             created_at=datetime.now(UTC),
         )
         self._session.add(handle)
-        await self._session.flush()
+        self._handle_cache[cache_key] = handle
         return handle
 
     async def _get_or_create_proposition(
@@ -171,6 +179,10 @@ class CandidateGrounder:
         semantic_key: str,
     ) -> tuple[Proposition, bool]:
         """Get existing proposition by semantic_key or create new one."""
+        cached = self._proposition_cache.get(semantic_key)
+        if cached is not None:
+            return cached, False
+
         from sqlalchemy import select
 
         stmt = select(Proposition).where(
@@ -180,6 +192,7 @@ class CandidateGrounder:
         result = await self._session.execute(stmt)
         existing = result.scalar_one_or_none()
         if existing is not None:
+            self._proposition_cache[semantic_key] = existing
             return existing, False
 
         prop = Proposition(
@@ -199,7 +212,7 @@ class CandidateGrounder:
             system_created=datetime.now(UTC),
         )
         self._session.add(prop)
-        await self._session.flush()
+        self._proposition_cache[semantic_key] = prop
         return prop, True
 
 

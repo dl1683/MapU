@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import contextlib
 import re
 from datetime import datetime
@@ -162,10 +163,13 @@ class AmendmentExtractor:
         frames: list[PropositionFrameCandidate] = []
 
         all_refs = list(_CROSS_REF_PATTERN.finditer(ctx.text))
+        ref_starts = [r.start() for r in all_refs]
 
         for pattern in _AMENDMENT_PATTERNS:
             for match in pattern.finditer(ctx.text):
-                ref_match = _nearest_preceding_ref(all_refs, match.start())
+                ref_match = _nearest_preceding_ref(
+                    all_refs, ref_starts, match.start()
+                )
                 target_ref = ref_match.group() if ref_match else None
 
                 signals.append(ExtractionSignal(
@@ -212,14 +216,15 @@ class AmendmentExtractor:
 
 
 def _nearest_preceding_ref(
-    refs: list[re.Match[str]], position: int
+    refs: list[re.Match[str]],
+    ref_starts: list[int],
+    position: int,
 ) -> re.Match[str] | None:
-    result: re.Match[str] | None = None
-    for ref in refs:
-        if ref.start() >= position:
-            break
-        result = ref
-    return result
+    idx = bisect.bisect_right(ref_starts, position) - 1
+    if idx < 0:
+        return None
+    ref = refs[idx]
+    return ref if ref.start() < position else None
 
 
 def _find_sentence_end(text: str, start: int) -> int:

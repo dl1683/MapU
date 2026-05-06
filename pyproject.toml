@@ -42,7 +42,10 @@ packages = ["src/mapu"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-q --strict-markers --strict-config"
+addopts = "-q --strict-markers --strict-config -m 'not integration'"
+markers = [
+  "integration: requires Docker + PostgreSQL (testcontainers)",
+]
 
 [tool.ruff]
 target-version = "py312"

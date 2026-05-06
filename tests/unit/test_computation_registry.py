@@ -48,6 +48,32 @@ class TestRatioComparison:
         assert result["ratio"] == pytest.approx(2.0)
         assert result["met"] is True
 
+    def test_comparison_word_form_lte(self) -> None:
+        evaluator = RatioComparison()
+        result = evaluator.evaluate(
+            {"numerator": "a", "denominator": "b", "threshold": 3.5, "comparison": "lte"},
+            {"a": 7, "b": 2},
+        )
+        assert result["ratio"] == pytest.approx(3.5)
+        assert result["met"] is True
+
+    def test_comparison_word_form_gte(self) -> None:
+        evaluator = RatioComparison()
+        result = evaluator.evaluate(
+            {"numerator": "a", "denominator": "b", "threshold": 3.0, "comparison": "gte"},
+            {"a": 7, "b": 2},
+        )
+        assert result["met"] is True
+
+    def test_operator_takes_precedence_over_comparison(self) -> None:
+        evaluator = RatioComparison()
+        result = evaluator.evaluate(
+            {"numerator": "a", "denominator": "b", "threshold": 3.0,
+             "operator": "<=", "comparison": "gte"},
+            {"a": 4, "b": 2},
+        )
+        assert result["met"] is True  # 2.0 <= 3.0, operator wins
+
 
 class TestThresholdCheck:
     def test_above_threshold(self) -> None:
@@ -65,6 +91,14 @@ class TestThresholdCheck:
             {"score": 0.8},
         )
         assert result["met"] is False
+
+    def test_comparison_word_form_lt(self) -> None:
+        evaluator = ThresholdCheck()
+        result = evaluator.evaluate(
+            {"value": "score", "threshold": 0.9, "comparison": "lt"},
+            {"score": 0.8},
+        )
+        assert result["met"] is True
 
 
 class TestDifferenceCheck:

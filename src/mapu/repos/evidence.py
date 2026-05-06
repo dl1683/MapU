@@ -44,6 +44,14 @@ class TextSpanRepo(CorpusScopedRepo[TextSpan]):
 class ChunkRepo(CorpusScopedRepo[Chunk]):
     model = Chunk
 
+    async def get_for_expression(self, expression_id: uuid.UUID) -> list[Chunk]:
+        stmt = select(Chunk).where(
+            Chunk.expression_id == expression_id,
+            Chunk.corpus_id == self.corpus_id,
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
 
 class ChunkEmbeddingRepo(CorpusScopedRepo[ChunkEmbedding]):
     model = ChunkEmbedding
@@ -55,3 +63,14 @@ class ChunkEmbeddingRepo(CorpusScopedRepo[ChunkEmbedding]):
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_for_chunk_and_model(
+        self, chunk_id: uuid.UUID, model_name: str
+    ) -> ChunkEmbedding | None:
+        stmt = select(ChunkEmbedding).where(
+            ChunkEmbedding.chunk_id == chunk_id,
+            ChunkEmbedding.corpus_id == self.corpus_id,
+            ChunkEmbedding.model_name == model_name,
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()

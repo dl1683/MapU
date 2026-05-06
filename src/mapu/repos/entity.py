@@ -22,6 +22,33 @@ class HandleRepo(CorpusScopedRepo[Handle]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def active_handles(
+        self, *, limit: int = 100, offset: int = 0
+    ) -> list[Handle]:
+        stmt = (
+            select(Handle)
+            .where(Handle.corpus_id == self.corpus_id, Handle.status == "active")
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def search_by_name(
+        self, query: str, *, limit: int = 20
+    ) -> list[Handle]:
+        stmt = (
+            select(Handle)
+            .where(
+                Handle.corpus_id == self.corpus_id,
+                Handle.status == "active",
+                Handle.canonical_name.ilike(f"%{query}%"),
+            )
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
 
 class IdentityDecisionRepo(CorpusScopedRepo[IdentityDecisionModel]):
     model = IdentityDecisionModel

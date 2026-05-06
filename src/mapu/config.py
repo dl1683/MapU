@@ -12,7 +12,39 @@ class DatabaseSettings(BaseSettings):
     model_config = {"env_prefix": "MAPU_DB_"}
 
 
+class EmbeddingSettings(BaseSettings):
+    provider: str = "local"
+    model: str = "hash-deterministic"
+    dimensions: int = 384
+    batch_size: int = 64
+
+    model_config = {"env_prefix": "MAPU_EMBEDDING_"}
+
+
+class ChunkingSettings(BaseSettings):
+    max_tokens: int = 512
+    overlap_tokens: int = 64
+
+    model_config = {"env_prefix": "MAPU_CHUNKING_"}
+
+
+class ParserSettings(BaseSettings):
+    enabled_types: str = "text/plain"
+
+    model_config = {"env_prefix": "MAPU_PARSER_"}
+
+
+class SourcePolicySettings(BaseSettings):
+    default_document_type: str = "unknown"
+
+    model_config = {"env_prefix": "MAPU_SOURCE_POLICY_"}
+
+
 class Settings(BaseSettings):
     database: DatabaseSettings = DatabaseSettings()
+    embedding: EmbeddingSettings = EmbeddingSettings()
+    chunking: ChunkingSettings = ChunkingSettings()
+    parser: ParserSettings = ParserSettings()
+    source_policy: SourcePolicySettings = SourcePolicySettings()
 
-    model_config = {"env_prefix": "MAPU_"}
+    model_config = {"env_prefix": "MAPU_", "env_nested_delimiter": "__"}

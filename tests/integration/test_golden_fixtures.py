@@ -96,14 +96,15 @@ async def seed_golden_example(
     await session.flush()
 
     for pf in example.propositions:
-        subject_handle = seeded.handles[0] if seeded.handles else None
+        subject_handle = seeded.handles[pf.subject_handle_idx]
+        object_handle = seeded.handles[pf.object_handle_idx] if pf.object_handle_idx is not None else None
         p = Proposition(
             id=pf.id,
             corpus_id=corpus.id,
             frame_type=pf.frame_type,
-            subject_handle_id=subject_handle.id if subject_handle else uuid.uuid4(),
+            subject_handle_id=subject_handle.id,
             predicate=pf.predicate,
-            object_handle_id=pf.object.id if pf.object else None,
+            object_handle_id=object_handle.id if object_handle else None,
             value=pf.value,
             polarity=pf.polarity,
             modality=pf.modality,

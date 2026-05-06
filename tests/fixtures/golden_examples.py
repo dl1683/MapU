@@ -24,9 +24,9 @@ class HandleFixture:
 class PropositionFixture:
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     frame_type: str = "finding"
-    subject: HandleFixture = field(default_factory=HandleFixture)
+    subject_handle_idx: int = 0
     predicate: str = ""
-    object: HandleFixture | None = None
+    object_handle_idx: int | None = None
     value: dict | None = None
     polarity: bool = True
     modality: str | None = None
@@ -153,6 +153,7 @@ L5 = GoldenExample(
         PropositionFixture(
             frame_type="finding",
             predicate="breached",
+            object_handle_idx=1,
             polarity=True,
             normalized_text="Defendant breached 2024 amendment confidentiality provisions",
             qualifiers={"scope": "2024 amendments"},
@@ -161,6 +162,7 @@ L5 = GoldenExample(
         PropositionFixture(
             frame_type="finding",
             predicate="breached",
+            object_handle_idx=1,
             polarity=False,
             normalized_text="Defendant did NOT breach 2020 agreement confidentiality provisions",
             qualifiers={"scope": "2020 agreement"},
@@ -487,18 +489,22 @@ I1 = GoldenExample(
         PropositionFixture(
             frame_type="relationship",
             predicate="incorporated_in",
+            object_handle_idx=1,
             normalized_text="Company X is incorporated in BVI",
             semantic_key="company_x:incorporated_in:bvi",
         ),
         PropositionFixture(
             frame_type="relationship",
+            subject_handle_idx=2,
             predicate="is_director_of",
+            object_handle_idx=0,
             normalized_text="Person Y is director of Company X",
             semantic_key="person_y:director_of:company_x",
         ),
         PropositionFixture(
             frame_type="relationship",
             predicate="controlled_by",
+            object_handle_idx=2,
             normalized_text="Company X is controlled by Person Y (per leaked document)",
             semantic_key="company_x:controlled_by:person_y",
         ),
@@ -963,6 +969,7 @@ C4 = GoldenExample(
         ),
         PropositionFixture(
             frame_type="vulnerability",
+            subject_handle_idx=2,
             predicate="has_defect",
             normalized_text="Module C has memory leak (Issue #456) causing OOM after >10K records",
             qualifiers={"issue": "#456", "defect_type": "memory_leak", "threshold": 10_000},
@@ -1027,20 +1034,25 @@ I4 = GoldenExample(
         PropositionFixture(
             frame_type="relationship",
             predicate="owns",
+            object_handle_idx=1,
             normalized_text="Company A (Cayman) owns 100% of Company B (Delaware)",
             qualifiers={"ownership_pct": 100, "parent_jurisdiction": "Cayman", "child_jurisdiction": "Delaware"},
             semantic_key="company_a:owns:company_b:100pct",
         ),
         PropositionFixture(
             frame_type="relationship",
+            subject_handle_idx=1,
             predicate="owns",
+            object_handle_idx=2,
             normalized_text="Company B (Delaware) owns 51% of Company C (Luxembourg)",
             qualifiers={"ownership_pct": 51, "parent_jurisdiction": "Delaware", "child_jurisdiction": "Luxembourg"},
             semantic_key="company_b:owns:company_c:51pct",
         ),
         PropositionFixture(
             frame_type="relationship",
+            subject_handle_idx=2,
             predicate="owns",
+            object_handle_idx=3,
             normalized_text="Company C (Luxembourg) owns controlling interest in Company D (operating company)",
             qualifiers={"ownership_type": "controlling_interest", "parent_jurisdiction": "Luxembourg"},
             semantic_key="company_c:owns:company_d:controlling",

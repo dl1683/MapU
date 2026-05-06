@@ -4,17 +4,26 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select, update
 
 from mapu.models.review import Changeset, ChangesetOperation
 from mapu.repos.base import CorpusScopedRepo
+from mapu.truth.state_machine import validate_changeset_transition
+from mapu.types import ChangesetStatus
 
 
 class ChangesetRepo(CorpusScopedRepo[Changeset]):
     model = Changeset
 
     async def transition(self, changeset_id: uuid.UUID, new_status: str) -> None:
+        current = await self.session.get(Changeset, changeset_id)
+        if current is None:
+            raise ValueError(f"Changeset {changeset_id} not found")
+        validate_changeset_transition(
+            ChangesetStatus(current.status), ChangesetStatus(new_status),
+        )
         stmt = (
             update(Changeset)
             .where(Changeset.id == changeset_id, Changeset.corpus_id == self.corpus_id)
@@ -35,7 +44,7 @@ class ChangesetRepo(CorpusScopedRepo[Changeset]):
         changeset_id: uuid.UUID,
         ordinal: int,
         operation_type: str,
-        payload: dict,
+        payload: dict[str, Any],
     ) -> ChangesetOperation:
         op = ChangesetOperation(
             changeset_id=changeset_id,

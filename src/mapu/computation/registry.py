@@ -10,6 +10,25 @@ class ComputationEvaluator(Protocol):
     def evaluate(self, definition: dict[str, Any], inputs: dict[str, Any]) -> dict[str, Any]: ...
 
 
+_COMPARISON_WORD_TO_SYMBOL: dict[str, str] = {
+    "gte": ">=",
+    "lte": "<=",
+    "gt": ">",
+    "lt": "<",
+    "eq": "==",
+}
+
+
+def _resolve_operator(definition: dict[str, Any]) -> str:
+    if "operator" in definition:
+        op: str = definition["operator"]
+        return _COMPARISON_WORD_TO_SYMBOL.get(op, op)
+    if "comparison" in definition:
+        word: str = definition["comparison"]
+        return _COMPARISON_WORD_TO_SYMBOL.get(word, word)
+    return ">="
+
+
 @dataclass(frozen=True)
 class RatioComparisonResult:
     ratio: float
@@ -23,7 +42,7 @@ class RatioComparison:
         numerator_key = definition["numerator"]
         denominator_key = definition["denominator"]
         threshold = definition["threshold"]
-        operator = definition.get("operator", ">=")
+        operator = _resolve_operator(definition)
 
         numerator = float(inputs[numerator_key])
         denominator = float(inputs[denominator_key])
@@ -52,7 +71,7 @@ class ThresholdCheck:
     def evaluate(self, definition: dict[str, Any], inputs: dict[str, Any]) -> dict[str, Any]:
         value_key = definition["value"]
         threshold = definition["threshold"]
-        operator = definition.get("operator", ">=")
+        operator = _resolve_operator(definition)
 
         value = float(inputs[value_key])
 

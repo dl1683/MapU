@@ -12,6 +12,17 @@ from mapu.repos.base import CorpusScopedRepo
 MAX_REPAIR_CASCADE_DEPTH = 50
 
 
+class RepairCascadeDepthExceeded(Exception):
+    """Raised when the blast radius traversal hits the depth limit."""
+
+    def __init__(self, proposition_id: uuid.UUID, max_depth: int) -> None:
+        super().__init__(
+            f"Repair cascade for {proposition_id} exceeded depth limit {max_depth}"
+        )
+        self.proposition_id = proposition_id
+        self.max_depth = max_depth
+
+
 class DerivationEdgeRepo(CorpusScopedRepo[DerivationEdge]):
     model = DerivationEdge
 
@@ -36,7 +47,11 @@ class DerivationEdgeRepo(CorpusScopedRepo[DerivationEdge]):
     async def descendants_bounded(
         self, proposition_id: uuid.UUID, max_depth: int = MAX_REPAIR_CASCADE_DEPTH
     ) -> set[uuid.UUID]:
-        """Compute bounded blast radius using recursive CTE."""
+        """Compute bounded blast radius using recursive CTE.
+
+        Raises RepairCascadeDepthExceeded if any node reaches max_depth,
+        indicating the true blast radius may extend further.
+        """
         stmt = text("""
             WITH RECURSIVE descendants AS (
                 SELECT child_proposition_id AS id, 1 AS depth
@@ -48,13 +63,19 @@ class DerivationEdgeRepo(CorpusScopedRepo[DerivationEdge]):
                 JOIN descendants d ON de.parent_proposition_id = d.id
                 WHERE de.corpus_id = :corpus_id AND d.depth < :max_depth
             )
-            SELECT DISTINCT id FROM descendants
+            SELECT id, depth FROM descendants
         """)
         result = await self.session.execute(
             stmt,
             {"prop_id": proposition_id, "corpus_id": self.corpus_id, "max_depth": max_depth},
         )
-        return {row[0] for row in result}
+        rows = list(result)
+        ids = set()
+        for row in rows:
+            ids.add(row[0])
+            if row[1] >= max_depth:
+                raise RepairCascadeDepthExceeded(proposition_id, max_depth)
+        return ids
 
 
 class SupersessionEdgeRepo(CorpusScopedRepo[SupersessionEdge]):

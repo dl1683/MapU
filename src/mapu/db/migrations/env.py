@@ -9,6 +9,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import mapu.models  # noqa: F401
 from mapu.db.base import Base
 
 config = context.config

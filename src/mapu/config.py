@@ -40,11 +40,20 @@ class SourcePolicySettings(BaseSettings):
     model_config = {"env_prefix": "MAPU_SOURCE_POLICY_"}
 
 
+class ExtractionSettings(BaseSettings):
+    auto_accept_min: float = 0.85
+    candidate_min: float = 0.3
+    spacy_model: str = "en_core_web_sm"
+
+    model_config = {"env_prefix": "MAPU_EXTRACTION_"}
+
+
 class Settings(BaseSettings):
     database: DatabaseSettings = DatabaseSettings()
     embedding: EmbeddingSettings = EmbeddingSettings()
     chunking: ChunkingSettings = ChunkingSettings()
     parser: ParserSettings = ParserSettings()
     source_policy: SourcePolicySettings = SourcePolicySettings()
+    extraction: ExtractionSettings = ExtractionSettings()
 
     model_config = {"env_prefix": "MAPU_", "env_nested_delimiter": "__"}

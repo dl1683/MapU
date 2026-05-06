@@ -10,20 +10,20 @@ PROPOSITION_TRANSITIONS: dict[TruthStatus, frozenset[TruthStatus]] = {
         TruthStatus.CONTESTED, TruthStatus.RETRACTED, TruthStatus.SUPERSEDED,
     }),
     TruthStatus.ACCEPTED: frozenset({
-        TruthStatus.CONTESTED, TruthStatus.UNKNOWN,
-        TruthStatus.RETRACTED, TruthStatus.SUPERSEDED,
+        TruthStatus.DENIED, TruthStatus.REPORTED, TruthStatus.CONTESTED,
+        TruthStatus.UNKNOWN, TruthStatus.RETRACTED, TruthStatus.SUPERSEDED,
     }),
     TruthStatus.DENIED: frozenset({
-        TruthStatus.CONTESTED, TruthStatus.UNKNOWN,
-        TruthStatus.RETRACTED, TruthStatus.SUPERSEDED,
+        TruthStatus.ACCEPTED, TruthStatus.REPORTED, TruthStatus.CONTESTED,
+        TruthStatus.UNKNOWN, TruthStatus.RETRACTED, TruthStatus.SUPERSEDED,
     }),
     TruthStatus.REPORTED: frozenset({
         TruthStatus.ACCEPTED, TruthStatus.DENIED, TruthStatus.CONTESTED,
         TruthStatus.UNKNOWN, TruthStatus.RETRACTED, TruthStatus.SUPERSEDED,
     }),
     TruthStatus.CONTESTED: frozenset({
-        TruthStatus.ACCEPTED, TruthStatus.DENIED, TruthStatus.UNKNOWN,
-        TruthStatus.RETRACTED, TruthStatus.SUPERSEDED,
+        TruthStatus.ACCEPTED, TruthStatus.DENIED, TruthStatus.REPORTED,
+        TruthStatus.UNKNOWN, TruthStatus.RETRACTED, TruthStatus.SUPERSEDED,
     }),
     TruthStatus.RETRACTED: frozenset({TruthStatus.UNKNOWN}),
     TruthStatus.SUPERSEDED: frozenset({TruthStatus.UNKNOWN}),

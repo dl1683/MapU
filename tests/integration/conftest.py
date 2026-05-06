@@ -59,8 +59,8 @@ def session_factory(async_engine) -> async_sessionmaker[AsyncSession]:
 @pytest.fixture
 async def session(session_factory) -> AsyncSession:
     async with session_factory() as session:
-        async with session.begin():
-            yield session
+        await session.begin()
+        yield session
         await session.rollback()
 
 

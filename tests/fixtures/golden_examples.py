@@ -650,7 +650,7 @@ L6 = GoldenExample(
     ],
     situations=[SituationFixture(kind="contractual_terms", name="Representations and warranties")],
     attestations=[
-        AttestationFixture(stance="asserts", authority_score=0.75, attestation_strength="qualified_statement"),
+        AttestationFixture(stance="asserts", authority_score=0.75, attestation_strength="direct_statement"),
     ],
     expected_truth=[ExpectedTruth(expected_status="accepted")],
 )
@@ -708,7 +708,7 @@ L8 = GoldenExample(
     ],
     situations=[SituationFixture(kind="statutory_provisions", name="Limitations statute")],
     attestations=[
-        AttestationFixture(stance="asserts", authority_score=0.92, document_type="statutory_text"),
+        AttestationFixture(stance="asserts", authority_score=0.92, document_type="statute"),
     ],
     expected_truth=[ExpectedTruth(expected_status="accepted")],
 )
@@ -753,8 +753,8 @@ F3 = GoldenExample(
         SituationFixture(kind="audited_financials", name="FY2025 10-K"),
     ],
     attestations=[
-        AttestationFixture(proposition_idx=0, stance="asserts", authority_score=0.65, publication_context="industry_report"),
-        AttestationFixture(proposition_idx=1, stance="asserts", authority_score=0.60, publication_context="company_report"),
+        AttestationFixture(proposition_idx=0, stance="asserts", authority_score=0.65, publication_context="official_filing"),
+        AttestationFixture(proposition_idx=1, stance="asserts", authority_score=0.60, publication_context="internal_document"),
         AttestationFixture(proposition_idx=2, stance="asserts", authority_score=0.80, publication_context="official_filing"),
     ],
     expected_truth=[
@@ -852,7 +852,7 @@ B3 = GoldenExample(
     ],
     situations=[SituationFixture(kind="clinical_classification", name="Variant interpretation")],
     attestations=[
-        AttestationFixture(stance="asserts", authority_score=0.85, attestation_type="expert_panel"),
+        AttestationFixture(stance="asserts", authority_score=0.85, attestation_type="expert_opinion"),
     ],
     expected_truth=[ExpectedTruth(expected_status="accepted")],
 )
@@ -940,7 +940,7 @@ C2 = GoldenExample(
     ],
     situations=[SituationFixture(kind="api_lifecycle", name="Auth module deprecation")],
     attestations=[
-        AttestationFixture(stance="asserts", authority_score=0.80, publication_context="release_notes"),
+        AttestationFixture(stance="asserts", authority_score=0.80, publication_context="code_repository"),
     ],
     expected_truth=[ExpectedTruth(expected_status="accepted")],
 )
@@ -1051,7 +1051,7 @@ I4 = GoldenExample(
     attestations=[
         AttestationFixture(proposition_idx=0, stance="asserts", authority_score=0.85, publication_context="government_registry"),
         AttestationFixture(proposition_idx=1, stance="asserts", authority_score=0.85, publication_context="government_registry"),
-        AttestationFixture(proposition_idx=2, stance="reports", authority_score=0.50, publication_context="corporate_filing"),
+        AttestationFixture(proposition_idx=2, stance="reports", authority_score=0.50, publication_context="official_filing"),
     ],
     expected_truth=[
         ExpectedTruth(proposition_idx=0, expected_status="accepted"),

@@ -111,7 +111,7 @@ docker-compose.override.yml
 # MODELS & LARGE ARTIFACTS
 # ----------------------------------------------------------
 
-models/
+/models/
 *.bin
 *.onnx
 *.safetensors

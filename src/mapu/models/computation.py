@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TSTZRANGE, UUID
@@ -22,7 +23,7 @@ class ComputationSpec(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     evaluator_type: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    definition: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    definition: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     source_proposition_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     reviewed_by: Mapped[str | None] = mapped_column(Text)
     reviewed_at: Mapped[datetime | None] = mapped_column()
@@ -41,9 +42,9 @@ class ComputationRun(Base):
     )
     spec_version: Mapped[int] = mapped_column(Integer, nullable=False)
     as_of: Mapped[datetime] = mapped_column(nullable=False)
-    input_values: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    result: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    input_values: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     engine_version: Mapped[str] = mapped_column(Text, nullable=False)
-    errors: Mapped[dict | None] = mapped_column(JSONB)
+    errors: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     result_proposition_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     computed_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))

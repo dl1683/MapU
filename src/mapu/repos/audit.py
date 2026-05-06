@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 
@@ -19,7 +20,7 @@ class ActivityRepo(CorpusScopedRepo[Activity]):
         actor: str,
         entity_type: str | None = None,
         entity_id: uuid.UUID | None = None,
-        details: dict | None = None,
+        details: dict[str, Any] | None = None,
     ) -> Activity:
         entry = Activity(
             corpus_id=self.corpus_id,

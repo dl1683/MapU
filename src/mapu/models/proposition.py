@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import Boolean, ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TSTZRANGE, UUID
@@ -23,12 +24,12 @@ class Proposition(Base):
     subject_handle_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     predicate: Mapped[str] = mapped_column(Text, nullable=False)
     object_handle_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    value: Mapped[dict | None] = mapped_column(JSONB)
+    value: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     polarity: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     modality: Mapped[str | None] = mapped_column(Text)
     valid_range: Mapped[object | None] = mapped_column(TSTZRANGE)
     normalized_text: Mapped[str] = mapped_column(Text, nullable=False)
-    qualifiers: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    qualifiers: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     semantic_key: Mapped[str] = mapped_column(Text, nullable=False)
     system_created: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 

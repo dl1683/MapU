@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -24,7 +25,7 @@ class Changeset(Base):
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="proposed")
     risk_level: Mapped[str] = mapped_column(Text, nullable=False, default="low")
-    blast_radius: Mapped[dict | None] = mapped_column(JSONB)
+    blast_radius: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     reviewed_by: Mapped[str | None] = mapped_column(Text)
     reviewed_at: Mapped[datetime | None] = mapped_column()
     review_reason: Mapped[str | None] = mapped_column(Text)
@@ -43,6 +44,6 @@ class ChangesetOperation(Base):
     )
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     operation_type: Mapped[str] = mapped_column(Text, nullable=False)
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    result: Mapped[dict | None] = mapped_column(JSONB)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     executed_at: Mapped[datetime | None] = mapped_column()

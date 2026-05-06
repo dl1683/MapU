@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
-from pgvector.sqlalchemy import Vector
+from pgvector.sqlalchemy import Vector  # type: ignore[import-untyped]
 from sqlalchemy import ForeignKey, Integer, LargeBinary, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,7 +24,9 @@ class DocumentWork(Base):
     raw_content: Mapped[bytes | None] = mapped_column(LargeBinary)
     mime_type: Mapped[str] = mapped_column(Text, nullable=False)
     source_uri: Mapped[str | None] = mapped_column(Text)
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
+    metadata_: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict,
+    )
     ingested_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
 
@@ -50,7 +53,9 @@ class StructureNode(Base):
     parent_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     node_type: Mapped[str] = mapped_column(Text, nullable=False)
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
+    metadata_: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict,
+    )
 
 
 class TextSpan(Base):
@@ -91,4 +96,4 @@ class ChunkEmbedding(Base):
     )
     model_name: Mapped[str] = mapped_column(Text, nullable=False)
     dimensions: Mapped[int] = mapped_column(Integer, nullable=False)
-    embedding: Mapped[list] = mapped_column(Vector, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector, nullable=False)

@@ -98,8 +98,9 @@ class HandleSearchService:
         if row is None:
             return []
 
-        return await self.search(
+        candidates = await self.search(
             query_vector=list(row[0]),
             top_k=top_k + 1,
             min_score=min_score,
         )
+        return [c for c in candidates if c.handle_id != handle_id]

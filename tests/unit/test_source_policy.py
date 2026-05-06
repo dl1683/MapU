@@ -16,8 +16,8 @@ class TestSourcePolicyScoring:
         score = evaluator.score(SourcePolicyInput(document_type="court_opinion"))
         assert score >= 0.90
 
-    def test_social_media_low(self, evaluator: SourcePolicyEvaluatorV1) -> None:
-        score = evaluator.score(SourcePolicyInput(document_type="social_media"))
+    def test_leaked_document_low(self, evaluator: SourcePolicyEvaluatorV1) -> None:
+        score = evaluator.score(SourcePolicyInput(document_type="leaked_document"))
         assert score <= 0.30
 
     def test_unknown_document_type(self, evaluator: SourcePolicyEvaluatorV1) -> None:
@@ -27,17 +27,17 @@ class TestSourcePolicyScoring:
     def test_publication_context_boost(
         self, evaluator: SourcePolicyEvaluatorV1
     ) -> None:
-        base = evaluator.score(SourcePolicyInput(document_type="peer_reviewed_paper"))
+        base = evaluator.score(SourcePolicyInput(document_type="peer_reviewed_article"))
         boosted = evaluator.score(SourcePolicyInput(
-            document_type="peer_reviewed_paper",
+            document_type="peer_reviewed_article",
             publication_context="peer_reviewed_journal",
         ))
         assert boosted > base
 
     def test_hearsay_penalty(self, evaluator: SourcePolicyEvaluatorV1) -> None:
-        base = evaluator.score(SourcePolicyInput(document_type="news_article"))
+        base = evaluator.score(SourcePolicyInput(document_type="press_release"))
         penalized = evaluator.score(SourcePolicyInput(
-            document_type="news_article",
+            document_type="press_release",
             attestation_type="hearsay",
         ))
         assert penalized < base
@@ -46,8 +46,8 @@ class TestSourcePolicyScoring:
         self, evaluator: SourcePolicyEvaluatorV1
     ) -> None:
         score = evaluator.score(SourcePolicyInput(
-            document_type="social_media",
-            publication_context="social_media",
+            document_type="leaked_document",
+            publication_context="leaked_document",
             attestation_type="hearsay",
         ))
         assert 0.0 <= score <= 1.0
@@ -56,10 +56,10 @@ class TestSourcePolicyScoring:
         self, evaluator: SourcePolicyEvaluatorV1
     ) -> None:
         base = evaluator.score(SourcePolicyInput(
-            document_type="official_report",
+            document_type="government_filing",
         ))
         gov = evaluator.score(SourcePolicyInput(
-            document_type="official_report",
+            document_type="government_filing",
             attestation_type="government",
         ))
         assert gov > base
@@ -68,10 +68,13 @@ class TestSourcePolicyScoring:
         self, evaluator: SourcePolicyEvaluatorV1
     ) -> None:
         types = [
-            "court_opinion", "statute", "regulation", "peer_reviewed_paper",
-            "government_filing", "sec_filing", "official_report", "contract",
-            "technical_standard", "audit_report", "news_article", "blog_post",
-            "social_media", "unknown",
+            "court_opinion", "court_order", "statute", "regulation",
+            "peer_reviewed_article", "clinical_trial_report",
+            "government_filing", "sec_filing", "public_registry",
+            "contract", "amendment", "retraction_notice",
+            "cve_record", "code_file", "press_release",
+            "earnings_call_transcript", "state_media_report",
+            "internal_document", "leaked_document", "other",
         ]
         for doc_type in types:
             score = evaluator.score(SourcePolicyInput(document_type=doc_type))

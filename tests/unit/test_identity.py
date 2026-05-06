@@ -1,10 +1,10 @@
-"""Unit tests for identity decision pair canonicalization."""
+"""Unit tests for identity decision pair canonicalization and validation."""
 
 from __future__ import annotations
 
 import uuid
 
-from mapu.entity.identity import canonicalize_pair
+from mapu.entity.identity import _VALID_DECISIONS, canonicalize_pair
 
 
 class TestCanonicalizePair:
@@ -31,3 +31,12 @@ class TestCanonicalizePair:
         a = uuid.UUID("00000000-0000-0000-0000-000000000001")
         result = canonicalize_pair(a, a)
         assert result == (a, a)
+
+
+class TestValidDecisions:
+    def test_expected_decisions_present(self) -> None:
+        assert {"same_entity", "different_entity", "uncertain"} == _VALID_DECISIONS
+
+    def test_matches_db_check_constraint(self) -> None:
+        db_values = {"same_entity", "different_entity", "uncertain"}
+        assert db_values == _VALID_DECISIONS

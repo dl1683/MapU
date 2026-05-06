@@ -11,6 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.models.entity import IdentityDecisionModel
 
+_VALID_DECISIONS: frozenset[str] = frozenset({
+    "same_entity", "different_entity", "uncertain",
+})
+
 
 def canonicalize_pair(
     handle_a_id: uuid.UUID, handle_b_id: uuid.UUID
@@ -37,6 +41,15 @@ class IdentityDecisionService:
         decided_by: str,
         evidence: dict[str, Any] | None = None,
     ) -> IdentityDecisionModel:
+        if handle_a_id == handle_b_id:
+            raise ValueError("Cannot create identity decision between a handle and itself")
+        if decision not in _VALID_DECISIONS:
+            raise ValueError(
+                f"Invalid decision {decision!r}; must be one of {sorted(_VALID_DECISIONS)}"
+            )
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"Confidence must be in [0.0, 1.0], got {confidence}")
+
         a_id, b_id = canonicalize_pair(handle_a_id, handle_b_id)
 
         await self._invalidate_active(a_id, b_id)

@@ -18,6 +18,8 @@ class HashEmbeddingProvider:
     """
 
     def __init__(self, dimensions: int = 384) -> None:
+        if dimensions < 1:
+            raise ValueError(f"Dimensions must be positive, got {dimensions}")
         self._dimensions = dimensions
         self._model_ref = EmbeddingModelRef(
             provider="local",

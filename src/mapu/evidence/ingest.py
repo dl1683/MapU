@@ -54,6 +54,9 @@ class IngestionService:
         self._embedder = embedding_provider
 
     async def ingest(self, blob: DocumentBlob) -> IngestResult:
+        parser = self._parsers.get_parser(blob.mime_type)
+        parsed = await parser.parse(blob)
+
         now = datetime.now(UTC)
 
         doc = DocumentWork(
@@ -68,9 +71,6 @@ class IngestionService:
         self._session.add(doc)
         await self._session.flush()
 
-        parser = self._parsers.get_parser(blob.mime_type)
-        parsed = await parser.parse(blob)
-
         expr = DocumentExpression(
             id=uuid.uuid4(),
             document_id=doc.id,
@@ -83,29 +83,37 @@ class IngestionService:
 
         result = IngestResult(document_id=doc.id, expression_id=expr.id)
 
+        node_models: list[StructureNode] = []
         for node in parsed.nodes:
+            parent_id = node_models[node.parent_index].id if node.parent_index is not None else None
             sn = StructureNode(
                 id=uuid.uuid4(),
                 expression_id=expr.id,
                 corpus_id=self._corpus_id,
+                parent_id=parent_id,
                 node_type=node.node_type,
                 ordinal=node.ordinal,
                 metadata_=node.metadata,
             )
             self._session.add(sn)
+            node_models.append(sn)
             result.node_count += 1
         await self._session.flush()
 
+        span_models: list[TextSpan] = []
         for span in parsed.spans:
+            node_id = node_models[span.node_index].id if span.node_index is not None else None
             ts = TextSpan(
                 id=uuid.uuid4(),
                 expression_id=expr.id,
                 corpus_id=self._corpus_id,
+                node_id=node_id,
                 text=span.text,
                 start_char=span.start_char,
                 end_char=span.end_char,
             )
             self._session.add(ts)
+            span_models.append(ts)
             result.span_ids.append(ts.id)
             result.span_count += 1
         await self._session.flush()
@@ -115,11 +123,21 @@ class IngestionService:
         chunk_models: list[Chunk] = []
 
         for candidate in candidates:
+            start_span_id = (
+                span_models[candidate.start_span_index].id
+                if candidate.start_span_index is not None else None
+            )
+            end_span_id = (
+                span_models[candidate.end_span_index].id
+                if candidate.end_span_index is not None else None
+            )
             c = Chunk(
                 id=uuid.uuid4(),
                 expression_id=expr.id,
                 corpus_id=self._corpus_id,
                 text=candidate.text,
+                start_span_id=start_span_id,
+                end_span_id=end_span_id,
                 token_count=candidate.token_count,
             )
             self._session.add(c)

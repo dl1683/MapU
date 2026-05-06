@@ -12,19 +12,25 @@ from mapu.models.authority import SourcePolicyEval
 
 _DOCUMENT_TYPE_SCORES: dict[str, float] = {
     "court_opinion": 0.95,
+    "court_order": 0.95,
     "statute": 0.95,
     "regulation": 0.90,
-    "peer_reviewed_paper": 0.88,
+    "peer_reviewed_article": 0.88,
+    "clinical_trial_report": 0.85,
     "government_filing": 0.85,
     "sec_filing": 0.85,
-    "official_report": 0.80,
+    "public_registry": 0.82,
     "contract": 0.78,
-    "technical_standard": 0.75,
-    "audit_report": 0.75,
-    "news_article": 0.55,
-    "blog_post": 0.35,
-    "social_media": 0.20,
-    "unknown": 0.40,
+    "amendment": 0.78,
+    "retraction_notice": 0.75,
+    "cve_record": 0.72,
+    "code_file": 0.60,
+    "press_release": 0.55,
+    "earnings_call_transcript": 0.55,
+    "state_media_report": 0.40,
+    "internal_document": 0.35,
+    "leaked_document": 0.25,
+    "other": 0.40,
 }
 
 _PUBLICATION_CONTEXT_MODIFIER: dict[str, float] = {

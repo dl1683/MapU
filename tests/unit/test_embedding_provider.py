@@ -74,3 +74,11 @@ class TestHashEmbeddingProvider:
         results = await provider.embed_texts(["test finite"])
         for val in results[0]:
             assert math.isfinite(val)
+
+    def test_zero_dimensions_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positive"):
+            HashEmbeddingProvider(dimensions=0)
+
+    def test_negative_dimensions_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positive"):
+            HashEmbeddingProvider(dimensions=-10)

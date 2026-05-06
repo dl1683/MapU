@@ -1,0 +1,37 @@
+"""Tests verifying protocol compliance across implementations."""
+
+from __future__ import annotations
+
+from mapu.evidence.chunking import Chunker, SimpleCharTokenCounter, SpanAwareChunker, TokenCounter
+from mapu.evidence.docx import DocxParser
+from mapu.evidence.parsers import DocumentParser
+from mapu.evidence.pdf import PdfParser
+from mapu.evidence.plaintext import PlaintextParser
+from mapu.providers.embedding_local import HashEmbeddingProvider
+from mapu.providers.embeddings import EmbeddingProvider
+
+
+class TestDocumentParserProtocol:
+    def test_plaintext_is_document_parser(self) -> None:
+        assert isinstance(PlaintextParser(), DocumentParser)
+
+    def test_pdf_is_document_parser(self) -> None:
+        assert isinstance(PdfParser(), DocumentParser)
+
+    def test_docx_is_document_parser(self) -> None:
+        assert isinstance(DocxParser(), DocumentParser)
+
+
+class TestChunkerProtocol:
+    def test_span_aware_is_chunker(self) -> None:
+        assert isinstance(SpanAwareChunker(), Chunker)
+
+
+class TestTokenCounterProtocol:
+    def test_simple_char_is_token_counter(self) -> None:
+        assert isinstance(SimpleCharTokenCounter(), TokenCounter)
+
+
+class TestEmbeddingProviderProtocol:
+    def test_hash_is_embedding_provider(self) -> None:
+        assert isinstance(HashEmbeddingProvider(), EmbeddingProvider)

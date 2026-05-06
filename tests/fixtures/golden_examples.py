@@ -187,7 +187,7 @@ L5 = GoldenExample(
 F1 = GoldenExample(
     code="F1",
     domain="finance",
-    description="Debt covenant ratio: Interest Coverage >= 3.0x",
+    description="Debt covenant ratio: Consolidated Leverage Ratio <= 3.50:1.00",
     handles=[
         HandleFixture(canonical_name="Borrower", kind="party"),
     ],
@@ -195,9 +195,9 @@ F1 = GoldenExample(
         PropositionFixture(
             frame_type="constraint",
             predicate="maintain",
-            normalized_text="Borrower shall maintain Interest Coverage Ratio >= 3.0x",
-            qualifiers={"ratio_type": "interest_coverage", "threshold": 3.0, "operator": ">="},
-            semantic_key="borrower:maintain:icr:3.0x",
+            normalized_text="Borrower shall maintain Consolidated Leverage Ratio not greater than 3.50:1.00",
+            qualifiers={"ratio_type": "leverage", "threshold": 3.5, "operator": "<="},
+            semantic_key="borrower:maintain:leverage:3.5x",
         ),
     ],
     situations=[SituationFixture(kind="contractual_terms", name="Credit agreement covenants")],

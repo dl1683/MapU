@@ -8,6 +8,7 @@ from mapu.computation.registry import (
     DifferenceCheck,
     RatioComparison,
     ThresholdCheck,
+    _resolve_operator,
     get_evaluator,
 )
 
@@ -129,3 +130,11 @@ class TestRegistry:
     def test_get_unknown_evaluator_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown evaluator"):
             get_evaluator("nonexistent")
+
+    def test_unknown_operator_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown operator"):
+            _resolve_operator({"operator": "between"})
+
+    def test_unknown_comparison_word_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown operator"):
+            _resolve_operator({"comparison": "not_a_real_op"})

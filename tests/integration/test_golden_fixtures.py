@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,8 +39,8 @@ def _parse_valid_range(
         return None
     try:
         from sqlalchemy.dialects.postgresql import Range
-        lower = datetime.fromisoformat(vr[0]).replace(tzinfo=timezone.utc) if vr[0] else None
-        upper = datetime.fromisoformat(vr[1]).replace(tzinfo=timezone.utc) if vr[1] else None
+        lower = datetime.fromisoformat(vr[0]).replace(tzinfo=UTC) if vr[0] else None
+        upper = datetime.fromisoformat(vr[1]).replace(tzinfo=UTC) if vr[1] else None
         return Range(lower, upper)
     except ImportError:
         return None

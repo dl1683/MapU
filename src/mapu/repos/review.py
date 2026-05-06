@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from mapu.models.review import Changeset, ChangesetOperation
 from mapu.repos.base import CorpusScopedRepo
@@ -18,26 +18,21 @@ class ChangesetRepo(CorpusScopedRepo[Changeset]):
     model = Changeset
 
     async def transition(self, changeset_id: uuid.UUID, new_status: str) -> None:
-        current = await self.session.get(Changeset, changeset_id)
+        current = await self.get(changeset_id)
         if current is None:
-            raise ValueError(f"Changeset {changeset_id} not found")
+            raise ValueError(f"Changeset {changeset_id} not found in corpus {self.corpus_id}")
         validate_changeset_transition(
             ChangesetStatus(current.status), ChangesetStatus(new_status),
         )
-        stmt = (
-            update(Changeset)
-            .where(Changeset.id == changeset_id, Changeset.corpus_id == self.corpus_id)
-            .values(status=new_status)
-        )
-        await self.session.execute(stmt)
+        current.status = new_status
+        await self.session.flush()
 
     async def mark_applied(self, changeset_id: uuid.UUID) -> None:
-        stmt = (
-            update(Changeset)
-            .where(Changeset.id == changeset_id, Changeset.corpus_id == self.corpus_id)
-            .values(status="applied", applied_at=datetime.now(UTC))
-        )
-        await self.session.execute(stmt)
+        await self.transition(changeset_id, ChangesetStatus.APPLIED.value)
+        current = await self.get(changeset_id)
+        if current is not None:
+            current.applied_at = datetime.now(UTC)
+            await self.session.flush()
 
     async def append_operation(
         self,

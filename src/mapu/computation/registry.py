@@ -19,14 +19,21 @@ _COMPARISON_WORD_TO_SYMBOL: dict[str, str] = {
 }
 
 
+_VALID_OPERATORS: frozenset[str] = frozenset({">=", "<=", ">", "<", "=="})
+
+
 def _resolve_operator(definition: dict[str, Any]) -> str:
     if "operator" in definition:
         op: str = definition["operator"]
-        return _COMPARISON_WORD_TO_SYMBOL.get(op, op)
-    if "comparison" in definition:
+        resolved = _COMPARISON_WORD_TO_SYMBOL.get(op, op)
+    elif "comparison" in definition:
         word: str = definition["comparison"]
-        return _COMPARISON_WORD_TO_SYMBOL.get(word, word)
-    return ">="
+        resolved = _COMPARISON_WORD_TO_SYMBOL.get(word, word)
+    else:
+        return ">="
+    if resolved not in _VALID_OPERATORS:
+        raise ValueError(f"Unknown operator: {resolved!r}")
+    return resolved
 
 
 @dataclass(frozen=True)

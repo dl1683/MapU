@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,21 @@ from tests.fixtures.golden_examples import ALL_EXAMPLES, GoldenExample
 pytestmark = pytest.mark.integration
 
 NOW = datetime.now(UTC)
+
+
+def _parse_valid_range(
+    vr: tuple[str | None, str | None] | None,
+) -> object | None:
+    """Convert fixture valid_range tuple to a PostgreSQL-compatible Range."""
+    if vr is None:
+        return None
+    try:
+        from sqlalchemy.dialects.postgresql import Range
+        lower = datetime.fromisoformat(vr[0]).replace(tzinfo=timezone.utc) if vr[0] else None
+        upper = datetime.fromisoformat(vr[1]).replace(tzinfo=timezone.utc) if vr[1] else None
+        return Range(lower, upper)
+    except ImportError:
+        return None
 
 
 class SeededExample:
@@ -108,6 +123,7 @@ async def seed_golden_example(
             value=pf.value,
             polarity=pf.polarity,
             modality=pf.modality,
+            valid_range=_parse_valid_range(pf.valid_range),
             normalized_text=pf.normalized_text,
             qualifiers=pf.qualifiers,
             semantic_key=pf.semantic_key,

@@ -301,3 +301,47 @@ class TestHardExamples:
 
         assert result_guidance.status == TruthStatus.REPORTED
         assert result_actual.status == TruthStatus.ACCEPTED
+
+
+class TestNeutralStances:
+    """Questions and conditions stances should not create truth on their own."""
+
+    async def test_questions_only_unknown(
+        self, policy: TruthPolicyV1, provider: InMemoryTruthEvidenceProvider
+    ) -> None:
+        provider.add_evidence(PROP, SIT, [
+            make_evidence(Stance.QUESTIONS, authority_score=0.70),
+        ])
+        result = await policy.compute(PROP, SIT, provider)
+        assert result.status == TruthStatus.UNKNOWN
+
+    async def test_conditions_only_unknown(
+        self, policy: TruthPolicyV1, provider: InMemoryTruthEvidenceProvider
+    ) -> None:
+        provider.add_evidence(PROP, SIT, [
+            make_evidence(Stance.CONDITIONS, authority_score=0.80),
+        ])
+        result = await policy.compute(PROP, SIT, provider)
+        assert result.status == TruthStatus.UNKNOWN
+
+    async def test_assert_plus_questions_accepted(
+        self, policy: TruthPolicyV1, provider: InMemoryTruthEvidenceProvider
+    ) -> None:
+        """Questions should not oppose assertions."""
+        provider.add_evidence(PROP, SIT, [
+            make_evidence(Stance.ASSERTS, authority_score=0.80),
+            make_evidence(Stance.QUESTIONS, authority_score=0.70),
+        ])
+        result = await policy.compute(PROP, SIT, provider)
+        assert result.status == TruthStatus.ACCEPTED
+
+    async def test_assert_plus_conditions_accepted(
+        self, policy: TruthPolicyV1, provider: InMemoryTruthEvidenceProvider
+    ) -> None:
+        """Conditions should not oppose assertions."""
+        provider.add_evidence(PROP, SIT, [
+            make_evidence(Stance.ASSERTS, authority_score=0.80),
+            make_evidence(Stance.CONDITIONS, authority_score=0.80),
+        ])
+        result = await policy.compute(PROP, SIT, provider)
+        assert result.status == TruthStatus.ACCEPTED

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy import ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TSTZRANGE, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,7 +28,7 @@ class ComputationSpec(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column()
     status: Mapped[str] = mapped_column(Text, nullable=False, default="candidate")
     effective_range: Mapped[object | None] = mapped_column(TSTZRANGE)
-    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
 
 class ComputationRun(Base):
@@ -46,4 +46,4 @@ class ComputationRun(Base):
     engine_version: Mapped[str] = mapped_column(Text, nullable=False)
     errors: Mapped[dict | None] = mapped_column(JSONB)
     result_proposition_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    computed_at: Mapped[datetime] = mapped_column(nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))

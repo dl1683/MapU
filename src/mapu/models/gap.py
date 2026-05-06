@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import ForeignKey, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,7 +24,7 @@ class Gap(Base):
     severity: Mapped[str] = mapped_column(Text, nullable=False, default="moderate")
     status: Mapped[str] = mapped_column(Text, nullable=False, default="open")
     detected_by: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     resolved_at: Mapped[datetime | None] = mapped_column()
 
 

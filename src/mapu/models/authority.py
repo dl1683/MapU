@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,4 +31,4 @@ class SourcePolicyEval(Base):
     source_identity: Mapped[str | None] = mapped_column(Text)
     independence_group: Mapped[str | None] = mapped_column(Text)
     authority_score: Mapped[float] = mapped_column(nullable=False)
-    evaluated_at: Mapped[datetime] = mapped_column(nullable=False)
+    evaluated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))

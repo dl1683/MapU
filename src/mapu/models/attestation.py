@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import ForeignKey, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,7 +27,7 @@ class Attestation(Base):
     extraction_confidence: Mapped[float] = mapped_column(nullable=False)
     attestation_strength: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="candidate")
-    system_created: Mapped[datetime] = mapped_column(nullable=False)
+    system_created: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     system_invalidated: Mapped[datetime | None] = mapped_column()
 
 
@@ -42,5 +42,5 @@ class AttestationSituation(Base):
     )
     assignment_confidence: Mapped[float] = mapped_column(nullable=False)
     assignment_basis: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     invalidated_at: Mapped[datetime | None] = mapped_column()

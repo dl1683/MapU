@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import ForeignKey, Integer, LargeBinary, Text
+from sqlalchemy import ForeignKey, Integer, LargeBinary, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,7 +24,7 @@ class DocumentWork(Base):
     mime_type: Mapped[str] = mapped_column(Text, nullable=False)
     source_uri: Mapped[str | None] = mapped_column(Text)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
-    ingested_at: Mapped[datetime] = mapped_column(nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
 
 class DocumentExpression(Base):
@@ -36,7 +36,7 @@ class DocumentExpression(Base):
         UUID(as_uuid=True), ForeignKey("corpus.id"), nullable=False
     )
     parser_version: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
 
 class StructureNode(Base):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TSTZRANGE, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,7 +30,7 @@ class Proposition(Base):
     normalized_text: Mapped[str] = mapped_column(Text, nullable=False)
     qualifiers: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     semantic_key: Mapped[str] = mapped_column(Text, nullable=False)
-    system_created: Mapped[datetime] = mapped_column(nullable=False)
+    system_created: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
 
 class PropositionParticipant(Base):

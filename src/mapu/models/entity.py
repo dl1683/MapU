@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import ARRAY, ForeignKey, Text
+from sqlalchemy import ARRAY, ForeignKey, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,7 +26,7 @@ class Handle(Base):
     embedding: Mapped[list | None] = mapped_column(Vector)
     embedding_model: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
 
 class IdentityDecisionModel(Base):
@@ -42,5 +42,5 @@ class IdentityDecisionModel(Base):
     confidence: Mapped[float] = mapped_column(nullable=False)
     evidence: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     decided_by: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     invalidated_at: Mapped[datetime | None] = mapped_column()

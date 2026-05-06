@@ -157,6 +157,19 @@ class TestDefinedTermExtractor:
         assert len(result.frames) == 1
         assert result.frames[0].subject.text == "Closing Date"
 
+    async def test_definition_value_excludes_term(
+        self, extractor: DefinedTermExtractor
+    ) -> None:
+        ctx = _make_ctx(
+            '"Closing Date" means the date on which the closing occurs.'
+        )
+        result = await extractor.extract(ctx)
+        assert len(result.frames) == 1
+        definition = result.frames[0].value
+        assert definition is not None
+        assert '"Closing Date"' not in definition["definition"]
+        assert "means" not in definition["definition"]
+
     async def test_no_definitions(
         self, extractor: DefinedTermExtractor
     ) -> None:
@@ -296,3 +309,15 @@ class TestAbstentionGate:
         gate = AbstentionGate()
         results = gate.evaluate(())
         assert results == []
+
+    def test_out_of_range_confidence_rejected(self) -> None:
+        gate = AbstentionGate()
+        frame = _make_frame(confidence=1.5)
+        with pytest.raises(ValueError, match="extraction_confidence"):
+            gate.evaluate((frame,))
+
+    def test_negative_confidence_rejected(self) -> None:
+        gate = AbstentionGate()
+        frame = _make_frame(confidence=-0.1)
+        with pytest.raises(ValueError, match="extraction_confidence"):
+            gate.evaluate((frame,))

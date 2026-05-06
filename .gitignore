@@ -1,0 +1,130 @@
+# ============================================================
+# MapU .gitignore
+# ============================================================
+
+# ----------------------------------------------------------
+# PROPRIETARY PROCESS & ENGINEERING WORKFLOW (NEVER PUBLIC)
+# ----------------------------------------------------------
+
+# Claude Code project instructions & agent configuration
+.claude/
+CLAUDE.md
+**/CLAUDE.md
+
+# Internal process documentation & engineering methodology
+.process/
+**/.process/
+
+# Code review artifacts (any reviewer tooling)
+**/codex_*
+**/review_*
+**/*_review.md
+**/*_review.txt
+**/*_audit.md
+**/*_comparative_analysis.md
+
+# Internal decision logs that expose methodology
+**/DECISIONS_INTERNAL.md
+**/ASSUMPTIONS_INTERNAL.md
+
+# Session transcripts & agent conversation logs
+**/*.session
+**/*.session.json
+**/sessions/
+
+# ----------------------------------------------------------
+# STANDARD PYTHON
+# ----------------------------------------------------------
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ----------------------------------------------------------
+# IDE & EDITOR
+# ----------------------------------------------------------
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----------------------------------------------------------
+# ENVIRONMENT & SECRETS
+# ----------------------------------------------------------
+
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+credentials.json
+secrets.yaml
+
+# ----------------------------------------------------------
+# DATABASE & LOCAL STATE
+# ----------------------------------------------------------
+
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.mapu/
+
+# ----------------------------------------------------------
+# TEST & COVERAGE
+# ----------------------------------------------------------
+
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ----------------------------------------------------------
+# DOCKER & INFRASTRUCTURE
+# ----------------------------------------------------------
+
+docker-compose.override.yml
+.docker/
+
+# ----------------------------------------------------------
+# MODELS & LARGE ARTIFACTS
+# ----------------------------------------------------------
+
+models/
+*.bin
+*.onnx
+*.safetensors
+*.gguf
+*.pt
+*.pth
+data/raw/
+data/private/
+
+# ----------------------------------------------------------
+# OS
+# ----------------------------------------------------------
+
+*.log
+*.tmp
+*.bak

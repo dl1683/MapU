@@ -24,13 +24,18 @@ def _make_mock_session(
     session.flush = AsyncMock()
 
     if spans is not None or document_id is not None:
+        doc_id = document_id or uuid.uuid4()
+
         doc_result = MagicMock()
-        doc_result.scalar_one_or_none.return_value = document_id or uuid.uuid4()
+        doc_result.scalar_one_or_none.return_value = doc_id
+
+        spe_result = MagicMock()
+        spe_result.scalar_one_or_none.return_value = doc_id
 
         span_result = MagicMock()
         span_result.scalars.return_value.all.return_value = spans or []
 
-        session.execute = AsyncMock(side_effect=[doc_result, span_result])
+        session.execute = AsyncMock(side_effect=[doc_result, spe_result, span_result])
 
     return session
 

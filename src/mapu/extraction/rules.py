@@ -7,7 +7,7 @@ import contextlib
 import re
 from datetime import datetime
 
-import dateutil.parser as dateutil_parser  # type: ignore[import-untyped]
+import dateutil.parser as dateutil_parser
 
 from mapu.extraction.types import (
     EntityMention,
@@ -165,52 +165,64 @@ class AmendmentExtractor:
         all_refs = list(_CROSS_REF_PATTERN.finditer(ctx.text))
         ref_starts = [r.start() for r in all_refs]
 
+        raw_matches: list[re.Match[str]] = []
         for pattern in _AMENDMENT_PATTERNS:
-            for match in pattern.finditer(ctx.text):
-                ref_match = _nearest_preceding_ref(
-                    all_refs, ref_starts, match.start()
-                )
-                target_ref = ref_match.group() if ref_match else None
+            raw_matches.extend(pattern.finditer(ctx.text))
 
-                signals.append(ExtractionSignal(
-                    signal_type="amendment",
-                    data={
-                        "action": match.group().strip().lower(),
-                        "target_reference": target_ref,
-                    },
-                    start_char=ctx.start_char + match.start(),
-                    end_char=ctx.start_char + match.end(),
+        raw_matches.sort(key=lambda m: m.end() - m.start(), reverse=True)
+        covered: list[tuple[int, int]] = []
+        deduped: list[re.Match[str]] = []
+        for m in raw_matches:
+            if any(m.start() < ce and cs < m.end() for cs, ce in covered):
+                continue
+            covered.append((m.start(), m.end()))
+            deduped.append(m)
+
+        for match in deduped:
+            ref_match = _nearest_preceding_ref(
+                all_refs, ref_starts, match.start()
+            )
+            target_ref = ref_match.group() if ref_match else None
+
+            signals.append(ExtractionSignal(
+                signal_type="amendment",
+                data={
+                    "action": match.group().strip().lower(),
+                    "target_reference": target_ref,
+                },
+                start_char=ctx.start_char + match.start(),
+                end_char=ctx.start_char + match.end(),
+                source=self.name,
+            ))
+
+            if target_ref:
+                ref_start = ref_match.start() if ref_match else match.start()
+                ref_end = ref_match.end() if ref_match else match.end()
+                subject = EntityMention(
+                    text=target_ref,
+                    kind="document_section",
+                    start_char=ctx.start_char + ref_start,
+                    end_char=ctx.start_char + ref_end,
+                    confidence=0.9,
                     source=self.name,
+                )
+                frames.append(PropositionFrameCandidate(
+                    span_id=ctx.span_id,
+                    frame_type=FrameType.STATUS,
+                    subject=subject,
+                    predicate="amended",
+                    object=None,
+                    value={"action": match.group().strip().lower()},
+                    polarity=True,
+                    modality=None,
+                    valid_range=None,
+                    normalized_text=f"{target_ref} {match.group().strip().lower()}",
+                    qualifiers={},
+                    stance=Stance.ASSERTS,
+                    attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+                    extraction_method=self.name,
+                    extraction_confidence=0.9,
                 ))
-
-                if target_ref:
-                    ref_start = ref_match.start() if ref_match else match.start()
-                    ref_end = ref_match.end() if ref_match else match.end()
-                    subject = EntityMention(
-                        text=target_ref,
-                        kind="document_section",
-                        start_char=ctx.start_char + ref_start,
-                        end_char=ctx.start_char + ref_end,
-                        confidence=0.9,
-                        source=self.name,
-                    )
-                    frames.append(PropositionFrameCandidate(
-                        span_id=ctx.span_id,
-                        frame_type=FrameType.STATUS,
-                        subject=subject,
-                        predicate="amended",
-                        object=None,
-                        value={"action": match.group().strip().lower()},
-                        polarity=True,
-                        modality=None,
-                        valid_range=None,
-                        normalized_text=f"{target_ref} {match.group().strip().lower()}",
-                        qualifiers={},
-                        stance=Stance.ASSERTS,
-                        attestation_strength=AttestationStrength.DIRECT_STATEMENT,
-                        extraction_method=self.name,
-                        extraction_confidence=0.9,
-                    ))
 
         return ExtractorOutput(frames=tuple(frames), signals=tuple(signals))
 

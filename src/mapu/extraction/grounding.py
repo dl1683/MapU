@@ -15,7 +15,7 @@ from mapu.extraction.abstention import AbstentionDecision, AbstentionResult
 from mapu.extraction.types import EntityMention
 from mapu.models.attestation import Attestation, AttestationSituation
 from mapu.models.entity import Handle
-from mapu.models.proposition import Proposition
+from mapu.models.proposition import Proposition, PropositionParticipant
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,25 @@ class CandidateGrounder:
             qualifiers=frame.qualifiers,
             semantic_key=semantic_key,
         )
+
+        if created:
+            self._session.add(PropositionParticipant(
+                id=uuid.uuid4(),
+                proposition_id=prop.id,
+                handle_id=subject_handle.id,
+                corpus_id=self._corpus_id,
+                role="subject",
+                ordinal=0,
+            ))
+            if object_handle is not None:
+                self._session.add(PropositionParticipant(
+                    id=uuid.uuid4(),
+                    proposition_id=prop.id,
+                    handle_id=object_handle.id,
+                    corpus_id=self._corpus_id,
+                    role="object",
+                    ordinal=1,
+                ))
 
         attestation_status = (
             "accepted" if result.decision == AbstentionDecision.ACCEPTED

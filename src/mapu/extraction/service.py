@@ -19,6 +19,7 @@ from mapu.extraction.types import (
     Extractor,
     ExtractorOutput,
 )
+from mapu.models.authority import SourcePolicyEval
 from mapu.models.evidence import DocumentExpression, TextSpan
 
 
@@ -34,6 +35,7 @@ class ExtractionResult:
     candidate_status: int = 0
     rejected: int = 0
     materialized: list[MaterializedExtraction] = field(default_factory=list)
+    signals: list[ExtractionSignal] = field(default_factory=list)
 
 
 class ExtractionService:
@@ -64,6 +66,7 @@ class ExtractionService:
         default_situation_id: uuid.UUID | None = None,
     ) -> ExtractionResult:
         document_id = await self._get_document_id(expression_id)
+        await self._validate_source_policy(source_policy_eval_id, document_id)
         spans = await self._load_spans(expression_id)
 
         result = ExtractionResult(expression_id=expression_id)
@@ -109,6 +112,7 @@ class ExtractionService:
             merged = self._merge.merge(outputs)
             result.candidates_produced += len(merged.frames)
             result.duplicates_removed += merged.duplicates_removed
+            result.signals.extend(merged.signals)
 
             abstention_results = self._abstention.evaluate(merged.frames)
 
@@ -144,6 +148,25 @@ class ExtractionService:
         if row is None:
             raise ValueError(f"Expression {expression_id} not found")
         return row
+
+    async def _validate_source_policy(
+        self, source_policy_eval_id: uuid.UUID, document_id: uuid.UUID
+    ) -> None:
+        stmt = select(SourcePolicyEval.document_id).where(
+            SourcePolicyEval.id == source_policy_eval_id,
+            SourcePolicyEval.corpus_id == self._corpus_id,
+        )
+        r = await self._session.execute(stmt)
+        spe_doc_id = r.scalar_one_or_none()
+        if spe_doc_id is None:
+            raise ValueError(
+                f"SourcePolicyEval {source_policy_eval_id} not found"
+            )
+        if spe_doc_id != document_id:
+            raise ValueError(
+                f"SourcePolicyEval document_id {spe_doc_id} does not match "
+                f"expression document_id {document_id}"
+            )
 
     async def _load_spans(self, expression_id: uuid.UUID) -> list[TextSpan]:
         stmt = select(TextSpan).where(

@@ -33,8 +33,10 @@ def upgrade() -> None:
         "  SELECT DISTINCT ON (ats.attestation_id, ats.corpus_id) ats.id "
         "  FROM attestation_situation ats "
         "  JOIN situation s ON ats.situation_id = s.id "
+        "  LEFT JOIN survivors sv ON s.id = sv.id "
         "  WHERE s.kind = 'default' AND ats.invalidated_at IS NULL "
-        "  ORDER BY ats.attestation_id, ats.corpus_id, ats.created_at ASC"
+        "  ORDER BY ats.attestation_id, ats.corpus_id, "
+        "    CASE WHEN sv.id IS NOT NULL THEN 0 ELSE 1 END, ats.created_at ASC"
         ") "
         "DELETE FROM attestation_situation AS ats_del "
         "USING dupes d "
@@ -46,18 +48,36 @@ def upgrade() -> None:
 
     op.execute(
         _DUPES_CTE
-        + ", keepers AS ("
-        "  SELECT DISTINCT ON (ps.proposition_id, ps.corpus_id) ps.id "
+        + "DELETE FROM proposition_state AS ps_del "
+        "USING dupes d "
+        "WHERE ps_del.situation_id = d.id "
+        "AND ps_del.corpus_id = d.corpus_id "
+        "AND EXISTS ("
+        "  SELECT 1 FROM proposition_state ps_surv "
+        "  WHERE ps_surv.proposition_id = ps_del.proposition_id "
+        "  AND ps_surv.situation_id = d.survivor_id "
+        "  AND ps_surv.corpus_id = ps_del.corpus_id"
+        ")"
+    )
+    op.execute(
+        _DUPES_CTE
+        + ", source_pick AS ("
+        "  SELECT DISTINCT ON (ps.proposition_id, ps.corpus_id) "
+        "    ps.situation_id AS keep_sit, ps.proposition_id, ps.corpus_id "
         "  FROM proposition_state ps "
-        "  JOIN situation s ON ps.situation_id = s.id "
-        "  WHERE s.kind = 'default' "
+        "  JOIN dupes d ON ps.situation_id = d.id AND ps.corpus_id = d.corpus_id "
         "  ORDER BY ps.proposition_id, ps.corpus_id, ps.computed_at DESC"
         ") "
         "DELETE FROM proposition_state AS ps_del "
         "USING dupes d "
         "WHERE ps_del.situation_id = d.id "
         "AND ps_del.corpus_id = d.corpus_id "
-        "AND ps_del.id NOT IN (SELECT id FROM keepers)"
+        "AND NOT EXISTS ("
+        "  SELECT 1 FROM source_pick sp "
+        "  WHERE sp.proposition_id = ps_del.proposition_id "
+        "  AND sp.corpus_id = ps_del.corpus_id "
+        "  AND sp.keep_sit = ps_del.situation_id"
+        ")"
     )
 
     op.execute(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from mapu.query.types import (
     IntentClassifier,
     QueryIntent,
@@ -76,37 +78,44 @@ class CascadeGovernor:
         return Tier.STRUCTURED
 
 
+_QUOTED_RE = re.compile(r'"([^"]+)"')
+_CAPITALIZED_RE = re.compile(
+    r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b",
+)
+_ACRONYM_RE = re.compile(r"\b([A-Z]{2,})\b")
+_NOUN_PHRASE_RE = re.compile(
+    r"(?:what is (?:a |an |the )?|who is (?:a |an |the )?|define |tell me about (?:the )?)"
+    r"(.+?)(?:\?|$)",
+    re.IGNORECASE,
+)
+_PREDICATE_RE = re.compile(
+    r"\b(own|control|manage|employ|relate|connect|pay|owe|define|obligat|terminat|vest|acquir)\w*\b",
+    re.IGNORECASE,
+)
+
+_ENTITY_SKIP = frozenset({
+    "What", "Who", "Where", "When", "How", "Which",
+    "Does", "Did", "Is", "Are", "The", "Can",
+    "Define", "Tell", "List", "Show", "Describe",
+    "Explain", "Find", "Give", "Identify",
+})
+
+
 def _extract_query_entities(question: str) -> list[str]:
     """Extract likely entity references from a query (lightweight heuristic)."""
-    import re
-
     entities: list[str] = []
-    quoted = re.findall(r'"([^"]+)"', question)
-    entities.extend(quoted)
+    entities.extend(_QUOTED_RE.findall(question))
 
-    capitalized = re.findall(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b", question)
-    skip = {
-        "What", "Who", "Where", "When", "How", "Which",
-        "Does", "Did", "Is", "Are", "The", "Can",
-        "Define", "Tell", "List", "Show", "Describe",
-        "Explain", "Find", "Give", "Identify",
-    }
-    for cap in capitalized:
-        if cap not in skip and cap not in entities:
+    for cap in _CAPITALIZED_RE.findall(question):
+        if cap not in _ENTITY_SKIP and cap not in entities:
             entities.append(cap)
 
-    acronyms = re.findall(r"\b([A-Z]{2,})\b", question)
-    for acr in acronyms:
+    for acr in _ACRONYM_RE.findall(question):
         if acr not in entities:
             entities.append(acr)
 
     if not entities:
-        noun_phrase = re.search(
-            r"(?:what is (?:a |an |the )?|who is (?:a |an |the )?|define |tell me about (?:the )?)"
-            r"(.+?)(?:\?|$)",
-            question,
-            re.IGNORECASE,
-        )
+        noun_phrase = _NOUN_PHRASE_RE.search(question)
         if noun_phrase:
             target = noun_phrase.group(1).strip().rstrip("?. ")
             if target:
@@ -117,11 +126,5 @@ def _extract_query_entities(question: str) -> list[str]:
 
 def _extract_query_predicates(question: str) -> list[str]:
     """Extract likely predicate keywords from a query."""
-    import re
-
-    verbs = re.findall(
-        r"\b(own|control|manage|employ|relate|connect|pay|owe|define|obligat|terminat|vest|acquir)\w*\b",
-        question,
-        re.IGNORECASE,
-    )
+    verbs = _PREDICATE_RE.findall(question)
     return list(set(v.lower() for v in verbs))

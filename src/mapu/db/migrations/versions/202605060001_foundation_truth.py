@@ -259,11 +259,11 @@ def upgrade() -> None:
 
     CREATE TABLE attestation (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      span_id UUID NOT NULL,
+      span_id UUID,
       proposition_id UUID NOT NULL,
       corpus_id UUID NOT NULL REFERENCES corpus(id),
-      source_policy_eval_id UUID NOT NULL,
-      stance TEXT NOT NULL CHECK (stance IN ('asserts', 'denies', 'reports', 'questions', 'conditions')),
+      source_policy_eval_id UUID,
+      stance TEXT NOT NULL CHECK (stance IN ('asserts', 'denies', 'reports', 'questions', 'conditions', 'derived')),
       extraction_method TEXT NOT NULL,
       extraction_confidence DOUBLE PRECISION NOT NULL CHECK (extraction_confidence >= 0 AND extraction_confidence <= 1),
       attestation_strength TEXT CHECK (attestation_strength IS NULL OR attestation_strength IN (

@@ -52,8 +52,10 @@ def _frame_dedup_key(frame: PropositionFrameCandidate) -> str:
     parts = [
         frame.frame_type.value,
         frame.subject.text.lower().strip(),
+        frame.subject.kind,
         frame.predicate.lower().strip(),
         frame.object.text.lower().strip() if frame.object else "",
+        frame.object.kind if frame.object else "",
         json.dumps(frame.value, sort_keys=True) if frame.value else "",
         str(frame.polarity),
         frame.modality or "",

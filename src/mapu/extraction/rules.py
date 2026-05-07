@@ -184,7 +184,7 @@ class AmendmentExtractor:
 
         for match in deduped:
             ref_match = _nearest_preceding_ref(
-                all_refs, ref_starts, match.start()
+                all_refs, ref_starts, match.start(), ctx.text,
             )
             target_ref = ref_match.group() if ref_match else None
 
@@ -235,12 +235,27 @@ def _nearest_preceding_ref(
     refs: list[re.Match[str]],
     ref_starts: list[int],
     position: int,
+    text: str,
 ) -> re.Match[str] | None:
     idx = bisect.bisect_right(ref_starts, position) - 1
     if idx < 0:
         return None
     ref = refs[idx]
-    return ref if ref.start() < position else None
+    if ref.start() >= position:
+        return None
+    sentence_start = _find_sentence_start(text, position)
+    if ref.start() < sentence_start:
+        return None
+    return ref
+
+
+def _find_sentence_start(text: str, position: int) -> int:
+    for i in range(position - 1, -1, -1):
+        if text[i] in "!?\n":
+            return i + 1
+        if text[i] == "." and not (i > 0 and text[i - 1].isdigit()):
+            return i + 1
+    return 0
 
 
 def _find_sentence_end(text: str, start: int) -> int:

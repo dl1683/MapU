@@ -225,6 +225,18 @@ class TestAmendmentExtractor:
         result = await extractor.extract(ctx)
         assert len(result.signals) == 0
 
+    async def test_cross_sentence_ref_not_attached(
+        self, extractor: AmendmentExtractor
+    ) -> None:
+        ctx = _make_ctx(
+            "Pursuant to Section 2.1 of this Agreement. "
+            "The foregoing clause is hereby amended."
+        )
+        result = await extractor.extract(ctx)
+        assert len(result.signals) == 1
+        assert result.signals[0].data["target_reference"] is None
+        assert len(result.frames) == 0
+
 
 class TestCandidateMergeEngine:
     def test_no_duplicates(self) -> None:
@@ -285,6 +297,56 @@ class TestCandidateMergeEngine:
             ExtractorOutput(frames=(frame_neg,)),
         ])
         assert len(result.frames) == 2
+
+
+    def test_same_text_different_kind_not_deduped(self) -> None:
+        engine = CandidateMergeEngine()
+        frame_person = PropositionFrameCandidate(
+            span_id=uuid.uuid4(),
+            frame_type=FrameType.RELATIONSHIP,
+            subject=EntityMention(
+                text="Mercury", kind="person",
+                start_char=0, end_char=7, confidence=1.0, source="test",
+            ),
+            predicate="located_in",
+            object=None,
+            value=None,
+            polarity=True,
+            modality=None,
+            valid_range=None,
+            normalized_text="Mercury located_in",
+            qualifiers={},
+            stance=Stance.ASSERTS,
+            attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+            extraction_method="test",
+            extraction_confidence=0.9,
+        )
+        frame_planet = PropositionFrameCandidate(
+            span_id=frame_person.span_id,
+            frame_type=FrameType.RELATIONSHIP,
+            subject=EntityMention(
+                text="Mercury", kind="planet",
+                start_char=0, end_char=7, confidence=1.0, source="test",
+            ),
+            predicate="located_in",
+            object=None,
+            value=None,
+            polarity=True,
+            modality=None,
+            valid_range=None,
+            normalized_text="Mercury located_in",
+            qualifiers={},
+            stance=Stance.ASSERTS,
+            attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+            extraction_method="test",
+            extraction_confidence=0.9,
+        )
+        result = engine.merge([
+            ExtractorOutput(frames=(frame_person,)),
+            ExtractorOutput(frames=(frame_planet,)),
+        ])
+        assert len(result.frames) == 2
+        assert result.duplicates_removed == 0
 
 
 class TestAbstentionGate:

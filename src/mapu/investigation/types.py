@@ -16,6 +16,7 @@ class ActionKind(StrEnum):
     ENTITY_LOOKUP = "entity_lookup"
     TEMPORAL_DIFF = "temporal_diff"
     GAP_CHECK = "gap_check"
+    FULL_DOCUMENT = "full_document"
 
 
 class TerminationReason(StrEnum):
@@ -44,6 +45,7 @@ class InvestigationAction:
     entities: tuple[str, ...] = ()
     predicates: tuple[str, ...] = ()
     reason: str = ""
+    document_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)

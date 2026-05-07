@@ -392,7 +392,7 @@ class TestParseFindings:
         findings = _parse_findings({}, ())
         assert len(findings) == 0
 
-    def test_chunk_only_evidence_skipped(self) -> None:
+    def test_chunk_only_evidence_accepted_with_penalty(self) -> None:
         from mapu.investigation.service import _parse_findings
         from mapu.investigation.types import InvestigationEvidence
 
@@ -426,7 +426,8 @@ class TestParseFindings:
             ],
         }
         findings = _parse_findings(raw, evidence)
-        assert len(findings) == 0
+        assert len(findings) == 1
+        assert findings[0].confidence == pytest.approx(0.8 * 0.6)
 
     def test_mixed_evidence_applies_confidence_penalty(self) -> None:
         from mapu.investigation.service import _parse_findings

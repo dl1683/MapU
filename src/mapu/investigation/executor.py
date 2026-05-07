@@ -63,6 +63,9 @@ class InvestigationExecutor:
         if action.kind == ActionKind.CHUNK_RETRIEVAL:
             return await self._execute_chunk(action, corpus_id, state)
 
+        if action.kind == ActionKind.FULL_DOCUMENT:
+            return await self._execute_full_document(action, corpus_id, state)
+
         return Observation(action=action)
 
     async def _execute_structured(
@@ -170,6 +173,44 @@ class InvestigationExecutor:
             action=action,
             span_texts=tuple(r.text for r in results),
             document_ids=doc_ids,
+            evidence=evidence,
+        )
+
+
+    async def _execute_full_document(
+        self,
+        action: InvestigationAction,
+        corpus_id: uuid.UUID,
+        state: InvestigationState,
+    ) -> Observation:
+        from mapu.repos.evidence import ChunkRepo
+
+        state.actions_executed += 1
+
+        if action.document_id is None:
+            return Observation(action=action)
+
+        repo = ChunkRepo(self._session, corpus_id)
+        chunks = await repo.get_for_expression(action.document_id)
+
+        results = [
+            RetrievalResult(
+                chunk_id=c.id,
+                text=c.text,
+                score=1.0,
+                expression_id=c.expression_id,
+            )
+            for c in chunks
+        ]
+
+        evidence = _chunk_results_to_evidence(results)
+        state.seen_document_ids.add(action.document_id)
+        state.documents_read = len(state.seen_document_ids)
+
+        return Observation(
+            action=action,
+            span_texts=tuple(c.text for c in chunks),
+            document_ids=(action.document_id,),
             evidence=evidence,
         )
 

@@ -24,6 +24,7 @@ from mapu.investigation.types import (
     TerminationReason,
 )
 from mapu.models.attestation import Attestation, AttestationSituation
+from mapu.models.authority import SourcePolicyEval
 from mapu.models.entity import Handle
 from mapu.models.lineage import DerivationEdge
 from mapu.models.proposition import Proposition, PropositionParticipant
@@ -182,13 +183,20 @@ class InvestigationService:
             return "No evidence found to answer this question."
 
         capped_evidence = evidence[:50]
-        evidence_text = "\n".join(
-            f"- {e.normalized_text}" + (
-                f" (source: {e.source_span[:200]})" if e.source_span else ""
-            )
-            for e in capped_evidence
-            if e.normalized_text
-        )
+        evidence_lines: list[str] = []
+        for e in capped_evidence:
+            if not e.normalized_text:
+                continue
+            line = f"- {e.normalized_text}"
+            meta: list[str] = []
+            if e.authority_score is not None:
+                meta.append(f"authority: {e.authority_score:.2f}")
+            if e.source_span:
+                meta.append(f"source: {e.source_span[:200]}")
+            if meta:
+                line += f" ({', '.join(meta)})"
+            evidence_lines.append(line)
+        evidence_text = "\n".join(evidence_lines)
 
         gap_text = "\n".join(f"- {g}" for g in gaps) if gaps else "None"
 
@@ -369,13 +377,25 @@ class InvestigationService:
                             confidence=draft.confidence,
                             created_at=now,
                         ))
+                    spe = SourcePolicyEval(
+                        id=uuid.uuid4(),
+                        document_id=prop_id,
+                        corpus_id=corpus_id,
+                        policy_version="v1",
+                        evaluator="investigation_derived",
+                        document_type="derived_finding",
+                        attestation_type="automated",
+                        authority_score=draft.confidence * 0.7,
+                        evaluated_at=now,
+                    )
+                    self._session.add(spe)
                     att_id = uuid.uuid4()
                     self._session.add(Attestation(
                         id=att_id,
                         span_id=None,
                         proposition_id=prop_id,
                         corpus_id=corpus_id,
-                        source_policy_eval_id=None,
+                        source_policy_eval_id=spe.id,
                         stance="derived",
                         extraction_method="investigation",
                         extraction_confidence=draft.confidence,
@@ -518,22 +538,25 @@ def _parse_findings(
         prop_indices = [
             i for i in valid_indices if evidence[i].is_proposition
         ]
-        if len(prop_indices) < 1:
-            continue
         basis = tuple(
             evidence[i].proposition_id for i in prop_indices
+        ) if prop_indices else tuple(
+            evidence[i].proposition_id for i in valid_indices
         )
 
         has_chunk_evidence = any(
             not evidence[i].is_proposition for i in valid_indices
         )
+        chunk_only = len(prop_indices) == 0
         raw_confidence = f.get("confidence")
         if not isinstance(raw_confidence, (int, float)) or isinstance(raw_confidence, bool):
             continue
         confidence = float(raw_confidence)
         if not (0.0 <= confidence <= 1.0) or not math.isfinite(confidence):
             continue
-        if has_chunk_evidence and len(prop_indices) < len(valid_indices):
+        if chunk_only:
+            confidence *= 0.6
+        elif has_chunk_evidence and len(prop_indices) < len(valid_indices):
             confidence *= 0.85
 
         drafts.append(DerivedPropositionDraft(

@@ -9,6 +9,14 @@ import sys
 import uuid
 
 
+def _uuid_arg(value: str) -> str:
+    try:
+        uuid.UUID(value)
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(f"invalid UUID: {value!r}") from err
+    return value
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="mapu", description="MapU knowledge substrate")
     sub = parser.add_subparsers(dest="command")
@@ -20,21 +28,21 @@ def main() -> None:
     sub.add_parser("mcp", help="Start the MCP server (stdio)")
 
     query_cmd = sub.add_parser("query", help="Query a corpus")
-    query_cmd.add_argument("corpus_id", type=str)
+    query_cmd.add_argument("corpus_id", type=_uuid_arg)
     query_cmd.add_argument("question", type=str)
     query_cmd.add_argument("--max-results", type=int, default=20)
-    query_cmd.add_argument("--situation-id", type=str, default=None)
+    query_cmd.add_argument("--situation-id", type=_uuid_arg, default=None)
     query_cmd.add_argument("--as-of", type=str, default=None)
     query_cmd.add_argument("--json", action="store_true", dest="json_output")
 
     ingest_cmd = sub.add_parser("ingest", help="Ingest a file into a corpus")
-    ingest_cmd.add_argument("corpus_id", type=str)
+    ingest_cmd.add_argument("corpus_id", type=_uuid_arg)
     ingest_cmd.add_argument("path", type=str)
     ingest_cmd.add_argument("--document-type", type=str, default=None)
     ingest_cmd.add_argument("--source-uri", type=str, default=None)
 
     inv_cmd = sub.add_parser("investigate", help="Run a multi-document investigation")
-    inv_cmd.add_argument("corpus_id", type=str)
+    inv_cmd.add_argument("corpus_id", type=_uuid_arg)
     inv_cmd.add_argument("question", type=str)
     inv_cmd.add_argument("--entity", action="append", default=[], dest="entities")
     inv_cmd.add_argument("--predicate", action="append", default=[], dest="predicates")
@@ -50,18 +58,18 @@ def main() -> None:
     cl.add_argument("--json", action="store_true", dest="json_output")
 
     entity_cmd = sub.add_parser("entities", help="Look up entities")
-    entity_cmd.add_argument("corpus_id", type=str)
+    entity_cmd.add_argument("corpus_id", type=_uuid_arg)
     entity_cmd.add_argument("name", type=str)
     entity_cmd.add_argument("--limit", type=int, default=20)
     entity_cmd.add_argument("--json", action="store_true", dest="json_output")
 
     gaps_cmd = sub.add_parser("gaps", help="List knowledge gaps")
-    gaps_cmd.add_argument("corpus_id", type=str)
+    gaps_cmd.add_argument("corpus_id", type=_uuid_arg)
     gaps_cmd.add_argument("--status", type=str, default="open")
     gaps_cmd.add_argument("--json", action="store_true", dest="json_output")
 
     activity_cmd = sub.add_parser("activity", help="List activity log")
-    activity_cmd.add_argument("corpus_id", type=str)
+    activity_cmd.add_argument("corpus_id", type=_uuid_arg)
     activity_cmd.add_argument("--limit", type=int, default=50)
     activity_cmd.add_argument("--json", action="store_true", dest="json_output")
 
@@ -224,9 +232,8 @@ async def _run_ingest(
         async with session_factory() as session:
             registry = ParserRegistry.create_default()
             chunker = SpanAwareChunker()
-            from mapu.extraction import get_default_extractors
-
             from mapu.config import EmbeddingSettings
+            from mapu.extraction import get_default_extractors
 
             metadata: dict[str, str] = {}
             if args.document_type:

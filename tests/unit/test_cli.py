@@ -33,6 +33,12 @@ class TestCLIParsing:
                 main()
             assert exc_info.value.code == 1
 
+    def test_bad_uuid_exits(self) -> None:
+        with patch.object(sys, "argv", ["mapu", "query", "not-a-uuid", "What?"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 2
+
     def test_serve_dispatches(self) -> None:
         with (
             patch.object(sys, "argv", ["mapu", "serve", "--host", "0.0.0.0", "--port", "9000"]),

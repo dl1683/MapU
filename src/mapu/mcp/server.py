@@ -11,6 +11,19 @@ _engine = None
 _session_factory = None
 
 
+def _parse_uuid(value: str, name: str = "id") -> uuid.UUID:
+    try:
+        return uuid.UUID(value)
+    except ValueError as err:
+        raise _UUIDError(name, value) from err
+
+
+class _UUIDError(Exception):
+    def __init__(self, name: str, value: str) -> None:
+        self.error_dict = {"error": f"Invalid {name}: {value!r}. Must be a valid UUID."}
+        super().__init__(self.error_dict["error"])
+
+
 def _get_session_factory():
     global _engine, _session_factory
     if _session_factory is None:
@@ -142,10 +155,9 @@ async def ingest_document(
     cid = uuid.UUID(corpus_id)
     factory = _get_session_factory()
     async with factory() as session:
+        from mapu.config import EmbeddingSettings
         from mapu.extraction import get_default_extractors
         from mapu.providers.embeddings import get_default_embedding_provider
-
-        from mapu.config import EmbeddingSettings
 
         registry = ParserRegistry.create_default()
         chunker = SpanAwareChunker()
@@ -391,7 +403,8 @@ async def contribute_proposition(
 
     _VALID_STANCES = {"asserts", "denies", "reports", "questions", "conditions"}
     if stance not in _VALID_STANCES:
-        return {"error": f"Invalid stance '{stance}'. Must be one of: {', '.join(sorted(_VALID_STANCES))}"}
+        valid = ", ".join(sorted(_VALID_STANCES))
+        return {"error": f"Invalid stance '{stance}'. Must be one of: {valid}"}
     if not isinstance(confidence, (int, float)) or confidence < 0.0 or confidence > 1.0:
         return {"error": f"confidence must be a number between 0.0 and 1.0, got {confidence}"}
     subject_name = subject_name.strip()
@@ -583,8 +596,11 @@ async def investigate(
     from mapu.investigation.service import InvestigationService
     from mapu.investigation.types import InvestigationBudget
 
-    cid = uuid.UUID(corpus_id)
-    sid = uuid.UUID(situation_id) if situation_id else None
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+        sid = _parse_uuid(situation_id, "situation_id") if situation_id else None
+    except _UUIDError as e:
+        return e.error_dict
     max_llm_calls = min(max(max_llm_calls, 1), 50)
     max_actions = min(max(max_actions, 1), 100)
     max_documents_read = min(max(max_documents_read, 1), 200)
@@ -664,7 +680,10 @@ async def list_gaps(
     """
     from mapu.repos.gap import GapRepo
 
-    cid = uuid.UUID(corpus_id)
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+    except _UUIDError as e:
+        return e.error_dict
     limit = min(max(limit, 1), 500)
     factory = _get_session_factory()
     async with factory() as session:
@@ -707,8 +726,11 @@ async def list_activity(
     """
     from mapu.repos.audit import ActivityRepo
 
-    cid = uuid.UUID(corpus_id)
-    eid = uuid.UUID(entity_id) if entity_id else None
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+        eid = _parse_uuid(entity_id, "entity_id") if entity_id else None
+    except _UUIDError as e:
+        return e.error_dict
     limit = min(max(limit, 1), 500)
     factory = _get_session_factory()
     async with factory() as session:

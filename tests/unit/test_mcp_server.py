@@ -612,3 +612,49 @@ class TestListActivityTool:
         assert len(result["activities"]) == 1
         assert result["activities"][0]["event_type"] == "ingestion"
         assert result["activities"][0]["actor"] == "system"
+
+
+class TestBadUUIDHandling:
+    @pytest.mark.asyncio
+    async def test_investigate_bad_corpus_id(self) -> None:
+        from mapu.mcp.server import investigate
+
+        result = await investigate(corpus_id="not-a-uuid", question="Why?")
+        assert "error" in result
+        assert "corpus_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_investigate_bad_situation_id(self) -> None:
+        from mapu.mcp.server import investigate
+
+        result = await investigate(
+            corpus_id=str(uuid.uuid4()), question="Why?", situation_id="bad",
+        )
+        assert "error" in result
+        assert "situation_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_list_gaps_bad_corpus_id(self) -> None:
+        from mapu.mcp.server import list_gaps
+
+        result = await list_gaps(corpus_id="bad-uuid")
+        assert "error" in result
+        assert "corpus_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_list_activity_bad_corpus_id(self) -> None:
+        from mapu.mcp.server import list_activity
+
+        result = await list_activity(corpus_id="bad-uuid")
+        assert "error" in result
+        assert "corpus_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_list_activity_bad_entity_id(self) -> None:
+        from mapu.mcp.server import list_activity
+
+        result = await list_activity(
+            corpus_id=str(uuid.uuid4()), entity_id="bad",
+        )
+        assert "error" in result
+        assert "entity_id" in result["error"]

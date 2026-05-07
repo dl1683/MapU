@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from datetime import datetime
 from typing import Any
@@ -37,7 +36,7 @@ class AsyncMapUClient:
 
     async def _request(
         self, method: str, path: str, **kwargs: Any,
-    ) -> dict[str, Any]:
+    ) -> Any:
         resp = await self._client.request(method, path, **kwargs)
         resp.raise_for_status()
         return resp.json()
@@ -174,6 +173,13 @@ class AsyncMapUClient:
             "POST", f"/corpora/{corpus_id}/repair/apply/{changeset_id}",
         )
 
+    async def repair_approve(
+        self, corpus_id: uuid.UUID, changeset_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST", f"/corpora/{corpus_id}/repair/approve/{changeset_id}",
+        )
+
     async def repair_rollback(
         self, corpus_id: uuid.UUID, changeset_id: uuid.UUID,
     ) -> dict[str, Any]:
@@ -290,7 +296,10 @@ class AsyncMapUClient:
 
 
 class MapUClient:
-    """Sync wrapper around AsyncMapUClient."""
+    """Sync HTTP client for the MapU REST API.
+
+    Uses httpx.Client directly — safe to use inside or outside async contexts.
+    """
 
     def __init__(
         self,
@@ -298,8 +307,11 @@ class MapUClient:
         api_key: str | None = None,
         timeout: float = 30.0,
     ) -> None:
-        self._async = AsyncMapUClient(
-            base_url=base_url, api_key=api_key, timeout=timeout,
+        headers: dict[str, str] = {}
+        if api_key:
+            headers["x-api-key"] = api_key
+        self._client = httpx.Client(
+            base_url=base_url, headers=headers, timeout=timeout,
         )
 
     def __enter__(self) -> MapUClient:
@@ -309,29 +321,26 @@ class MapUClient:
         self.close()
 
     def close(self) -> None:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-        if loop and loop.is_running():
-            loop.create_task(self._async.close())
-        else:
-            asyncio.run(self._async.close())
+        self._client.close()
 
-    def _run(self, coro: Any) -> Any:
-        return asyncio.run(coro)
+    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+        resp = self._client.request(method, path, **kwargs)
+        resp.raise_for_status()
+        return resp.json()
 
     def health(self) -> dict[str, Any]:
-        return self._run(self._async.health())
+        return self._request("GET", "/health")
 
     def create_corpus(self, name: str, description: str = "") -> dict[str, Any]:
-        return self._run(self._async.create_corpus(name, description))
+        return self._request(
+            "POST", "/corpora", json={"name": name, "description": description},
+        )
 
     def list_corpora(self, limit: int = 100) -> list[dict[str, Any]]:
-        return self._run(self._async.list_corpora(limit))
+        return self._request("GET", "/corpora", params={"limit": limit})
 
     def get_corpus(self, corpus_id: uuid.UUID) -> dict[str, Any]:
-        return self._run(self._async.get_corpus(corpus_id))
+        return self._request("GET", f"/corpora/{corpus_id}")
 
     def query(
         self,
@@ -341,9 +350,12 @@ class MapUClient:
         situation_id: uuid.UUID | None = None,
         as_of: datetime | None = None,
     ) -> dict[str, Any]:
-        return self._run(
-            self._async.query(corpus_id, question, max_results, situation_id, as_of),
-        )
+        params: dict[str, Any] = {"question": question, "max_results": max_results}
+        if situation_id:
+            params["situation_id"] = str(situation_id)
+        if as_of:
+            params["as_of"] = as_of.isoformat()
+        return self._request("GET", f"/corpora/{corpus_id}/query", params=params)
 
     def ingest_document(
         self,
@@ -353,14 +365,19 @@ class MapUClient:
         source_uri: str = "",
         **kwargs: Any,
     ) -> dict[str, Any]:
-        return self._run(
-            self._async.ingest_document(corpus_id, content, mime_type, source_uri, **kwargs),
-        )
+        body: dict[str, Any] = {
+            "content": content, "mime_type": mime_type,
+            "source_uri": source_uri, **kwargs,
+        }
+        return self._request("POST", f"/corpora/{corpus_id}/documents", json=body)
 
     def lookup_entities(
         self, corpus_id: uuid.UUID, name: str, limit: int = 20,
     ) -> list[dict[str, Any]]:
-        return self._run(self._async.lookup_entities(corpus_id, name, limit))
+        return self._request(
+            "GET", f"/corpora/{corpus_id}/entities",
+            params={"name": name, "limit": limit},
+        )
 
     def investigate(
         self,
@@ -368,73 +385,114 @@ class MapUClient:
         question: str,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        return self._run(self._async.investigate(corpus_id, question, **kwargs))
+        body: dict[str, Any] = {"question": question, **kwargs}
+        return self._request("POST", f"/corpora/{corpus_id}/investigations", json=body)
 
     def repair_preview(
         self, corpus_id: uuid.UUID, proposition_id: uuid.UUID,
     ) -> dict[str, Any]:
-        return self._run(self._async.repair_preview(corpus_id, proposition_id))
+        return self._request(
+            "POST", f"/corpora/{corpus_id}/repair/preview",
+            params={"proposition_id": str(proposition_id)},
+        )
 
     def repair_propose(
         self, corpus_id: uuid.UUID, proposition_id: uuid.UUID,
         reason: str = "", actor: str = "sdk",
     ) -> dict[str, Any]:
-        return self._run(
-            self._async.repair_propose(corpus_id, proposition_id, reason, actor),
+        return self._request(
+            "POST", f"/corpora/{corpus_id}/repair/propose",
+            json={
+                "proposition_id": str(proposition_id),
+                "reason": reason,
+                "actor": actor,
+            },
         )
 
     def repair_apply(
         self, corpus_id: uuid.UUID, changeset_id: uuid.UUID,
     ) -> dict[str, Any]:
-        return self._run(self._async.repair_apply(corpus_id, changeset_id))
+        return self._request(
+            "POST", f"/corpora/{corpus_id}/repair/apply/{changeset_id}",
+        )
+
+    def repair_approve(
+        self, corpus_id: uuid.UUID, changeset_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST", f"/corpora/{corpus_id}/repair/approve/{changeset_id}",
+        )
 
     def repair_rollback(
         self, corpus_id: uuid.UUID, changeset_id: uuid.UUID,
     ) -> dict[str, Any]:
-        return self._run(self._async.repair_rollback(corpus_id, changeset_id))
+        return self._request(
+            "POST", f"/corpora/{corpus_id}/repair/rollback/{changeset_id}",
+        )
 
     def contribute_proposition(
         self, corpus_id: uuid.UUID,
         subject_name: str, predicate: str, normalized_text: str,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        return self._run(
-            self._async.contribute_proposition(
-                corpus_id, subject_name, predicate, normalized_text, **kwargs,
-            ),
+        body: dict[str, Any] = {
+            "subject_name": subject_name,
+            "predicate": predicate,
+            "normalized_text": normalized_text,
+            **kwargs,
+        }
+        return self._request("POST", f"/corpora/{corpus_id}/contributions", json=body)
+
+    def review_attestation(
+        self,
+        corpus_id: uuid.UUID,
+        attestation_id: uuid.UUID,
+        decision: str,
+        actor: str = "sdk",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST", f"/corpora/{corpus_id}/contributions/review",
+            json={
+                "attestation_id": str(attestation_id),
+                "decision": decision,
+                "actor": actor,
+                "reason": reason,
+            },
         )
 
     def list_gaps(
         self, corpus_id: uuid.UUID, status: str = "open", **kwargs: Any,
     ) -> list[dict[str, Any]]:
-        return self._run(self._async.list_gaps(corpus_id, status, **kwargs))
+        return self._request(
+            "GET", f"/corpora/{corpus_id}/gaps",
+            params={"status": status, **kwargs},
+        )
 
     def list_activity(
         self, corpus_id: uuid.UUID, limit: int = 50, **kwargs: Any,
     ) -> list[dict[str, Any]]:
-        return self._run(self._async.list_activity(corpus_id, limit, **kwargs))
+        return self._request(
+            "GET", f"/corpora/{corpus_id}/activity",
+            params={"limit": limit, **kwargs},
+        )
 
     def list_situations(
         self, corpus_id: uuid.UUID, limit: int = 100,
     ) -> list[dict[str, Any]]:
-        return self._run(self._async.list_situations(corpus_id, limit))
+        return self._request(
+            "GET", f"/corpora/{corpus_id}/situations", params={"limit": limit},
+        )
 
     def create_situation(
         self, corpus_id: uuid.UUID, name: str, **kwargs: Any,
     ) -> dict[str, Any]:
-        return self._run(self._async.create_situation(corpus_id, name, **kwargs))
+        body: dict[str, Any] = {"name": name, **kwargs}
+        return self._request("POST", f"/corpora/{corpus_id}/situations", json=body)
 
     def get_situation(
         self, corpus_id: uuid.UUID, situation_id: uuid.UUID,
     ) -> dict[str, Any]:
-        return self._run(self._async.get_situation(corpus_id, situation_id))
-
-    def review_attestation(
-        self, corpus_id: uuid.UUID, attestation_id: uuid.UUID,
-        decision: str, actor: str = "sdk", reason: str = "",
-    ) -> dict[str, Any]:
-        return self._run(
-            self._async.review_attestation(
-                corpus_id, attestation_id, decision, actor, reason,
-            ),
+        return self._request(
+            "GET", f"/corpora/{corpus_id}/situations/{situation_id}",
         )

@@ -172,14 +172,13 @@ class DocumentController(Controller):
         data: IngestRequestDTO,
         db_session: AsyncSession,
     ) -> IngestResponse:
+        from mapu.config import EmbeddingSettings
         from mapu.evidence.chunking import SpanAwareChunker
         from mapu.evidence.ingest import IngestionService
         from mapu.evidence.parsers import ParserRegistry
         from mapu.evidence.types import DocumentBlob
         from mapu.extraction import get_default_extractors
         from mapu.providers.embeddings import get_default_embedding_provider
-
-        from mapu.config import EmbeddingSettings
 
         await _require_corpus(db_session, corpus_id)
         registry = ParserRegistry.create_default()
@@ -776,9 +775,34 @@ class SituationController(Controller):
         data: SituationCreate,
         db_session: AsyncSession,
     ) -> SituationResponse:
+        from litestar.exceptions import ValidationException
+
         from mapu.models.context import Situation
 
         await _require_corpus(db_session, corpus_id)
+        if data.parent_id:
+            from mapu.repos.context import SituationRepo
+
+            sit_repo = SituationRepo(db_session, corpus_id)
+            parent = await sit_repo.get(data.parent_id)
+            if parent is None:
+                raise ValidationException(
+                    f"parent_id {data.parent_id} not found in corpus {corpus_id}",
+                )
+        if data.document_id:
+            from sqlalchemy import select
+
+            from mapu.models.document import Document
+
+            doc_stmt = select(Document.id).where(
+                Document.id == data.document_id,
+                Document.corpus_id == corpus_id,
+            )
+            doc_row = await db_session.execute(doc_stmt)
+            if doc_row.scalar_one_or_none() is None:
+                raise ValidationException(
+                    f"document_id {data.document_id} not found in corpus {corpus_id}",
+                )
         situation = Situation(
             corpus_id=corpus_id,
             name=data.name,

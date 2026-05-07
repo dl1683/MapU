@@ -104,6 +104,15 @@ class TestSyncClient:
         missing = async_methods - sync_methods
         assert not missing, f"Sync client missing methods: {missing}"
 
+    def test_sync_client_uses_httpx_client(self) -> None:
+        client = MapUClient()
+        assert isinstance(client._client, httpx.Client)
+        client.close()
+
+    def test_sync_client_context_manager(self) -> None:
+        with MapUClient() as client:
+            assert isinstance(client._client, httpx.Client)
+
 
 @pytest.fixture
 def httpx_mock(monkeypatch):

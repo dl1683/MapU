@@ -193,7 +193,8 @@ async def _rollback_merge_handles(
 
     if "proposition_snapshots" not in result or "participant_snapshots" not in result:
         raise IncompleteRollbackPayloadError(
-            "Cannot rollback merge: operation result missing proposition_snapshots or participant_snapshots. "
+            "Cannot rollback merge: operation result missing "
+            "proposition_snapshots or participant_snapshots. "
             f"Available keys: {list(result.keys())}"
         )
     snapshots = result["proposition_snapshots"]

@@ -22,7 +22,9 @@ class Attestation(Base):
     corpus_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("corpus.id"), nullable=False
     )
-    source_policy_eval_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source_policy_eval_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True,
+    )
     stance: Mapped[str] = mapped_column(Text, nullable=False)
     extraction_method: Mapped[str] = mapped_column(Text, nullable=False)
     extraction_confidence: Mapped[float] = mapped_column(nullable=False)

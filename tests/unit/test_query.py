@@ -449,8 +449,8 @@ class TestQueryRequestAsOf:
 class TestProviderRegistry:
     def test_register_and_lookup(self) -> None:
         from mapu.providers.llms import (
-            OpenAICompatibleLLMProvider,
             _PROVIDER_FACTORIES,
+            OpenAICompatibleLLMProvider,
             register_llm_provider,
         )
 
@@ -463,6 +463,8 @@ class TestEmbeddingProviderRegistry:
     def test_register_and_lookup(self) -> None:
         from mapu.providers.embeddings import (
             _PROVIDER_FACTORIES as EMB_FACTORIES,
+        )
+        from mapu.providers.embeddings import (
             register_embedding_provider,
         )
 

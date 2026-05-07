@@ -67,8 +67,11 @@ async def query(
     from mapu.query.service import QueryService
     from mapu.query.types import QueryRequest
 
-    cid = uuid.UUID(corpus_id)
-    sid = uuid.UUID(situation_id) if situation_id else None
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+        sid = _parse_uuid(situation_id, "situation_id") if situation_id else None
+    except _UUIDError as e:
+        return e.error_dict
     max_results = min(max(max_results, 1), 500)
     as_of_dt = None
     if as_of is not None:
@@ -153,11 +156,13 @@ async def ingest_document(
     from mapu.evidence.parsers import ParserRegistry
     from mapu.evidence.types import DocumentBlob
 
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+    except _UUIDError as e:
+        return e.error_dict
     content_bytes = content.encode("utf-8")
     if len(content_bytes) > 10_000_000:
         return {"error": "Content exceeds 10MB limit"}
-
-    cid = uuid.UUID(corpus_id)
     factory = _get_session_factory()
     async with factory() as session:
         from mapu.config import EmbeddingSettings
@@ -210,7 +215,10 @@ async def lookup_entity(corpus_id: str, name: str, limit: int = 20) -> dict[str,
     from mapu.models.entity import Handle
     from mapu.query.direct import _escape_like
 
-    cid = uuid.UUID(corpus_id)
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+    except _UUIDError as e:
+        return e.error_dict
     limit = min(max(limit, 1), 100)
     factory = _get_session_factory()
     async with factory() as session:
@@ -247,8 +255,11 @@ async def repair_preview(
     """
     from mapu.repair.blast_radius import compute_blast_radius
 
-    cid = uuid.UUID(corpus_id)
-    pid = uuid.UUID(proposition_id)
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+        pid = _parse_uuid(proposition_id, "proposition_id")
+    except _UUIDError as e:
+        return e.error_dict
     factory = _get_session_factory()
     async with factory() as session:
         report = await compute_blast_radius(session, cid, pid)
@@ -268,8 +279,11 @@ async def repair_propose(
     """
     from mapu.repair.service import RepairService
 
-    cid = uuid.UUID(corpus_id)
-    pid = uuid.UUID(proposition_id)
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+        pid = _parse_uuid(proposition_id, "proposition_id")
+    except _UUIDError as e:
+        return e.error_dict
     factory = _get_session_factory()
     async with factory() as session:
         svc = RepairService(session, cid)
@@ -295,8 +309,11 @@ async def repair_apply(corpus_id: str, changeset_id: str) -> dict[str, Any]:
     """
     from mapu.repair.service import RepairService
 
-    cid = uuid.UUID(corpus_id)
-    csid = uuid.UUID(changeset_id)
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+        csid = _parse_uuid(changeset_id, "changeset_id")
+    except _UUIDError as e:
+        return e.error_dict
     factory = _get_session_factory()
     async with factory() as session:
         svc = RepairService(session, cid)
@@ -321,8 +338,11 @@ async def repair_rollback(corpus_id: str, changeset_id: str) -> dict[str, Any]:
     """
     from mapu.repair.service import RepairService
 
-    cid = uuid.UUID(corpus_id)
-    csid = uuid.UUID(changeset_id)
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+        csid = _parse_uuid(changeset_id, "changeset_id")
+    except _UUIDError as e:
+        return e.error_dict
     factory = _get_session_factory()
     async with factory() as session:
         svc = RepairService(session, cid)
@@ -419,7 +439,10 @@ async def contribute_proposition(
     if not subject_name or not predicate:
         return {"error": "subject_name and predicate must not be empty"}
 
-    cid = uuid.UUID(corpus_id)
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+    except _UUIDError as e:
+        return e.error_dict
     factory = _get_session_factory()
     async with factory() as session:
         handle_repo = HandleRepo(session, cid)
@@ -538,8 +561,11 @@ async def review_attestation(
     from mapu.models.attestation import Attestation
     from mapu.repos.audit import ActivityRepo
 
-    cid = uuid.UUID(corpus_id)
-    aid = uuid.UUID(attestation_id)
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+        aid = _parse_uuid(attestation_id, "attestation_id")
+    except _UUIDError as e:
+        return e.error_dict
     factory = _get_session_factory()
     async with factory() as session:
         stmt = select(Attestation.id, Attestation.proposition_id).where(

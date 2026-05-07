@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from typing import Any
 
@@ -241,9 +242,11 @@ async def rollback_changeset(
     try:
         for op in reversed(operations):
             if op.result is None:
-                result.errors.append(
-                    f"Skipped operation {op.operation_type} (ordinal {op.ordinal}): no recorded result",
+                msg = (
+                    f"Skipped operation {op.operation_type} "
+                    f"(ordinal {op.ordinal}): no recorded result"
                 )
+                result.errors.append(msg)
                 continue
             rollback_result = await dispatch_rollback(
                 session, corpus_id, op.operation_type, op.payload, op.result,
@@ -254,10 +257,8 @@ async def rollback_changeset(
         await savepoint.commit()
         if result.errors:
             result.success = False
-            try:
+            with contextlib.suppress(Exception):
                 await repo.transition(changeset_id, ChangesetStatus.ROLLBACK_FAILED.value)
-            except Exception:
-                pass
         else:
             await repo.mark_rolled_back(changeset_id)
             result.success = True

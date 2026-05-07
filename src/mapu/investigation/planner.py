@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from collections.abc import Mapping
 from typing import Any
@@ -104,10 +105,8 @@ def _parse_plan(raw: Mapping[str, Any]) -> InvestigationPlan:
         doc_id: uuid.UUID | None = None
         raw_doc_id = action_data.get("document_id")
         if raw_doc_id and isinstance(raw_doc_id, str):
-            try:
+            with contextlib.suppress(ValueError):
                 doc_id = uuid.UUID(raw_doc_id)
-            except ValueError:
-                pass
 
         actions.append(InvestigationAction(
             kind=kind,

@@ -6,9 +6,9 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import Protocol, runtime_checkable
 
-_log = logging.getLogger(__name__)
-
 from mapu.evidence.types import EmbeddingModelRef, EmbeddingVector
+
+_log = logging.getLogger(__name__)
 
 
 @runtime_checkable

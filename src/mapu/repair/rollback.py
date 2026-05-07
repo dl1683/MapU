@@ -154,7 +154,10 @@ async def _rollback_attestation_rejection(
     att = att_result.scalar_one_or_none()
     if att is not None:
         att.status = result.get("prior_status", "accepted")
-        att.system_invalidated = None
+        prior_inv = result.get("prior_system_invalidated")
+        att.system_invalidated = (
+            datetime.fromisoformat(prior_inv) if prior_inv else None
+        )
         await session.flush()
 
         truth_svc = TruthComputeService(session, corpus_id)
@@ -195,10 +198,12 @@ async def _rollback_merge_handles(
         prop_id = uuid.UUID(snap["id"])
         moved_ids.append(prop_id)
         prior_subj = uuid.UUID(snap["prior_subject"])
-        subj_groups.setdefault(prior_subj, []).append(prop_id)
+        if prior_subj == merged_id:
+            subj_groups.setdefault(prior_subj, []).append(prop_id)
         if snap.get("prior_object"):
             prior_obj = uuid.UUID(snap["prior_object"])
-            obj_groups.setdefault(prior_obj, []).append(prop_id)
+            if prior_obj == merged_id:
+                obj_groups.setdefault(prior_obj, []).append(prop_id)
 
     for handle_id, prop_ids in subj_groups.items():
         await session.execute(

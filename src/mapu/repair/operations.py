@@ -160,6 +160,7 @@ async def reject_attestation(
         raise ValueError(f"Attestation {attestation_id} not found")
 
     prior_status = att.status
+    prior_system_invalidated = att.system_invalidated
     att.status = "rejected"
     att.system_invalidated = datetime.now(UTC)
     await session.flush()
@@ -183,6 +184,9 @@ async def reject_attestation(
         "attestation_id": str(attestation_id),
         "proposition_id": str(att.proposition_id),
         "prior_status": prior_status,
+        "prior_system_invalidated": (
+            prior_system_invalidated.isoformat() if prior_system_invalidated else None
+        ),
         "recomputed_states": len(recomputed),
     }
 

@@ -378,6 +378,29 @@ class TestQueryService:
         assert result.synthesis is None
 
     @pytest.mark.asyncio
+    async def test_synthesis_tier_uses_structured_executor(self) -> None:
+        hits = [_make_hit(text="X controls Y", subject="X")]
+        svc = self._make_service(structured_hits=hits)
+        result = await svc.query(_make_request("How does X relate to Y?"))
+        assert result.tier_used == Tier.SYNTHESIS
+        assert len(result.hits) == 1
+        svc._structured.execute.assert_awaited_once()
+        assert result.synthesis is not None
+        assert "X controls Y" in result.synthesis
+
+    @pytest.mark.asyncio
+    async def test_synthesis_tier_prefers_llm_when_available(self) -> None:
+        hits = [_make_hit(text="X controls Y", subject="X")]
+        svc = self._make_service(structured_hits=hits)
+        llm_synth = AsyncMock(return_value="LLM synthesis result")
+        svc._llm_synth = MagicMock()
+        svc._llm_synth.synthesize = llm_synth
+        result = await svc.query(_make_request("How does X relate to Y?"))
+        assert result.tier_used == Tier.SYNTHESIS
+        llm_synth.assert_awaited_once()
+        assert result.synthesis == "LLM synthesis result"
+
+    @pytest.mark.asyncio
     async def test_metadata_contains_entities(self) -> None:
         hits = [_make_hit(text="Acme fact", subject="Acme")]
         svc = self._make_service(direct_hits=hits)

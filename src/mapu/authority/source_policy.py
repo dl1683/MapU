@@ -93,8 +93,19 @@ class SourcePolicyEvaluatorV1:
             inp.attestation_type or "", 0.0
         )
 
-        raw = base + pub_mod + att_mod
+        inferred_mod = self._infer_authority_modifier(inp)
+
+        raw = base + pub_mod + att_mod + inferred_mod
         return max(0.0, min(1.0, raw))
+
+    @staticmethod
+    def _infer_authority_modifier(inp: SourcePolicyInput) -> float:
+        mod = 0.0
+        if inp.independence_group:
+            mod += 0.03
+        if inp.source_identity:
+            mod += 0.02
+        return mod
 
     async def evaluate_and_persist(
         self,

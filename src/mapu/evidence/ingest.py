@@ -43,6 +43,7 @@ class IngestResult:
     span_ids: list[uuid.UUID] = field(default_factory=list)
     chunk_ids: list[uuid.UUID] = field(default_factory=list)
     propositions_extracted: int = 0
+    extraction_errors: list[str] = field(default_factory=list)
 
 
 class IngestionService:
@@ -243,13 +244,16 @@ class IngestionService:
                         expr.id, spe.id,
                     )
                     result.propositions_extracted = len(extraction_result.materialized)
-            except Exception:
+            except Exception as exc:
                 import logging
 
                 logging.getLogger(__name__).warning(
                     "Extraction failed for expression %s, continuing without propositions",
                     expr.id,
                     exc_info=True,
+                )
+                result.extraction_errors.append(
+                    f"Extraction failed for expression {expr.id}: {type(exc).__name__}: {exc}"
                 )
 
         return result

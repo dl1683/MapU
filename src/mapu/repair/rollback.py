@@ -19,6 +19,10 @@ from mapu.repos.audit import ActivityRepo
 from mapu.truth.service import TruthComputeService
 
 
+class IncompleteRollbackPayloadError(ValueError):
+    pass
+
+
 async def dispatch_rollback(
     session: AsyncSession,
     corpus_id: uuid.UUID,
@@ -60,8 +64,9 @@ async def _rollback_retraction(
         )
 
     if "invalidated_attestation_ids" not in result:
-        raise ValueError(
-            "Cannot rollback retraction: operation result missing invalidated_attestation_ids"
+        raise IncompleteRollbackPayloadError(
+            "Cannot rollback retraction: operation result missing invalidated_attestation_ids. "
+            f"Available keys: {list(result.keys())}"
         )
     invalidated_ids = result["invalidated_attestation_ids"]
     if invalidated_ids:
@@ -187,8 +192,9 @@ async def _rollback_merge_handles(
     merged_id = uuid.UUID(result["merged_handle_id"])
 
     if "proposition_snapshots" not in result or "participant_snapshots" not in result:
-        raise ValueError(
-            "Cannot rollback merge: operation result missing proposition_snapshots or participant_snapshots"
+        raise IncompleteRollbackPayloadError(
+            "Cannot rollback merge: operation result missing proposition_snapshots or participant_snapshots. "
+            f"Available keys: {list(result.keys())}"
         )
     snapshots = result["proposition_snapshots"]
     moved_ids: list[uuid.UUID] = []

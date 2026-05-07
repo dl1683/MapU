@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Mapping
 from typing import Any
 
@@ -38,6 +39,7 @@ Rules:
 - Prefer structured_query and entity_lookup for known entities.
 - Use embedding_search for fuzzy or conceptual queries.
 - Use chunk_retrieval when you need surrounding context from a document.
+- Use full_document to retrieve all content from a specific document (requires document_id).
 - Use temporal_diff when comparing states across time.
 - Use gap_check to verify known gaps are still unresolved.
 """
@@ -59,11 +61,15 @@ def _format_user_prompt(
     if state.observations:
         parts.append(f"Steps completed: {state.actions_executed}")
         parts.append(f"Propositions found: {len(state.seen_proposition_ids)}")
+        parts.append(f"Documents seen: {len(state.seen_document_ids)}")
         parts.append(f"Coverage: {state.coverage:.0%}")
         last_obs = state.observations[-1]
         parts.append(
             f"Last action found {len(last_obs.proposition_ids_found)} propositions"
         )
+        if state.seen_document_ids:
+            doc_ids = ", ".join(str(d) for d in list(state.seen_document_ids)[:5])
+            parts.append(f"Known document IDs: {doc_ids}")
 
     parts.append(
         f"Budget remaining: {state.budget.max_actions - state.actions_executed} actions, "
@@ -95,12 +101,21 @@ def _parse_plan(raw: Mapping[str, Any]) -> InvestigationPlan:
         entities = tuple(e for e in raw_entities if isinstance(e, str))
         predicates = tuple(p for p in raw_predicates if isinstance(p, str))
 
+        doc_id: uuid.UUID | None = None
+        raw_doc_id = action_data.get("document_id")
+        if raw_doc_id and isinstance(raw_doc_id, str):
+            try:
+                doc_id = uuid.UUID(raw_doc_id)
+            except ValueError:
+                pass
+
         actions.append(InvestigationAction(
             kind=kind,
             query=str(action_data.get("query", "")),
             entities=entities,
             predicates=predicates,
             reason=str(action_data.get("reason", "")),
+            document_id=doc_id,
         ))
 
     return InvestigationPlan(

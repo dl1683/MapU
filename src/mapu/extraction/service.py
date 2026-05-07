@@ -277,13 +277,19 @@ class ExtractionService:
             if existing.scalar_one_or_none() is not None:
                 continue
 
+            now = datetime.now(UTC)
             self._session.add(SupersessionEdge(
                 corpus_id=self._corpus_id,
                 old_proposition_id=old_prop.id,
                 new_proposition_id=mat.proposition.id,
                 supersession_type="supersession",
-                effective_at=datetime.now(UTC),
+                effective_at=now,
             ))
+            if old_prop.valid_range is not None and old_prop.valid_range.upper is None:
+                from sqlalchemy.dialects.postgresql import Range
+                old_prop.valid_range = Range(
+                    old_prop.valid_range.lower, now, bounds="[)",
+                )
         await self._session.flush()
 
     async def _load_spans(self, expression_id: uuid.UUID) -> list[TextSpan]:

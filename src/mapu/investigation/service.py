@@ -280,6 +280,8 @@ class InvestigationService:
                 termination.value if termination else "unknown"
             ),
             "steps": len(state.observations),
+            "cross_document": state.documents_read >= 2,
+            "document_ids": [str(d) for d in state.seen_document_ids],
         }
 
     async def _persist_findings(

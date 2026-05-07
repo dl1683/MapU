@@ -187,3 +187,72 @@ class TestExtractionService:
         assert result.rejected == 1
         assert result.accepted == 0
         mock_grounder.materialize.assert_not_called()
+
+    async def test_sequential_stage_accumulates_context(
+        self, corpus_id: uuid.UUID,
+    ) -> None:
+        """Sequential extractors in a stage see prior extractor output."""
+        from mapu.extraction.types import (
+            ExtractionPlan,
+            ExtractionSignal,
+            ExtractorStage,
+        )
+
+        seen_signals: list[int] = []
+
+        class SignalEmitter:
+            @property
+            def name(self) -> str:
+                return "emitter"
+
+            async def extract(self, ctx: ExtractionContext) -> ExtractorOutput:
+                seen_signals.append(len(ctx.prior_signals))
+                return ExtractorOutput(
+                    signals=(
+                        ExtractionSignal(
+                            signal_type="test",
+                            data={"from": "emitter"},
+                            source="emitter",
+                        ),
+                    ),
+                )
+
+        class SignalReader:
+            @property
+            def name(self) -> str:
+                return "reader"
+
+            async def extract(self, ctx: ExtractionContext) -> ExtractorOutput:
+                seen_signals.append(len(ctx.prior_signals))
+                return ExtractorOutput()
+
+        expression_id = uuid.uuid4()
+        span = _make_span("test text", expression_id=expression_id)
+        session = _make_mock_session(spans=[span])
+        mock_grounder = AsyncMock(spec=CandidateGrounder)
+
+        plan = ExtractionPlan(stages=(
+            ExtractorStage(
+                name="seq",
+                extractors=(SignalEmitter(), SignalReader()),
+                parallel=False,
+            ),
+        ))
+
+        service = ExtractionService(
+            session=session,
+            corpus_id=corpus_id,
+            extractors=[],
+            merge_engine=CandidateMergeEngine(),
+            abstention_gate=AbstentionGate(),
+            grounder=mock_grounder,
+            plan=plan,
+        )
+
+        await service.extract_expression(
+            expression_id=expression_id,
+            source_policy_eval_id=uuid.uuid4(),
+        )
+
+        assert seen_signals[0] == 0
+        assert seen_signals[1] == 1

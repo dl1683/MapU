@@ -33,6 +33,7 @@ _TEMPORAL_DIFF_PATTERNS = (
 _MEASUREMENT_PATTERNS = (
     re.compile(r"^(how much|how many|what is the value)\b", re.IGNORECASE),
     re.compile(r"\bpercentage\b|\b\$\d|\bamount\b|\btotal\b", re.IGNORECASE),
+    re.compile(r"\b(fee|price|cost|rate|salary|revenue|payment)\b", re.IGNORECASE),
 )
 
 _GAP_PATTERNS = (
@@ -143,8 +144,11 @@ class SetFitIntentClassifier:
                     best_idx = prob_list.index(max(prob_list))
                     label = labels[best_idx]
                     confidence = float(prob_list[best_idx])
-                    if confidence >= self._threshold and label in QueryIntent.__members__.values():
-                        return QueryIntent(label), confidence
+                    if confidence >= self._threshold:
+                        try:
+                            return QueryIntent(label), confidence
+                        except ValueError:
+                            pass
         except Exception:
             pass
 

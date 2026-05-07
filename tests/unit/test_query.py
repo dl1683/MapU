@@ -113,6 +113,12 @@ class TestHeuristicIntentClassifier:
         assert intent == QueryIntent.MEASUREMENT
 
     @pytest.mark.asyncio
+    async def test_measurement_keyword(self) -> None:
+        c = HeuristicIntentClassifier()
+        intent, _ = await c.classify("What is the termination fee?")
+        assert intent == QueryIntent.MEASUREMENT
+
+    @pytest.mark.asyncio
     async def test_gap_detection(self) -> None:
         c = HeuristicIntentClassifier()
         intent, _ = await c.classify("What's missing from our analysis?")
@@ -228,6 +234,15 @@ class TestEntityExtraction:
     def test_skip_question_words(self) -> None:
         entities = _extract_query_entities("What is the value?")
         assert "What" not in entities
+
+    def test_acronym_entities(self) -> None:
+        entities = _extract_query_entities("What does AWS do?")
+        assert "AWS" in entities
+
+    def test_acronym_in_phrase(self) -> None:
+        entities = _extract_query_entities("Tell me about the SEC filing for ACME LLC")
+        assert "SEC" in entities
+        assert "LLC" in entities
 
 
 class TestPredicateExtraction:

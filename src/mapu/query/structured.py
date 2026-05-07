@@ -126,6 +126,8 @@ class StructuredQueryExecutor:
     async def _execute_generic(
         self, plan: QueryPlan, request: QueryRequest,
     ) -> list[PropositionHit]:
+        if not plan.entities_extracted and not plan.predicates_extracted:
+            return []
         stmt = self._base_query(request.corpus_id)
         if plan.entities_extracted:
             stmt = stmt.where(

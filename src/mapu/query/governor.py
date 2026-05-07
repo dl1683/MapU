@@ -87,10 +87,18 @@ def _extract_query_entities(question: str) -> list[str]:
     entities.extend(quoted)
 
     capitalized = re.findall(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b", question)
-    skip = {"What", "Who", "Where", "When", "How", "Which", "Does", "Did", "Is", "Are"}
+    skip = {
+        "What", "Who", "Where", "When", "How", "Which",
+        "Does", "Did", "Is", "Are", "The", "Can",
+    }
     for cap in capitalized:
         if cap not in skip and cap not in entities:
             entities.append(cap)
+
+    acronyms = re.findall(r"\b([A-Z]{2,})\b", question)
+    for acr in acronyms:
+        if acr not in entities:
+            entities.append(acr)
 
     return entities
 

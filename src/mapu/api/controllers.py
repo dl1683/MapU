@@ -792,11 +792,11 @@ class SituationController(Controller):
         if data.document_id:
             from sqlalchemy import select
 
-            from mapu.models.document import Document
+            from mapu.models.evidence import DocumentWork
 
-            doc_stmt = select(Document.id).where(
-                Document.id == data.document_id,
-                Document.corpus_id == corpus_id,
+            doc_stmt = select(DocumentWork.id).where(
+                DocumentWork.id == data.document_id,
+                DocumentWork.corpus_id == corpus_id,
             )
             doc_row = await db_session.execute(doc_stmt)
             if doc_row.scalar_one_or_none() is None:

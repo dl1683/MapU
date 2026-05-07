@@ -350,12 +350,12 @@ class MapUClient:
         situation_id: uuid.UUID | None = None,
         as_of: datetime | None = None,
     ) -> dict[str, Any]:
-        params: dict[str, Any] = {"question": question, "max_results": max_results}
+        body: dict[str, Any] = {"question": question, "max_results": max_results}
         if situation_id:
-            params["situation_id"] = str(situation_id)
+            body["situation_id"] = str(situation_id)
         if as_of:
-            params["as_of"] = as_of.isoformat()
-        return self._request("GET", f"/corpora/{corpus_id}/query", params=params)
+            body["as_of"] = as_of.isoformat()
+        return self._request("POST", f"/corpora/{corpus_id}/query", json=body)
 
     def ingest_document(
         self,
@@ -383,9 +383,27 @@ class MapUClient:
         self,
         corpus_id: uuid.UUID,
         question: str,
-        **kwargs: Any,
+        initial_entities: list[str] | None = None,
+        initial_predicates: list[str] | None = None,
+        situation_id: uuid.UUID | None = None,
+        max_llm_calls: int = 10,
+        max_actions: int = 25,
+        max_documents_read: int = 50,
+        target_coverage: float = 0.9,
     ) -> dict[str, Any]:
-        body: dict[str, Any] = {"question": question, **kwargs}
+        body: dict[str, Any] = {
+            "question": question,
+            "initial_entities": initial_entities or [],
+            "initial_predicates": initial_predicates or [],
+            "budget": {
+                "max_llm_calls": max_llm_calls,
+                "max_actions": max_actions,
+                "max_documents_read": max_documents_read,
+                "target_coverage": target_coverage,
+            },
+        }
+        if situation_id:
+            body["situation_id"] = str(situation_id)
         return self._request("POST", f"/corpora/{corpus_id}/investigations", json=body)
 
     def repair_preview(
@@ -485,9 +503,21 @@ class MapUClient:
         )
 
     def create_situation(
-        self, corpus_id: uuid.UUID, name: str, **kwargs: Any,
+        self,
+        corpus_id: uuid.UUID,
+        name: str,
+        kind: str = "user",
+        parent_id: uuid.UUID | None = None,
+        document_id: uuid.UUID | None = None,
+        assumptions: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        body: dict[str, Any] = {"name": name, **kwargs}
+        body: dict[str, Any] = {"name": name, "kind": kind}
+        if parent_id:
+            body["parent_id"] = str(parent_id)
+        if document_id:
+            body["document_id"] = str(document_id)
+        if assumptions:
+            body["assumptions"] = assumptions
         return self._request("POST", f"/corpora/{corpus_id}/situations", json=body)
 
     def get_situation(

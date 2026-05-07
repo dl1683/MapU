@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.investigation.evaluator import InvestigationEvaluator
@@ -314,6 +315,10 @@ class InvestigationService:
             if existing.scalar_one_or_none() is not None:
                 continue
 
+            derived_range = await self._compute_derived_valid_range(
+                draft.derivation_basis, corpus_id,
+            )
+
             prop_id = uuid.uuid4()
             try:
                 async with self._session.begin_nested():
@@ -327,7 +332,7 @@ class InvestigationService:
                         value=None,
                         polarity=True,
                         modality=None,
-                        valid_range=None,
+                        valid_range=derived_range,
                         normalized_text=draft.normalized_text,
                         qualifiers={},
                         semantic_key=semantic_key,
@@ -391,6 +396,34 @@ class InvestigationService:
             persisted.append(prop_id)
 
         return persisted
+
+    async def _compute_derived_valid_range(
+        self,
+        basis_ids: tuple[uuid.UUID, ...],
+        corpus_id: uuid.UUID,
+    ) -> Range[datetime] | None:
+        if not basis_ids:
+            return None
+        result = await self._session.execute(
+            select(Proposition.valid_range).where(
+                Proposition.id.in_(list(basis_ids)),
+                Proposition.corpus_id == corpus_id,
+            ),
+        )
+        ranges = [r for (r,) in result.all() if r is not None]
+        if not ranges:
+            return None
+        lower = max(
+            (r.lower for r in ranges if r.lower is not None),
+            default=None,
+        )
+        upper = min(
+            (r.upper for r in ranges if r.upper is not None),
+            default=None,
+        )
+        if lower is not None and upper is not None and lower >= upper:
+            return None
+        return Range(lower, upper, bounds="[)")
 
     async def _resolve_or_create_handle(
         self,
@@ -480,18 +513,19 @@ def _parse_findings(
         if len(doc_ids) < 2:
             continue
 
-        prop_indices = [
-            i for i in valid_indices if evidence[i].is_proposition
-        ]
-        if len(prop_indices) < 2:
-            continue
         basis = tuple(
-            evidence[i].proposition_id for i in prop_indices
+            evidence[i].proposition_id for i in valid_indices
         )
+        if len(basis) < 2:
+            continue
+
+        has_proposition = any(evidence[i].is_proposition for i in valid_indices)
         confidence = f.get("confidence", 0.5)
         if not isinstance(confidence, (int, float)):
             confidence = 0.5
         confidence = max(0.0, min(1.0, float(confidence)))
+        if not has_proposition:
+            confidence *= 0.7
 
         drafts.append(DerivedPropositionDraft(
             normalized_text=str(text),

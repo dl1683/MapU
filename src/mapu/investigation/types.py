@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
@@ -81,6 +82,7 @@ class DerivedPropositionDraft:
     object_name: str | None = None
     derivation_basis: tuple[uuid.UUID, ...] = ()
     confidence: float = 0.5
+    valid_range: tuple[datetime | None, datetime | None] | None = None
 
 
 @dataclass

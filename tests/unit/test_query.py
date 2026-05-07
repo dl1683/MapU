@@ -1,8 +1,10 @@
-"""Unit tests for query engine: intent classification, governor, synthesis."""
+"""Unit tests for query engine: intent classification, governor, synthesis, service."""
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -12,6 +14,7 @@ from mapu.query.governor import (
     _extract_query_predicates,
 )
 from mapu.query.intent import HeuristicIntentClassifier
+from mapu.query.service import QueryService
 from mapu.query.synthesis import TemplateSynthesizer
 from mapu.query.types import (
     PropositionHit,
@@ -296,3 +299,87 @@ class TestTemplateSynthesizer:
         result = await synth.synthesize("test", hits, QueryIntent.GAP)
         assert "15 relevant" in result
         assert "5 more" in result
+
+
+class TestQueryService:
+    """Tests for the QueryService facade — tier routing, escalation, synthesis."""
+
+    def _make_service(
+        self,
+        direct_hits: Sequence[PropositionHit] = (),
+        structured_hits: Sequence[PropositionHit] = (),
+    ) -> QueryService:
+        session = AsyncMock()
+        classifier = HeuristicIntentClassifier()
+        svc = QueryService(session=session, intent_classifier=classifier)
+        svc._direct = MagicMock()
+        svc._direct.execute = AsyncMock(return_value=list(direct_hits))
+        svc._structured = MagicMock()
+        svc._structured.execute = AsyncMock(return_value=list(structured_hits))
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_identity_uses_direct_tier(self) -> None:
+        hits = [_make_hit(text="Acme is a corp", subject="Acme")]
+        svc = self._make_service(direct_hits=hits)
+        result = await svc.query(_make_request("Who is Acme?"))
+        assert result.tier_used == Tier.DIRECT
+        assert len(result.hits) == 1
+        svc._direct.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_list_uses_structured_tier(self) -> None:
+        hits = [_make_hit(text="Covenant A"), _make_hit(text="Covenant B")]
+        svc = self._make_service(structured_hits=hits)
+        result = await svc.query(_make_request("What are all the covenants?"))
+        assert result.tier_used == Tier.STRUCTURED
+        assert len(result.hits) == 2
+        svc._structured.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_direct_escalates_to_structured_on_empty(self) -> None:
+        hits = [_make_hit(text="Found via structured")]
+        svc = self._make_service(direct_hits=[], structured_hits=hits)
+        result = await svc.query(_make_request("Who is Acme Corp?"))
+        assert result.tier_used == Tier.STRUCTURED
+        assert len(result.hits) == 1
+        svc._direct.execute.assert_awaited_once()
+        svc._structured.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_escalation_past_structured(self) -> None:
+        svc = self._make_service(structured_hits=[])
+        result = await svc.query(_make_request("What are all the covenants?"))
+        assert result.tier_used == Tier.STRUCTURED
+        assert len(result.hits) == 0
+        assert result.synthesis is None
+
+    @pytest.mark.asyncio
+    async def test_investigation_returns_stub(self) -> None:
+        svc = self._make_service()
+        result = await svc.query(_make_request("Why did the price drop?"))
+        assert result.tier_used == Tier.INVESTIGATION
+        assert "not yet implemented" in result.synthesis
+        assert len(result.hits) == 0
+
+    @pytest.mark.asyncio
+    async def test_synthesis_returned_for_hits(self) -> None:
+        hits = [_make_hit(text="Acme is a corporation", subject="Acme")]
+        svc = self._make_service(direct_hits=hits)
+        result = await svc.query(_make_request("Who is Acme?"))
+        assert result.synthesis is not None
+        assert "Acme" in result.synthesis
+
+    @pytest.mark.asyncio
+    async def test_no_synthesis_for_empty_hits(self) -> None:
+        svc = self._make_service(direct_hits=[])
+        svc._structured.execute = AsyncMock(return_value=[])
+        result = await svc.query(_make_request("Who is Nobody?"))
+        assert result.synthesis is None
+
+    @pytest.mark.asyncio
+    async def test_metadata_contains_entities(self) -> None:
+        hits = [_make_hit(text="Acme fact", subject="Acme")]
+        svc = self._make_service(direct_hits=hits)
+        result = await svc.query(_make_request('Who is "Acme Corp"?'))
+        assert "Acme Corp" in result.metadata.get("entities", ())

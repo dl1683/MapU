@@ -523,6 +523,39 @@ class ContributionController(Controller):
             )
         proposition_id = row[1]
 
+        from datetime import UTC, datetime
+
+        from mapu.models.review import Changeset, ChangesetOperation
+
+        now = datetime.now(UTC)
+        changeset = Changeset(
+            corpus_id=corpus_id,
+            actor=data.actor,
+            actor_type="reviewer",
+            description=f"Review attestation {data.attestation_id}: {data.decision}",
+            status="applied",
+            risk_level="low",
+            reviewed_by=data.actor,
+            reviewed_at=now,
+            review_reason=data.reason or None,
+            applied_at=now,
+        )
+        db_session.add(changeset)
+        await db_session.flush()
+
+        db_session.add(ChangesetOperation(
+            changeset_id=changeset.id,
+            corpus_id=corpus_id,
+            ordinal=0,
+            operation_type="attestation_review",
+            payload={
+                "attestation_id": str(data.attestation_id),
+                "decision": data.decision,
+                "reason": data.reason,
+            },
+            executed_at=now,
+        ))
+
         repo = AttestationRepo(db_session, corpus_id)
         if data.decision == "accepted":
             await repo.accept(data.attestation_id)
@@ -542,7 +575,11 @@ class ContributionController(Controller):
             actor=data.actor,
             entity_type="attestation",
             entity_id=data.attestation_id,
-            details={"decision": data.decision, "reason": data.reason},
+            details={
+                "decision": data.decision,
+                "reason": data.reason,
+                "changeset_id": str(changeset.id),
+            },
         )
 
         return ReviewAttestationResponse(

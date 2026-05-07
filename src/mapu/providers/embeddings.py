@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Sequence
 from typing import Protocol, runtime_checkable
+
+_log = logging.getLogger(__name__)
 
 from mapu.evidence.types import EmbeddingModelRef, EmbeddingVector
 
@@ -73,4 +76,9 @@ def get_default_embedding_provider() -> EmbeddingProvider:
         dimensions=settings.dimensions,
         device=settings.device,
     )
+    if provider_name in ("local", "hash-deterministic"):
+        _log.warning(
+            "Using hash-based embedding provider (no semantic meaning). "
+            "Set MAPU_EMBEDDING_PROVIDER=sentence-transformers for production."
+        )
     return _cached_embedding_provider

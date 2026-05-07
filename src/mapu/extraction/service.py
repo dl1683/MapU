@@ -135,6 +135,8 @@ class ExtractionService:
         if result.materialized:
             await self._grounder.flush()
 
+        await self._process_amendment_signals(result, expression_id)
+
         return result
 
     async def _run_stages(
@@ -218,6 +220,71 @@ class ExtractionService:
                 f"SourcePolicyEval document_id {spe_doc_id} does not match "
                 f"expression document_id {document_id}"
             )
+
+    async def _process_amendment_signals(
+        self,
+        result: ExtractionResult,
+        expression_id: uuid.UUID,
+    ) -> None:
+        from datetime import UTC, datetime
+
+        from mapu.models.entity import Handle
+        from mapu.models.lineage import SupersessionEdge
+        from mapu.models.proposition import Proposition
+
+        amendment_signals = [
+            s for s in result.signals if s.signal_type == "amendment"
+        ]
+        if not amendment_signals:
+            return
+
+        amendment_props = [
+            m for m in result.materialized
+            if m.proposition.predicate == "amended"
+        ]
+        if not amendment_props:
+            return
+
+        for mat in amendment_props:
+            target_ref = mat.proposition.normalized_text
+            if not target_ref:
+                continue
+
+            subject_handle = mat.proposition.subject_handle_id
+            stmt = (
+                select(Proposition)
+                .join(Handle, Proposition.subject_handle_id == Handle.id)
+                .where(
+                    Proposition.corpus_id == self._corpus_id,
+                    Handle.id == subject_handle,
+                    Proposition.id != mat.proposition.id,
+                )
+                .order_by(Proposition.system_created.desc())
+                .limit(1)
+            )
+            r = await self._session.execute(stmt)
+            old_prop = r.scalar_one_or_none()
+            if old_prop is None:
+                continue
+
+            existing = await self._session.execute(
+                select(SupersessionEdge.id).where(
+                    SupersessionEdge.old_proposition_id == old_prop.id,
+                    SupersessionEdge.new_proposition_id == mat.proposition.id,
+                    SupersessionEdge.corpus_id == self._corpus_id,
+                ),
+            )
+            if existing.scalar_one_or_none() is not None:
+                continue
+
+            self._session.add(SupersessionEdge(
+                corpus_id=self._corpus_id,
+                old_proposition_id=old_prop.id,
+                new_proposition_id=mat.proposition.id,
+                supersession_type="supersession",
+                effective_at=datetime.now(UTC),
+            ))
+        await self._session.flush()
 
     async def _load_spans(self, expression_id: uuid.UUID) -> list[TextSpan]:
         stmt = (

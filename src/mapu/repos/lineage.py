@@ -167,21 +167,27 @@ class SupersessionEdgeRepo(CorpusScopedRepo[SupersessionEdge]):
         return await self.add(edge)
 
     async def is_superseded(self, proposition_id: uuid.UUID) -> bool:
+        from sqlalchemy import func
+
         stmt = select(
             exists().where(
                 SupersessionEdge.old_proposition_id == proposition_id,
                 SupersessionEdge.corpus_id == self.corpus_id,
+                SupersessionEdge.effective_at <= func.now(),
             )
         )
         result = await self.session.execute(stmt)
         return bool(result.scalar())
 
     async def is_retracted(self, proposition_id: uuid.UUID) -> bool:
+        from sqlalchemy import func
+
         stmt = select(
             exists().where(
                 SupersessionEdge.old_proposition_id == proposition_id,
                 SupersessionEdge.corpus_id == self.corpus_id,
                 SupersessionEdge.supersession_type == "retraction",
+                SupersessionEdge.effective_at <= func.now(),
             )
         )
         result = await self.session.execute(stmt)

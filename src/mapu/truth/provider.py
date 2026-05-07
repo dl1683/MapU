@@ -66,22 +66,28 @@ class DbTruthEvidenceProvider:
         ]
 
     async def is_retracted(self, proposition_id: uuid.UUID) -> bool:
+        from sqlalchemy import func
+
         from mapu.models.lineage import SupersessionEdge
 
         stmt = select(SupersessionEdge.id).where(
             SupersessionEdge.old_proposition_id == proposition_id,
             SupersessionEdge.corpus_id == self._corpus_id,
             SupersessionEdge.supersession_type == "retraction",
+            SupersessionEdge.effective_at <= func.now(),
         ).limit(1)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
     async def is_superseded(self, proposition_id: uuid.UUID) -> bool:
+        from sqlalchemy import func
+
         from mapu.models.lineage import SupersessionEdge
 
         stmt = select(SupersessionEdge.id).where(
             SupersessionEdge.old_proposition_id == proposition_id,
             SupersessionEdge.corpus_id == self._corpus_id,
+            SupersessionEdge.effective_at <= func.now(),
         ).limit(1)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None

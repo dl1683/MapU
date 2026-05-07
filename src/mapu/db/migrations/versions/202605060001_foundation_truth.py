@@ -593,6 +593,7 @@ def upgrade() -> None:
     CREATE INDEX idx_de_child ON derivation_edge(child_proposition_id);
     CREATE INDEX idx_se_old ON supersession_edge(old_proposition_id);
     CREATE INDEX idx_se_new ON supersession_edge(new_proposition_id);
+    CREATE INDEX idx_se_old_corpus_effective ON supersession_edge(old_proposition_id, corpus_id, effective_at);
 
     -- Computation
     CREATE INDEX idx_cs_corpus ON computation_spec(corpus_id);

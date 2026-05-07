@@ -237,6 +237,17 @@ class TestAmendmentExtractor:
         assert result.signals[0].data["target_reference"] is None
         assert len(result.frames) == 0
 
+    async def test_section_number_at_sentence_end_not_attached(
+        self, extractor: AmendmentExtractor
+    ) -> None:
+        ctx = _make_ctx(
+            "Pursuant to Section 2.1. The foregoing clause is hereby amended."
+        )
+        result = await extractor.extract(ctx)
+        assert len(result.signals) == 1
+        assert result.signals[0].data["target_reference"] is None
+        assert len(result.frames) == 0
+
 
 class TestCandidateMergeEngine:
     def test_no_duplicates(self) -> None:
@@ -344,6 +355,33 @@ class TestCandidateMergeEngine:
         result = engine.merge([
             ExtractorOutput(frames=(frame_person,)),
             ExtractorOutput(frames=(frame_planet,)),
+        ])
+        assert len(result.frames) == 2
+        assert result.duplicates_removed == 0
+
+    def test_different_qualifiers_not_deduped(self) -> None:
+        engine = CandidateMergeEngine()
+        frame_a = _make_frame(subject_text="Corp", predicate="pay")
+        frame_b = PropositionFrameCandidate(
+            span_id=frame_a.span_id,
+            frame_type=frame_a.frame_type,
+            subject=frame_a.subject,
+            predicate=frame_a.predicate,
+            object=None,
+            value=None,
+            polarity=True,
+            modality=None,
+            valid_range=None,
+            normalized_text="Corp pay",
+            qualifiers={"condition": "if_approved"},
+            stance=Stance.ASSERTS,
+            attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+            extraction_method="test",
+            extraction_confidence=0.9,
+        )
+        result = engine.merge([
+            ExtractorOutput(frames=(frame_a,)),
+            ExtractorOutput(frames=(frame_b,)),
         ])
         assert len(result.frames) == 2
         assert result.duplicates_removed == 0

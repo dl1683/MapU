@@ -72,6 +72,7 @@ class CandidateGrounder:
             value=frame.value,
             polarity=frame.polarity,
             modality=frame.modality,
+            qualifiers=frame.qualifiers,
             valid_range=frame.valid_range,
         )
 
@@ -285,6 +286,7 @@ def _compute_semantic_key(
     value: dict[str, Any] | None,
     polarity: bool,
     modality: str | None,
+    qualifiers: dict[str, Any] | None = None,
     valid_range: tuple[datetime | None, datetime | None] | None = None,
 ) -> str:
     """Deterministic semantic key from grounded content only."""
@@ -301,6 +303,7 @@ def _compute_semantic_key(
         str(sorted(value.items())) if value else "",
         str(polarity),
         modality or "",
+        str(sorted(qualifiers.items())) if qualifiers else "",
         range_str,
     ]
     content = "|".join(parts)

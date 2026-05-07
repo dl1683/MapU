@@ -249,18 +249,28 @@ def _nearest_preceding_ref(
     return ref
 
 
+def _is_decimal_period(text: str, i: int) -> bool:
+    return (
+        i > 0
+        and text[i - 1].isdigit()
+        and i + 1 < len(text)
+        and text[i + 1].isdigit()
+    )
+
+
 def _find_sentence_start(text: str, position: int) -> int:
     for i in range(position - 1, -1, -1):
         if text[i] in "!?\n":
             return i + 1
-        if text[i] == "." and not (i > 0 and text[i - 1].isdigit()):
+        if text[i] == "." and not _is_decimal_period(text, i):
             return i + 1
     return 0
 
 
 def _find_sentence_end(text: str, start: int) -> int:
-    """Find the end of the sentence containing the given position."""
     for i in range(start, len(text)):
-        if text[i] in ".!?\n":
+        if text[i] in "!?\n":
+            return i + 1
+        if text[i] == "." and not _is_decimal_period(text, i):
             return i + 1
     return len(text)

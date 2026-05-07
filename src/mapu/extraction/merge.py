@@ -60,5 +60,6 @@ def _frame_dedup_key(frame: PropositionFrameCandidate) -> str:
         str(frame.polarity),
         frame.modality or "",
         str(frame.valid_range) if frame.valid_range else "",
+        json.dumps(frame.qualifiers, sort_keys=True) if frame.qualifiers else "",
     ]
     return "|".join(parts)

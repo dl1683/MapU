@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Sequence
 from typing import Any
 
@@ -21,11 +22,14 @@ class SentenceTransformerEmbeddingProvider:
         self._dims = dimensions
         self._device = device
         self._model: Any = None
+        self._lock = threading.Lock()
 
     def _load_model(self) -> Any:
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(self._model_name, device=self._device)
+            with self._lock:
+                if self._model is None:
+                    from sentence_transformers import SentenceTransformer
+                    self._model = SentenceTransformer(self._model_name, device=self._device)
         return self._model
 
     @property

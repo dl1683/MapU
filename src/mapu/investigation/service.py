@@ -282,6 +282,9 @@ class InvestigationService:
         now = datetime.now(UTC)
 
         for draft in findings:
+            if not draft.derivation_basis:
+                continue
+
             subject_handle = await self._resolve_or_create_handle(
                 draft.subject_name, "entity", corpus_id,
             )
@@ -325,9 +328,9 @@ class InvestigationService:
             )
             self._session.add(prop)
             try:
-                await self._session.flush()
+                async with self._session.begin_nested():
+                    await self._session.flush()
             except IntegrityError:
-                await self._session.rollback()
                 continue
 
             self._session.add(PropositionParticipant(
@@ -458,6 +461,8 @@ def _parse_findings(
         prop_indices = [
             i for i in valid_indices if evidence[i].is_proposition
         ]
+        if len(prop_indices) < 2:
+            continue
         basis = tuple(
             evidence[i].proposition_id for i in prop_indices
         )

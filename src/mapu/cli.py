@@ -92,6 +92,11 @@ def _read_ingest_file(path: str) -> tuple[bytes, str, str]:
         print(f"File not found: {path}")
         sys.exit(1)
 
+    size = file_path.stat().st_size
+    if size > 10_000_000:
+        print(f"File too large ({size} bytes, max 10MB): {path}")
+        sys.exit(1)
+
     content = file_path.read_bytes()
     suffix = file_path.suffix.lower()
     mime_map = {

@@ -230,7 +230,7 @@ class AmendmentExtractor:
 
 
 _SUBORDINATE_PREFIX = re.compile(
-    r"(?:in|under|of|pursuant\s+to|referenced\s+in|per)\s+$",
+    r"(?:(?:as\s+)?referenced\s+in|pursuant\s+to|provided\s+in|described\s+in|set\s+forth\s+in|defined\s+in)\s+$",
     re.IGNORECASE,
 )
 

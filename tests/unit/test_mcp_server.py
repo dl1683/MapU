@@ -126,6 +126,7 @@ class TestIngestDocumentTool:
         mock_result.expression_id = expr_id
         mock_result.span_count = 5
         mock_result.chunk_count = 3
+        mock_result.embedding_count = 3
 
         mock_svc = AsyncMock()
         mock_svc.ingest = AsyncMock(return_value=mock_result)
@@ -147,6 +148,7 @@ class TestIngestDocumentTool:
         assert result["document_id"] == str(doc_id)
         assert result["spans"] == 5
         assert result["chunks"] == 3
+        assert result["embeddings"] == 3
 
 
 class TestCreateCorpusTool:

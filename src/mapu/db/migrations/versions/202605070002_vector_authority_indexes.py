@@ -23,8 +23,9 @@ def upgrade() -> None:
         )
         op.execute(
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ce_embedding_hnsw "
-            "ON chunk_embedding USING hnsw (embedding vector_cosine_ops) "
-            "WITH (m = 16, ef_construction = 64)"
+            "ON chunk_embedding USING hnsw ((embedding::vector(384)) vector_cosine_ops) "
+            "WITH (m = 16, ef_construction = 64) "
+            "WHERE dimensions = 384"
         )
         op.execute(
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_att_accepted_spe "
@@ -33,7 +34,7 @@ def upgrade() -> None:
         )
         op.execute(
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_spe_authority "
-            "ON source_policy_eval(id, authority_score DESC)"
+            "ON source_policy_eval(authority_score DESC, id)"
         )
 
 

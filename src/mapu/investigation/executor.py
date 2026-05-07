@@ -180,6 +180,7 @@ def _chunk_results_to_evidence(
             normalized_text=r.text,
             source_span=r.text[:200] if r.text else None,
             authority_score=r.score,
+            document_id=r.expression_id,
         )
         for r in results
     )

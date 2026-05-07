@@ -257,6 +257,7 @@ class TestInvestigationExecutor:
         assert state.actions_executed == 1
         assert len(obs.evidence) == 1
         assert obs.evidence[0].normalized_text == "found chunk"
+        assert obs.evidence[0].document_id is not None
         assert len(obs.document_ids) == 1
 
     @pytest.mark.asyncio

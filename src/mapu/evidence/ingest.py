@@ -242,6 +242,12 @@ class IngestionService:
                     )
                     result.propositions_extracted = len(extraction_result.materialized)
             except Exception:
-                pass
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "Extraction failed for expression %s, continuing without propositions",
+                    expr.id,
+                    exc_info=True,
+                )
 
         return result

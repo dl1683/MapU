@@ -513,19 +513,24 @@ def _parse_findings(
         if len(doc_ids) < 2:
             continue
 
-        basis = tuple(
-            evidence[i].proposition_id for i in valid_indices
-        )
-        if len(basis) < 2:
+        prop_indices = [
+            i for i in valid_indices if evidence[i].is_proposition
+        ]
+        if len(prop_indices) < 1:
             continue
+        basis = tuple(
+            evidence[i].proposition_id for i in prop_indices
+        )
 
-        has_proposition = any(evidence[i].is_proposition for i in valid_indices)
+        has_chunk_evidence = any(
+            not evidence[i].is_proposition for i in valid_indices
+        )
         confidence = f.get("confidence", 0.5)
         if not isinstance(confidence, (int, float)):
             confidence = 0.5
         confidence = max(0.0, min(1.0, float(confidence)))
-        if not has_proposition:
-            confidence *= 0.7
+        if has_chunk_evidence and len(prop_indices) < len(valid_indices):
+            confidence *= 0.85
 
         drafts.append(DerivedPropositionDraft(
             normalized_text=str(text),

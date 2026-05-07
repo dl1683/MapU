@@ -392,6 +392,82 @@ class TestParseFindings:
         findings = _parse_findings({}, ())
         assert len(findings) == 0
 
+    def test_chunk_only_evidence_skipped(self) -> None:
+        from mapu.investigation.service import _parse_findings
+        from mapu.investigation.types import InvestigationEvidence
+
+        evidence = (
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="Chunk from doc 1",
+                source_span=None,
+                authority_score=None,
+                document_id=uuid.uuid4(),
+                is_proposition=False,
+            ),
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="Chunk from doc 2",
+                source_span=None,
+                authority_score=None,
+                document_id=uuid.uuid4(),
+                is_proposition=False,
+            ),
+        )
+        raw = {
+            "findings": [
+                {
+                    "normalized_text": "Cross-doc from chunks",
+                    "predicate": "links",
+                    "subject_name": "X",
+                    "confidence": 0.8,
+                    "evidence_indices": [0, 1],
+                },
+            ],
+        }
+        findings = _parse_findings(raw, evidence)
+        assert len(findings) == 0
+
+    def test_mixed_evidence_applies_confidence_penalty(self) -> None:
+        from mapu.investigation.service import _parse_findings
+        from mapu.investigation.types import InvestigationEvidence
+
+        prop_id = uuid.uuid4()
+        evidence = (
+            InvestigationEvidence(
+                proposition_id=prop_id,
+                normalized_text="Proposition from doc 1",
+                source_span=None,
+                authority_score=0.9,
+                document_id=uuid.uuid4(),
+                is_proposition=True,
+            ),
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="Chunk from doc 2",
+                source_span=None,
+                authority_score=None,
+                document_id=uuid.uuid4(),
+                is_proposition=False,
+            ),
+        )
+        raw = {
+            "findings": [
+                {
+                    "normalized_text": "Cross-doc mixed",
+                    "predicate": "links",
+                    "subject_name": "X",
+                    "confidence": 0.8,
+                    "evidence_indices": [0, 1],
+                },
+            ],
+        }
+        findings = _parse_findings(raw, evidence)
+        assert len(findings) == 1
+        assert len(findings[0].derivation_basis) == 1
+        assert findings[0].derivation_basis[0] == prop_id
+        assert findings[0].confidence == pytest.approx(0.8 * 0.85)
+
     def test_clamps_confidence(self) -> None:
         from mapu.investigation.service import _parse_findings
         from mapu.investigation.types import InvestigationEvidence

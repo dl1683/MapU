@@ -241,6 +241,9 @@ async def rollback_changeset(
     try:
         for op in reversed(operations):
             if op.result is None:
+                result.errors.append(
+                    f"Skipped operation {op.operation_type} (ordinal {op.ordinal}): no recorded result",
+                )
                 continue
             rollback_result = await dispatch_rollback(
                 session, corpus_id, op.operation_type, op.payload, op.result,
@@ -257,7 +260,7 @@ async def rollback_changeset(
         result.errors.append(str(exc))
         try:
             await repo.transition(changeset_id, ChangesetStatus.ROLLBACK_FAILED.value)
-        except Exception:
-            pass
+        except Exception as inner_exc:
+            result.errors.append(f"Failed to mark rollback_failed: {inner_exc}")
 
     return result

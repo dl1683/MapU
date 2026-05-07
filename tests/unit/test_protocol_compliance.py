@@ -7,6 +7,12 @@ from mapu.evidence.docx import DocxParser
 from mapu.evidence.parsers import DocumentParser
 from mapu.evidence.pdf import PdfParser
 from mapu.evidence.plaintext import PlaintextParser
+from mapu.extraction.ml import (
+    GLiNERExtractor,
+    REBELExtractor,
+    SRLExtractor,
+    SetFitExtractor,
+)
 from mapu.extraction.rules import (
     AmendmentExtractor,
     CrossReferenceExtractor,
@@ -56,3 +62,15 @@ class TestExtractorProtocol:
 
     def test_amendment_is_extractor(self) -> None:
         assert isinstance(AmendmentExtractor(), Extractor)
+
+    def test_gliner_is_extractor(self) -> None:
+        assert isinstance(GLiNERExtractor(), Extractor)
+
+    def test_rebel_is_extractor(self) -> None:
+        assert isinstance(REBELExtractor(), Extractor)
+
+    def test_setfit_is_extractor(self) -> None:
+        assert isinstance(SetFitExtractor(), Extractor)
+
+    def test_srl_is_extractor(self) -> None:
+        assert isinstance(SRLExtractor(), Extractor)

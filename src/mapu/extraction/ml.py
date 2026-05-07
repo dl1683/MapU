@@ -62,9 +62,10 @@ _RELATION_TO_FRAME_TYPE: dict[str, FrameType] = {
 class LazyModelRuntime:
     """Process-lifetime model cache. Keyed by (backend, model_id, device)."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_concurrent_inference: int = 2) -> None:
         self._cache: dict[tuple[str, str, str], Any] = {}
         self._locks: dict[tuple[str, str, str], asyncio.Lock] = {}
+        self._inference_sem = asyncio.Semaphore(max_concurrent_inference)
 
     async def get_or_load(
         self,
@@ -84,6 +85,11 @@ class LazyModelRuntime:
             model = await asyncio.to_thread(loader)
             self._cache[key] = model
             return model
+
+    async def run_inference(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run inference function under concurrency limit."""
+        async with self._inference_sem:
+            return await asyncio.to_thread(fn, *args, **kwargs)
 
 
 _GLOBAL_RUNTIME = LazyModelRuntime()
@@ -125,7 +131,7 @@ class GLiNERExtractor:
             return ExtractorOutput()
 
         model = await self._get_model()
-        raw_entities: list[dict[str, Any]] = await asyncio.to_thread(
+        raw_entities: list[dict[str, Any]] = await self._runtime.run_inference(
             model.predict_entities,
             ctx.text,
             self._entity_types,
@@ -207,19 +213,11 @@ class SetFitExtractor:
             return ExtractorOutput()
 
         model = await self._get_model()
-        try:
-            predictions = await asyncio.to_thread(model.predict, [ctx.text])
-        except Exception:
+        predicted_label, confidence = await self._classify(model, ctx.text)
+        if predicted_label is None:
             return ExtractorOutput()
-
-        if not hasattr(predictions, '__len__') or len(predictions) == 0:
-            return ExtractorOutput()
-
-        predicted_label = str(predictions[0])
         if predicted_label not in _VALID_FRAME_LABELS:
             return ExtractorOutput()
-
-        confidence = await self._get_confidence(model, ctx.text, predicted_label)
         if confidence < self._confidence_threshold:
             return ExtractorOutput()
 
@@ -239,20 +237,26 @@ class SetFitExtractor:
             ),
         )
 
-    async def _get_confidence(
-        self, model: Any, text: str, label: str,
-    ) -> float:
+    async def _classify(
+        self, model: Any, text: str,
+    ) -> tuple[str | None, float]:
         try:
-            probs = await asyncio.to_thread(model.predict_proba, [text])
+            probs = await self._runtime.run_inference(model.predict_proba, [text])
             if hasattr(probs, '__getitem__') and hasattr(model, 'labels'):
                 prob_list = probs[0].tolist() if hasattr(probs[0], 'tolist') else list(probs[0])
                 labels = list(model.labels)
                 if len(labels) == len(prob_list):
-                    label_probs = dict(zip(labels, prob_list, strict=True))
-                    return float(label_probs.get(label, 0.5))
+                    best_idx = prob_list.index(max(prob_list))
+                    return labels[best_idx], float(prob_list[best_idx])
         except (AttributeError, TypeError, IndexError):
             pass
-        return 0.5
+        try:
+            predictions = await self._runtime.run_inference(model.predict, [text])
+            if hasattr(predictions, '__len__') and len(predictions) > 0:
+                return str(predictions[0]), 0.5
+        except Exception:
+            pass
+        return None, 0.0
 
 
 def parse_rebel_output(generated_text: str) -> list[dict[str, str]]:
@@ -315,7 +319,7 @@ class REBELExtractor:
             return ExtractorOutput()
 
         pipe = await self._get_pipeline()
-        outputs: list[dict[str, Any]] = await asyncio.to_thread(
+        outputs: list[dict[str, Any]] = await self._runtime.run_inference(
             pipe, ctx.text, return_text=True, return_tensors=False,
         )
         generated = outputs[0].get("generated_text", "") if outputs else ""

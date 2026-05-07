@@ -14,6 +14,11 @@ from mapu.models.proposition import Proposition
 from mapu.query.types import PropositionHit, QueryPlan, QueryRequest, Tier
 
 
+def _escape_like(value: str) -> str:
+    """Escape LIKE metacharacters so user input matches literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class DirectLookupExecutor:
     """Executes Tier 0 queries: entity identity, single-fact lookup."""
 
@@ -64,7 +69,7 @@ class DirectLookupExecutor:
             )
             .where(
                 Proposition.corpus_id == corpus_id,
-                Handle.canonical_name.ilike(f"%{entity_text}%"),
+                Handle.canonical_name.ilike(f"%{_escape_like(entity_text)}%"),
                 Attestation.status == "accepted",
                 Attestation.system_invalidated.is_(None),
             )
@@ -105,7 +110,7 @@ class DirectLookupExecutor:
             )
             .where(
                 Proposition.corpus_id == corpus_id,
-                Proposition.predicate.ilike(f"%{predicate}%"),
+                Proposition.predicate.ilike(f"%{_escape_like(predicate)}%"),
                 Attestation.status == "accepted",
                 Attestation.system_invalidated.is_(None),
             )

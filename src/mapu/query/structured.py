@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mapu.models.attestation import Attestation
 from mapu.models.entity import Handle
 from mapu.models.proposition import Proposition
+from mapu.query.direct import _escape_like
 from mapu.query.types import PropositionHit, QueryIntent, QueryPlan, QueryRequest, Tier
 
 
@@ -45,11 +46,11 @@ class StructuredQueryExecutor:
         if plan.predicates_extracted:
             predicates = plan.predicates_extracted
             stmt = stmt.where(
-                Proposition.predicate.ilike(f"%{predicates[0]}%")
+                Proposition.predicate.ilike(f"%{_escape_like(predicates[0])}%")
             )
         if plan.entities_extracted:
             stmt = stmt.where(
-                Handle.canonical_name.ilike(f"%{plan.entities_extracted[0]}%")
+                Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
         stmt = stmt.order_by(Proposition.system_created.desc()).limit(request.max_results)
         return await self._fetch(stmt)
@@ -60,7 +61,7 @@ class StructuredQueryExecutor:
         stmt = self._base_query(request.corpus_id)
         if plan.entities_extracted:
             stmt = stmt.where(
-                Handle.canonical_name.ilike(f"%{plan.entities_extracted[0]}%")
+                Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
         stmt = stmt.where(Proposition.valid_range.isnot(None))
         stmt = stmt.order_by(Proposition.system_created.desc()).limit(request.max_results)
@@ -92,11 +93,11 @@ class StructuredQueryExecutor:
         )
         if plan.entities_extracted:
             stmt = stmt.where(
-                Handle.canonical_name.ilike(f"%{plan.entities_extracted[0]}%")
+                Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
         if plan.predicates_extracted:
             stmt = stmt.where(
-                Proposition.predicate.ilike(f"%{plan.predicates_extracted[0]}%")
+                Proposition.predicate.ilike(f"%{_escape_like(plan.predicates_extracted[0])}%")
             )
         stmt = stmt.limit(request.max_results)
         return await self._fetch(stmt)
@@ -114,7 +115,7 @@ class StructuredQueryExecutor:
         )
         if plan.entities_extracted:
             stmt = stmt.where(
-                Handle.canonical_name.ilike(f"%{plan.entities_extracted[0]}%")
+                Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
         stmt = stmt.limit(request.max_results)
         return await self._fetch(stmt)
@@ -125,11 +126,11 @@ class StructuredQueryExecutor:
         stmt = self._base_query(request.corpus_id)
         if plan.entities_extracted:
             stmt = stmt.where(
-                Handle.canonical_name.ilike(f"%{plan.entities_extracted[0]}%")
+                Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
         if plan.predicates_extracted:
             stmt = stmt.where(
-                Proposition.predicate.ilike(f"%{plan.predicates_extracted[0]}%")
+                Proposition.predicate.ilike(f"%{_escape_like(plan.predicates_extracted[0])}%")
             )
         stmt = stmt.order_by(Attestation.extraction_confidence.desc()).limit(request.max_results)
         return await self._fetch(stmt)

@@ -387,6 +387,80 @@ class TestCandidateMergeEngine:
         assert result.duplicates_removed == 1
         assert result.frames[0].extraction_confidence == 0.95
 
+    def test_agreement_bonus_applied(self) -> None:
+        engine = CandidateMergeEngine()
+        frame_a = PropositionFrameCandidate(
+            span_id=uuid.uuid4(),
+            frame_type=FrameType.DEFINITION,
+            subject=EntityMention(
+                text="Corp", kind="org",
+                start_char=0, end_char=4, confidence=1.0, source="test",
+            ),
+            predicate="pay",
+            object=None,
+            value=None,
+            polarity=True,
+            modality=None,
+            valid_range=None,
+            normalized_text="Corp pay",
+            qualifiers={},
+            stance=Stance.ASSERTS,
+            attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+            extraction_method="rule_defined_term",
+            extraction_confidence=0.8,
+        )
+        frame_b = PropositionFrameCandidate(
+            span_id=frame_a.span_id,
+            frame_type=frame_a.frame_type,
+            subject=frame_a.subject,
+            predicate=frame_a.predicate,
+            object=None,
+            value=None,
+            polarity=True,
+            modality=None,
+            valid_range=None,
+            normalized_text="Corp pay",
+            qualifiers={},
+            stance=Stance.ASSERTS,
+            attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+            extraction_method="gliner",
+            extraction_confidence=0.7,
+        )
+        result = engine.merge([
+            ExtractorOutput(frames=(frame_a,)),
+            ExtractorOutput(frames=(frame_b,)),
+        ])
+        assert len(result.frames) == 1
+        assert result.duplicates_removed == 1
+        assert result.frames[0].extraction_confidence > 0.8
+
+    def test_different_stance_not_deduped(self) -> None:
+        engine = CandidateMergeEngine()
+        frame_a = _make_frame(subject_text="Fact", predicate="is_true")
+        frame_b = PropositionFrameCandidate(
+            span_id=frame_a.span_id,
+            frame_type=frame_a.frame_type,
+            subject=frame_a.subject,
+            predicate=frame_a.predicate,
+            object=None,
+            value=None,
+            polarity=True,
+            modality=None,
+            valid_range=None,
+            normalized_text="Fact is_true",
+            qualifiers={},
+            stance=Stance.REPORTS,
+            attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+            extraction_method="test",
+            extraction_confidence=0.9,
+        )
+        result = engine.merge([
+            ExtractorOutput(frames=(frame_a,)),
+            ExtractorOutput(frames=(frame_b,)),
+        ])
+        assert len(result.frames) == 2
+        assert result.duplicates_removed == 0
+
     def test_different_qualifiers_not_deduped(self) -> None:
         engine = CandidateMergeEngine()
         frame_a = _make_frame(subject_text="Corp", predicate="pay")

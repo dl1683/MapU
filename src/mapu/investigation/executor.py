@@ -136,6 +136,7 @@ class InvestigationExecutor:
             r.expression_id for r in results if r.expression_id is not None
         )
         state.seen_document_ids.update(doc_ids)
+        state.documents_read = len(state.seen_document_ids)
 
         return Observation(
             action=action,
@@ -162,6 +163,7 @@ class InvestigationExecutor:
             r.expression_id for r in results if r.expression_id is not None
         )
         state.seen_document_ids.update(doc_ids)
+        state.documents_read = len(state.seen_document_ids)
 
         return Observation(
             action=action,

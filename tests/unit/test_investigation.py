@@ -259,6 +259,7 @@ class TestInvestigationExecutor:
         assert obs.evidence[0].normalized_text == "found chunk"
         assert obs.evidence[0].document_id is not None
         assert len(obs.document_ids) == 1
+        assert state.documents_read == 1
 
     @pytest.mark.asyncio
     async def test_chunk_retrieval_calls_repo(self) -> None:

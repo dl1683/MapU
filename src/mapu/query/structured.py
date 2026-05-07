@@ -66,8 +66,8 @@ class StructuredQueryExecutor:
             )
         else:
             stmt = stmt.order_by(Proposition.system_created.desc())
-        stmt = stmt.limit(request.max_results)
-        return await self._fetch(stmt)
+        stmt = stmt.limit(request.max_results * 3)
+        return await self._fetch(stmt, max_results=request.max_results)
 
     async def _execute_temporal(
         self, plan: QueryPlan, request: QueryRequest,
@@ -78,8 +78,8 @@ class StructuredQueryExecutor:
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
         stmt = stmt.where(Proposition.valid_range.isnot(None))
-        stmt = stmt.order_by(Proposition.system_created.desc()).limit(request.max_results)
-        return await self._fetch(stmt)
+        stmt = stmt.order_by(Proposition.system_created.desc()).limit(request.max_results * 3)
+        return await self._fetch(stmt, max_results=request.max_results)
 
     async def _execute_temporal_diff(
         self, plan: QueryPlan, request: QueryRequest,
@@ -105,8 +105,8 @@ class StructuredQueryExecutor:
             )
         stmt = stmt.order_by(
             SourcePolicyEval.authority_score.desc().nulls_last(),
-        ).limit(request.max_results)
-        return await self._fetch(stmt)
+        ).limit(request.max_results * 3)
+        return await self._fetch(stmt, max_results=request.max_results)
 
     async def _execute_measurement(
         self, plan: QueryPlan, request: QueryRequest,
@@ -135,8 +135,8 @@ class StructuredQueryExecutor:
             )
         stmt = stmt.order_by(
             SourcePolicyEval.authority_score.desc().nulls_last(),
-        ).limit(request.max_results)
-        return await self._fetch(stmt)
+        ).limit(request.max_results * 3)
+        return await self._fetch(stmt, max_results=request.max_results)
 
     async def _execute_generic(
         self, plan: QueryPlan, request: QueryRequest,
@@ -155,8 +155,8 @@ class StructuredQueryExecutor:
         stmt = stmt.order_by(
             SourcePolicyEval.authority_score.desc().nulls_last(),
             Attestation.extraction_confidence.desc(),
-        ).limit(request.max_results)
-        return await self._fetch(stmt)
+        ).limit(request.max_results * 3)
+        return await self._fetch(stmt, max_results=request.max_results)
 
     def _base_query(
         self, corpus_id: uuid.UUID, situation_id: uuid.UUID | None = None,
@@ -224,7 +224,7 @@ class StructuredQueryExecutor:
             Attestation.system_invalidated.is_(None),
         )
 
-    async def _fetch(self, stmt: Any) -> list[PropositionHit]:
+    async def _fetch(self, stmt: Any, max_results: int = 0) -> list[PropositionHit]:
         result = await self._session.execute(stmt)
         rows = result.all()
         seen: set[uuid.UUID] = set()
@@ -248,4 +248,6 @@ class StructuredQueryExecutor:
                 source_span_text=span.text if span else None,
                 relevance_score=0.85,
             ))
+            if max_results and len(hits) >= max_results:
+                break
         return hits

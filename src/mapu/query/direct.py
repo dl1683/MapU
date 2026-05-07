@@ -144,7 +144,7 @@ class DirectLookupExecutor:
         stmt = stmt.order_by(
             SourcePolicyEval.authority_score.desc().nulls_last(),
             Attestation.extraction_confidence.desc(),
-        ).limit(limit)
+        ).limit(limit * 3)
         result = await self._session.execute(stmt)
         rows = result.all()
 
@@ -169,4 +169,6 @@ class DirectLookupExecutor:
                 source_span_text=span.text if span else None,
                 relevance_score=relevance,
             ))
+            if len(hits) >= limit:
+                break
         return hits

@@ -29,12 +29,10 @@ class QueryService:
         session: AsyncSession,
         intent_classifier: IntentClassifier,
         llm_provider: LLMProvider | None = None,
-        coverage_threshold: float = 0.8,
     ) -> None:
         self._session = session
         self._governor = CascadeGovernor(
             intent_classifier=intent_classifier,
-            coverage_threshold=coverage_threshold,
         )
         self._direct = DirectLookupExecutor(session)
         self._structured = StructuredQueryExecutor(session)

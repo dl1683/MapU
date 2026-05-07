@@ -38,10 +38,8 @@ class CascadeGovernor:
     def __init__(
         self,
         intent_classifier: IntentClassifier,
-        coverage_threshold: float = 0.8,
     ) -> None:
         self._classifier = intent_classifier
-        self._coverage_threshold = coverage_threshold
 
     async def plan(self, request: QueryRequest) -> QueryPlan:
         intent, confidence = await self._classifier.classify(request.question)

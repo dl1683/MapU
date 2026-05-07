@@ -526,10 +526,12 @@ def _parse_findings(
         has_chunk_evidence = any(
             not evidence[i].is_proposition for i in valid_indices
         )
-        confidence = f.get("confidence", 0.5)
-        if not isinstance(confidence, (int, float)):
-            confidence = 0.5
-        confidence = max(0.0, min(1.0, float(confidence)))
+        raw_confidence = f.get("confidence")
+        if not isinstance(raw_confidence, (int, float)):
+            continue
+        confidence = float(raw_confidence)
+        if confidence < 0.0 or confidence > 1.0:
+            continue
         if has_chunk_evidence and len(prop_indices) < len(valid_indices):
             confidence *= 0.85
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import delete, select, update
@@ -10,8 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.models.attestation import Attestation
 from mapu.models.entity import Handle, IdentityDecisionModel
+from mapu.models.gap import Gap
 from mapu.models.lineage import SupersessionEdge
 from mapu.models.proposition import Proposition, PropositionParticipant
+from mapu.repair.operations import _recompute_semantic_keys
 from mapu.repos.audit import ActivityRepo
 from mapu.truth.service import TruthComputeService
 
@@ -56,20 +59,28 @@ async def _rollback_retraction(
             )
         )
 
-    invalidated_ids = result.get("invalidated_attestation_ids", [])
-    if not invalidated_ids:
+    if "invalidated_attestation_ids" not in result:
         raise ValueError(
             "Cannot rollback retraction: operation result missing invalidated_attestation_ids"
         )
-    att_uuids = [uuid.UUID(x) for x in invalidated_ids]
-    await session.execute(
-        update(Attestation)
-        .where(
-            Attestation.id.in_(att_uuids),
-            Attestation.corpus_id == corpus_id,
+    invalidated_ids = result["invalidated_attestation_ids"]
+    if invalidated_ids:
+        att_uuids = [uuid.UUID(x) for x in invalidated_ids]
+        await session.execute(
+            update(Attestation)
+            .where(
+                Attestation.id.in_(att_uuids),
+                Attestation.corpus_id == corpus_id,
+            )
+            .values(system_invalidated=None)
         )
-        .values(system_invalidated=None)
-    )
+
+    gap_id_raw = result.get("gap_id")
+    if gap_id_raw:
+        gap = await session.get(Gap, uuid.UUID(gap_id_raw))
+        if gap is not None:
+            gap.status = "resolved"
+            gap.resolved_at = datetime.now(UTC)
 
     truth_svc = TruthComputeService(session, corpus_id)
     recomputed = await truth_svc.recompute_for_proposition(proposition_id)
@@ -171,27 +182,21 @@ async def _rollback_merge_handles(
 ) -> dict[str, Any]:
     canonical_id = uuid.UUID(result["canonical_handle_id"])
     merged_id = uuid.UUID(result["merged_handle_id"])
-    moved_ids = [uuid.UUID(x) for x in result.get("moved_proposition_ids", [])]
 
+    snapshots = result.get("proposition_snapshots", [])
+    for snap in snapshots:
+        prop_id = uuid.UUID(snap["id"])
+        prior_subj = uuid.UUID(snap["prior_subject"])
+        prior_obj = uuid.UUID(snap["prior_object"]) if snap.get("prior_object") else None
+        prop = await session.get(Proposition, prop_id)
+        if prop is None:
+            continue
+        prop.subject_handle_id = prior_subj
+        if prior_obj is not None:
+            prop.object_handle_id = prior_obj
+
+    moved_ids = [uuid.UUID(snap["id"]) for snap in snapshots]
     if moved_ids:
-        await session.execute(
-            update(Proposition)
-            .where(
-                Proposition.id.in_(moved_ids),
-                Proposition.subject_handle_id == canonical_id,
-                Proposition.corpus_id == corpus_id,
-            )
-            .values(subject_handle_id=merged_id)
-        )
-        await session.execute(
-            update(Proposition)
-            .where(
-                Proposition.id.in_(moved_ids),
-                Proposition.object_handle_id == canonical_id,
-                Proposition.corpus_id == corpus_id,
-            )
-            .values(object_handle_id=merged_id)
-        )
         await session.execute(
             update(PropositionParticipant)
             .where(
@@ -201,6 +206,11 @@ async def _rollback_merge_handles(
             )
             .values(handle_id=merged_id)
         )
+
+    canonical_handle = await session.get(Handle, canonical_id)
+    if canonical_handle is not None:
+        prior_aliases = result.get("prior_canonical_aliases", [])
+        canonical_handle.aliases = prior_aliases
 
     merged_handle = await session.get(Handle, merged_id)
     if merged_handle is not None:
@@ -215,6 +225,9 @@ async def _rollback_merge_handles(
         )
 
     await session.flush()
+
+    if moved_ids:
+        await _recompute_semantic_keys(session, corpus_id, moved_ids)
 
     activity_repo = ActivityRepo(session, corpus_id)
     await activity_repo.log(
@@ -237,13 +250,7 @@ async def _rollback_split_handle(
     original_id = uuid.UUID(result["original_handle_id"])
     new_id = uuid.UUID(result["new_handle_id"])
 
-    moved_stmt = select(Proposition.id).where(
-        Proposition.corpus_id == corpus_id,
-        (Proposition.subject_handle_id == new_id)
-        | (Proposition.object_handle_id == new_id),
-    )
-    moved_result = await session.execute(moved_stmt)
-    moved_ids = [row[0] for row in moved_result]
+    moved_ids = [uuid.UUID(x) for x in result.get("moved_proposition_ids", [])]
 
     if moved_ids:
         await session.execute(
@@ -267,6 +274,7 @@ async def _rollback_split_handle(
         await session.execute(
             update(PropositionParticipant)
             .where(
+                PropositionParticipant.proposition_id.in_(moved_ids),
                 PropositionParticipant.handle_id == new_id,
                 PropositionParticipant.corpus_id == corpus_id,
             )
@@ -286,6 +294,9 @@ async def _rollback_split_handle(
         await session.delete(new_handle)
 
     await session.flush()
+
+    if moved_ids:
+        await _recompute_semantic_keys(session, corpus_id, moved_ids)
 
     activity_repo = ActivityRepo(session, corpus_id)
     await activity_repo.log(

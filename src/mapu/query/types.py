@@ -58,6 +58,8 @@ class PropositionHit:
     source_span_text: str | None
     relevance_score: float
     document_id: uuid.UUID | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
 
 
 @dataclass(frozen=True)

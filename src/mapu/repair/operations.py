@@ -248,13 +248,25 @@ async def merge_handles(
     if canonical is None:
         raise ValueError(f"Handle {canonical_handle_id} not found")
 
-    moved_stmt = select(Proposition.id).where(
+    moved_stmt = select(
+        Proposition.id, Proposition.subject_handle_id, Proposition.object_handle_id,
+    ).where(
         Proposition.corpus_id == corpus_id,
         (Proposition.subject_handle_id == merged_handle_id)
         | (Proposition.object_handle_id == merged_handle_id),
     )
     moved_result = await session.execute(moved_stmt)
-    moved_prop_ids = [row[0] for row in moved_result]
+    prop_snapshots = [
+        {
+            "id": str(row[0]),
+            "prior_subject": str(row[1]),
+            "prior_object": str(row[2]) if row[2] else None,
+        }
+        for row in moved_result
+    ]
+    moved_prop_ids = [uuid.UUID(s["id"]) for s in prop_snapshots]
+
+    prior_canonical_aliases = list(canonical.aliases or [])
 
     await session.execute(
         update(Proposition)
@@ -319,6 +331,8 @@ async def merge_handles(
         "canonical_handle_id": str(canonical_handle_id),
         "merged_handle_id": str(merged_handle_id),
         "moved_proposition_ids": [str(p) for p in moved_prop_ids],
+        "proposition_snapshots": prop_snapshots,
+        "prior_canonical_aliases": prior_canonical_aliases,
         "identity_decision_id": str(identity.id),
     }
 
@@ -394,6 +408,6 @@ async def split_handle(
     return {
         "original_handle_id": str(handle_id),
         "new_handle_id": str(new_handle.id),
-        "propositions_moved": len(proposition_ids_to_move),
+        "moved_proposition_ids": [str(p) for p in proposition_ids_to_move],
         "identity_decision_id": str(identity.id),
     }

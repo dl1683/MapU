@@ -468,7 +468,7 @@ class TestParseFindings:
         assert findings[0].derivation_basis[0] == prop_id
         assert findings[0].confidence == pytest.approx(0.8 * 0.85)
 
-    def test_clamps_confidence(self) -> None:
+    def test_rejects_out_of_range_confidence(self) -> None:
         from mapu.investigation.service import _parse_findings
         from mapu.investigation.types import InvestigationEvidence
 
@@ -498,7 +498,7 @@ class TestParseFindings:
             ],
         }
         findings = _parse_findings(raw, evidence)
-        assert findings[0].confidence == 1.0
+        assert len(findings) == 0
 
 
 class TestInvestigationState:

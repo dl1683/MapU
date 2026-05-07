@@ -132,6 +132,11 @@ class QueryController(Controller):
                     object_name=h.object_name,
                     confidence=h.extraction_confidence,
                     authority_score=h.authority_score,
+                    truth_status=h.truth_status,
+                    source_span_text=h.source_span_text,
+                    document_id=h.document_id,
+                    valid_from=h.valid_from,
+                    valid_to=h.valid_to,
                 )
                 for h in result.hits
             ],

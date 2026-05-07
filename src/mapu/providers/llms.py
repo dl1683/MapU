@@ -176,8 +176,12 @@ def get_default_llm_provider() -> LLMProvider | None:
     provider_type = settings.provider.lower()
     factory_cls = _PROVIDER_FACTORIES.get(provider_type)
     if factory_cls is None:
-        factory_cls = OpenAICompatibleLLMProvider
-    default_model = _PROVIDER_DEFAULTS.get(provider_type, "gpt-4o-mini")
+        raise ValueError(
+            f"Unknown LLM provider '{settings.provider}'. "
+            f"Registered providers: {', '.join(sorted(_PROVIDER_FACTORIES))}. "
+            f"Use register_llm_provider() to add custom providers."
+        )
+    default_model = _PROVIDER_DEFAULTS.get(provider_type, "")
 
     _cached_llm_provider = factory_cls(
         api_key=settings.api_key,

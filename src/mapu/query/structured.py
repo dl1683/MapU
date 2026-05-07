@@ -250,6 +250,7 @@ class StructuredQueryExecutor:
             if prop.id in seen:
                 continue
             seen.add(prop.id)
+            vr = prop.valid_range
             hits.append(PropositionHit(
                 proposition_id=prop.id,
                 normalized_text=prop.normalized_text,
@@ -265,6 +266,8 @@ class StructuredQueryExecutor:
                 source_span_text=span.text if span else None,
                 relevance_score=0.85,
                 document_id=span.expression_id if span else None,
+                valid_from=vr.lower if vr else None,
+                valid_to=vr.upper if vr else None,
             ))
             if max_results and len(hits) >= max_results:
                 break

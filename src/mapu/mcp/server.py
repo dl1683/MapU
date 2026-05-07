@@ -56,7 +56,10 @@ async def query(
     if as_of is not None:
         from datetime import datetime as dt
 
-        as_of_dt = dt.fromisoformat(as_of)
+        try:
+            as_of_dt = dt.fromisoformat(as_of)
+        except ValueError:
+            return {"error": "as_of must be a valid ISO 8601 datetime"}
     factory = _get_session_factory()
     async with factory() as session:
         from mapu.providers.embeddings import get_default_embedding_provider
@@ -87,6 +90,11 @@ async def query(
                     "object_name": h.object_name,
                     "confidence": h.extraction_confidence,
                     "authority_score": h.authority_score,
+                    "truth_status": h.truth_status,
+                    "source_span_text": h.source_span_text,
+                    "document_id": str(h.document_id) if h.document_id else None,
+                    "valid_from": h.valid_from.isoformat() if h.valid_from else None,
+                    "valid_to": h.valid_to.isoformat() if h.valid_to else None,
                 }
                 for h in result.hits
             ],

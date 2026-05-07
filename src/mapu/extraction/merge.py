@@ -121,6 +121,7 @@ class CandidateMergeEngine:
             attestation_strength=frame.attestation_strength,
             extraction_method=frame.extraction_method,
             extraction_confidence=final,
+            corroborating_methods=tuple(acc.supports),
         )
 
 

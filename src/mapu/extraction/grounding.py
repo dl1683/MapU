@@ -109,6 +109,11 @@ class CandidateGrounder:
             else "candidate"
         )
 
+        corroboration = (
+            [list(pair) for pair in frame.corroborating_methods]
+            if frame.corroborating_methods else None
+        )
+
         att = Attestation(
             id=uuid.uuid4(),
             span_id=frame.span_id,
@@ -122,6 +127,7 @@ class CandidateGrounder:
                 frame.attestation_strength.value
                 if frame.attestation_strength else None
             ),
+            corroborating_methods=corroboration,
             status=attestation_status,
             system_created=datetime.now(UTC),
         )

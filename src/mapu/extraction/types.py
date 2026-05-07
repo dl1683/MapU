@@ -81,6 +81,7 @@ class PropositionFrameCandidate:
     attestation_strength: AttestationStrength | None
     extraction_method: str
     extraction_confidence: float
+    corroborating_methods: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True)

@@ -270,6 +270,7 @@ def upgrade() -> None:
         'direct_statement', 'allegation', 'inference', 'observation',
         'measurement', 'computation', 'expert_judgment'
       )),
+      corroborating_methods JSONB,
       status TEXT NOT NULL DEFAULT 'candidate' CHECK (status IN ('candidate', 'accepted', 'rejected', 'quarantined')),
       system_created TIMESTAMPTZ NOT NULL DEFAULT now(),
       system_invalidated TIMESTAMPTZ,

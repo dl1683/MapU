@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import ForeignKey, Text, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mapu.db.base import Base
@@ -26,6 +27,7 @@ class Attestation(Base):
     extraction_method: Mapped[str] = mapped_column(Text, nullable=False)
     extraction_confidence: Mapped[float] = mapped_column(nullable=False)
     attestation_strength: Mapped[str | None] = mapped_column(Text)
+    corroborating_methods: Mapped[list[list[Any]] | None] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="candidate")
     system_created: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     system_invalidated: Mapped[datetime | None] = mapped_column()

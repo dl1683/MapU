@@ -434,6 +434,62 @@ class TestCandidateMergeEngine:
         assert result.duplicates_removed == 1
         assert result.frames[0].extraction_confidence > 0.8
 
+    def test_agreement_records_corroborating_methods(self) -> None:
+        engine = CandidateMergeEngine()
+        frame_a = PropositionFrameCandidate(
+            span_id=uuid.uuid4(),
+            frame_type=FrameType.DEFINITION,
+            subject=EntityMention(
+                text="Corp", kind="org",
+                start_char=0, end_char=4, confidence=1.0, source="test",
+            ),
+            predicate="pay",
+            object=None,
+            value=None,
+            polarity=True,
+            modality=None,
+            valid_range=None,
+            normalized_text="Corp pay",
+            qualifiers={},
+            stance=Stance.ASSERTS,
+            attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+            extraction_method="rule_defined_term",
+            extraction_confidence=0.8,
+        )
+        frame_b = PropositionFrameCandidate(
+            span_id=frame_a.span_id,
+            frame_type=frame_a.frame_type,
+            subject=frame_a.subject,
+            predicate=frame_a.predicate,
+            object=None,
+            value=None,
+            polarity=True,
+            modality=None,
+            valid_range=None,
+            normalized_text="Corp pay",
+            qualifiers={},
+            stance=Stance.ASSERTS,
+            attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+            extraction_method="gliner",
+            extraction_confidence=0.7,
+        )
+        result = engine.merge([
+            ExtractorOutput(frames=(frame_a,)),
+            ExtractorOutput(frames=(frame_b,)),
+        ])
+        merged = result.frames[0]
+        assert len(merged.corroborating_methods) == 2
+        methods = {m for m, _ in merged.corroborating_methods}
+        assert methods == {"rule_defined_term", "gliner"}
+        for _method, conf in merged.corroborating_methods:
+            assert isinstance(conf, float)
+
+    def test_no_agreement_leaves_corroborating_methods_empty(self) -> None:
+        engine = CandidateMergeEngine()
+        frame = _make_frame(subject_text="Solo", predicate="alone")
+        result = engine.merge([ExtractorOutput(frames=(frame,))])
+        assert result.frames[0].corroborating_methods == ()
+
     def test_different_stance_not_deduped(self) -> None:
         engine = CandidateMergeEngine()
         frame_a = _make_frame(subject_text="Fact", predicate="is_true")
@@ -580,7 +636,7 @@ class TestAmendmentConjunctionLimitation:
     """Documents known limitation: conjunction targets use nearest-preceding heuristic.
 
     'Section 1.1 and Section 2.2 is hereby amended' targets Section 2.2 (nearest),
-    not Section 1.1 (first). Conjunction awareness requires syntactic parsing (Phase 4+).
+    not Section 1.1 (first). Conjunction awareness requires syntactic parsing.
     """
 
     @pytest.fixture

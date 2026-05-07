@@ -88,6 +88,10 @@ def _parse_plan(raw: Mapping[str, Any]) -> InvestigationPlan:
 
         raw_entities = action_data.get("entities") or ()
         raw_predicates = action_data.get("predicates") or ()
+        if isinstance(raw_entities, str):
+            raw_entities = [raw_entities]
+        if isinstance(raw_predicates, str):
+            raw_predicates = [raw_predicates]
         entities = tuple(e for e in raw_entities if isinstance(e, str))
         predicates = tuple(p for p in raw_predicates if isinstance(p, str))
 

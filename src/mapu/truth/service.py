@@ -48,7 +48,11 @@ class TruthComputeService:
 
         existing = await self._current_state(proposition_id, situation_id)
 
-        if existing and existing.basis_hash == truth.basis_hash:
+        if (
+            existing
+            and existing.basis_hash == truth.basis_hash
+            and existing.truth_status == truth.status.value
+        ):
             return TruthComputeResult(
                 proposition_id=proposition_id,
                 situation_id=situation_id,
@@ -143,7 +147,7 @@ class TruthComputeService:
     async def _situations_for_proposition(
         self, proposition_id: uuid.UUID,
     ) -> list[uuid.UUID]:
-        stmt = (
+        att_stmt = (
             select(AttestationSituation.situation_id)
             .join(
                 Attestation,
@@ -154,7 +158,15 @@ class TruthComputeService:
                 Attestation.proposition_id == proposition_id,
                 Attestation.corpus_id == self._corpus_id,
             )
-            .distinct()
         )
-        result = await self._session.execute(stmt)
+        state_stmt = (
+            select(PropositionState.situation_id)
+            .where(
+                PropositionState.proposition_id == proposition_id,
+                PropositionState.corpus_id == self._corpus_id,
+                func.upper(PropositionState.effective_range).is_(None),
+            )
+        )
+        combined = att_stmt.union(state_stmt)
+        result = await self._session.execute(combined)
         return [row[0] for row in result.all()]

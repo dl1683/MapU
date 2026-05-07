@@ -67,6 +67,24 @@ class DerivationEdgeRepo(CorpusScopedRepo[DerivationEdge]):
         result = await self.session.execute(stmt)
         return [row[0] for row in result.all()]
 
+    async def parents_batch(
+        self, proposition_ids: set[uuid.UUID],
+    ) -> dict[uuid.UUID, list[uuid.UUID]]:
+        if not proposition_ids:
+            return {}
+        stmt = select(
+            DerivationEdge.child_proposition_id,
+            DerivationEdge.parent_proposition_id,
+        ).where(
+            DerivationEdge.child_proposition_id.in_(proposition_ids),
+            DerivationEdge.corpus_id == self.corpus_id,
+        )
+        result = await self.session.execute(stmt)
+        mapping: dict[uuid.UUID, list[uuid.UUID]] = {pid: [] for pid in proposition_ids}
+        for row in result:
+            mapping[row[0]].append(row[1])
+        return mapping
+
     async def descendants_bounded(
         self, proposition_id: uuid.UUID, max_depth: int = MAX_REPAIR_CASCADE_DEPTH
     ) -> set[uuid.UUID]:

@@ -36,8 +36,10 @@ class InvestigationEvaluator:
         found_predicates: set[str] = set()
         for obs in state.observations:
             found_entities.update(e.lower() for e in obs.new_entities_discovered)
-            found_entities.update(e.lower() for e in obs.action.entities)
-            found_predicates.update(p.lower() for p in obs.action.predicates)
+            has_results = bool(obs.evidence or obs.proposition_ids_found)
+            if has_results:
+                found_entities.update(e.lower() for e in obs.action.entities)
+                found_predicates.update(p.lower() for p in obs.action.predicates)
 
         if query_entities:
             state.has_entity_targets = True

@@ -113,17 +113,18 @@ class TestBlastRadiusComputation:
         ) as MockGapRepo:
             deriv_instance = MagicMock()
             deriv_instance.descendants_with_depth = AsyncMock(return_value=[])
+            deriv_instance.parents_batch = AsyncMock(return_value={})
             MockDerivRepo.return_value = deriv_instance
 
             gap_instance = MagicMock()
-            gap_instance.gaps_for_target = AsyncMock(return_value=[])
+            gap_instance.gaps_for_targets_batch = AsyncMock(return_value=set())
             MockGapRepo.return_value = gap_instance
 
             prop_id = uuid.uuid4()
             handle_id = uuid.uuid4()
 
             result_mock = MagicMock()
-            result_mock.one_or_none.return_value = (handle_id, None)
+            result_mock.__iter__ = MagicMock(return_value=iter([(handle_id, None)]))
             session.execute = AsyncMock(return_value=result_mock)
 
             report = await compute_blast_radius(
@@ -153,18 +154,18 @@ class TestBlastRadiusComputation:
             deriv_instance.descendants_with_depth = AsyncMock(
                 return_value=[DescendantInfo(id=child_id, depth=1)]
             )
-            deriv_instance.parents = AsyncMock(
-                return_value=[prop_id, other_parent]
+            deriv_instance.parents_batch = AsyncMock(
+                return_value={child_id: [prop_id, other_parent]}
             )
             MockDerivRepo.return_value = deriv_instance
 
             gap_instance = MagicMock()
-            gap_instance.gaps_for_target = AsyncMock(return_value=[])
+            gap_instance.gaps_for_targets_batch = AsyncMock(return_value=set())
             MockGapRepo.return_value = gap_instance
 
             handle_id = uuid.uuid4()
             result_mock = MagicMock()
-            result_mock.one_or_none.return_value = (handle_id, None)
+            result_mock.__iter__ = MagicMock(return_value=iter([(handle_id, None)]))
             session.execute = AsyncMock(return_value=result_mock)
 
             report = await compute_blast_radius(
@@ -191,16 +192,18 @@ class TestBlastRadiusComputation:
             deriv_instance.descendants_with_depth = AsyncMock(
                 return_value=[DescendantInfo(id=child_id, depth=1)]
             )
-            deriv_instance.parents = AsyncMock(return_value=[prop_id])
+            deriv_instance.parents_batch = AsyncMock(
+                return_value={child_id: [prop_id]}
+            )
             MockDerivRepo.return_value = deriv_instance
 
             gap_instance = MagicMock()
-            gap_instance.gaps_for_target = AsyncMock(return_value=[])
+            gap_instance.gaps_for_targets_batch = AsyncMock(return_value=set())
             MockGapRepo.return_value = gap_instance
 
             handle_id = uuid.uuid4()
             result_mock = MagicMock()
-            result_mock.one_or_none.return_value = (handle_id, None)
+            result_mock.__iter__ = MagicMock(return_value=iter([(handle_id, None)]))
             session.execute = AsyncMock(return_value=result_mock)
 
             report = await compute_blast_radius(

@@ -158,6 +158,9 @@ async def _dispatch_operation(
             affected_ids=tuple(uuid.UUID(x) for x in payload.get("affected_ids", [])),
             reason=payload.get("reason", ""),
             actor=payload.get("actor", "system"),
+            recompute_only_ids=tuple(
+                uuid.UUID(x) for x in payload.get("recompute_only_ids", [])
+            ),
         )
     if operation_type == "supersede_proposition":
         return await supersede_proposition(
@@ -167,6 +170,9 @@ async def _dispatch_operation(
             new_proposition_id=uuid.UUID(payload["new_proposition_id"]),
             affected_ids=tuple(uuid.UUID(x) for x in payload.get("affected_ids", [])),
             actor=payload.get("actor", "system"),
+            recompute_only_ids=tuple(
+                uuid.UUID(x) for x in payload.get("recompute_only_ids", [])
+            ),
         )
     if operation_type == "reject_attestation":
         return await reject_attestation(

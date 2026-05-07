@@ -38,6 +38,19 @@ class GapRepo(CorpusScopedRepo[Gap]):
         result = await self.session.execute(stmt)
         return [row[0] for row in result.all()]
 
+    async def gaps_for_targets_batch(
+        self, target_type: str, target_ids: set[uuid.UUID],
+    ) -> set[uuid.UUID]:
+        if not target_ids:
+            return set()
+        stmt = select(GapTarget.gap_id).where(
+            GapTarget.corpus_id == self.corpus_id,
+            GapTarget.target_type == target_type,
+            GapTarget.target_id.in_(target_ids),
+        )
+        result = await self.session.execute(stmt)
+        return {row[0] for row in result.all()}
+
     async def open_gaps(self, *, limit: int = 100) -> list[Gap]:
         stmt = (
             select(Gap)

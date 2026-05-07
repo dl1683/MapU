@@ -80,6 +80,7 @@ class TestTruthComputeService:
         existing_state = MagicMock()
         existing_state.id = uuid.uuid4()
         existing_state.basis_hash = TruthPolicyV1()._hash([])
+        existing_state.truth_status = "unknown"
 
         current_mock = MagicMock()
         current_mock.scalar_one_or_none.return_value = existing_state

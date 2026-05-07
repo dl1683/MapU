@@ -26,6 +26,7 @@ async def retract_proposition(
     affected_ids: tuple[uuid.UUID, ...],
     reason: str,
     actor: str,
+    recompute_only_ids: tuple[uuid.UUID, ...] = (),
 ) -> dict[str, Any]:
     supersession_repo = SupersessionEdgeRepo(session, corpus_id)
     await supersession_repo.add_supersession(
@@ -49,7 +50,7 @@ async def retract_proposition(
     truth_svc = TruthComputeService(session, corpus_id)
     recomputed = await truth_svc.recompute_for_proposition(proposition_id)
 
-    for aid in affected_ids:
+    for aid in (*affected_ids, *recompute_only_ids):
         await truth_svc.recompute_for_proposition(aid)
 
     gap_repo = GapRepo(session, corpus_id)
@@ -91,6 +92,7 @@ async def supersede_proposition(
     new_proposition_id: uuid.UUID,
     affected_ids: tuple[uuid.UUID, ...],
     actor: str,
+    recompute_only_ids: tuple[uuid.UUID, ...] = (),
 ) -> dict[str, Any]:
     supersession_repo = SupersessionEdgeRepo(session, corpus_id)
     await supersession_repo.add_supersession(
@@ -103,7 +105,7 @@ async def supersede_proposition(
     truth_svc = TruthComputeService(session, corpus_id)
     recomputed = await truth_svc.recompute_for_proposition(old_proposition_id)
 
-    for aid in affected_ids:
+    for aid in (*affected_ids, *recompute_only_ids):
         await truth_svc.recompute_for_proposition(aid)
 
     activity_repo = ActivityRepo(session, corpus_id)

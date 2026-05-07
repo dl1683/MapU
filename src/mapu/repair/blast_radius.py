@@ -57,8 +57,9 @@ async def compute_blast_radius(
     affected_ids: list[uuid.UUID] = []
     recompute_only_ids: list[uuid.UUID] = []
 
+    parents_map = await derivation_repo.parents_batch(all_descendant_ids)
     for desc in descendants:
-        parent_ids = await derivation_repo.parents(desc.id)
+        parent_ids = parents_map.get(desc.id, [])
         surviving_parents = [
             p for p in parent_ids
             if p != proposition_id and p not in all_descendant_ids
@@ -68,26 +69,23 @@ async def compute_blast_radius(
         else:
             affected_ids.append(desc.id)
 
-    all_prop_ids = [proposition_id, *affected_ids, *recompute_only_ids]
+    all_prop_ids = {proposition_id, *affected_ids, *recompute_only_ids}
+
     handle_ids: set[uuid.UUID] = set()
-    for pid in all_prop_ids:
+    if all_prop_ids:
         stmt = select(
             Proposition.subject_handle_id, Proposition.object_handle_id,
         ).where(
-            Proposition.id == pid,
+            Proposition.id.in_(all_prop_ids),
             Proposition.corpus_id == corpus_id,
         )
         result = await session.execute(stmt)
-        row = result.one_or_none()
-        if row:
+        for row in result:
             handle_ids.add(row[0])
             if row[1] is not None:
                 handle_ids.add(row[1])
 
-    gap_ids: set[uuid.UUID] = set()
-    for pid in all_prop_ids:
-        gids = await gap_repo.gaps_for_target("proposition", pid)
-        gap_ids.update(gids)
+    gap_ids = await gap_repo.gaps_for_targets_batch("proposition", all_prop_ids)
 
     risk = _classify_risk(
         len(affected_ids) + len(recompute_only_ids), max_depth_seen, depth_limited,

@@ -161,6 +161,7 @@ class TestInvestigationEvaluator:
         state.observations = [
             Observation(
                 action=action,
+                proposition_ids_found=(uuid.uuid4(),),
                 new_entities_discovered=("CEO",),
             ),
         ]
@@ -174,10 +175,27 @@ class TestInvestigationEvaluator:
         action.entities = ()
         action.predicates = ("controls",)
         state.observations = [
-            Observation(action=action, new_entities_discovered=()),
+            Observation(
+                action=action,
+                proposition_ids_found=(uuid.uuid4(),),
+                new_entities_discovered=(),
+            ),
         ]
         evaluator.update_coverage(state, (), ("controls", "manages"))
         assert state.known_predicate_coverage == 0.5
+
+    def test_update_coverage_ignores_empty_results(self) -> None:
+        evaluator = InvestigationEvaluator()
+        state = InvestigationState(budget=InvestigationBudget())
+        action = MagicMock()
+        action.entities = ("CEO",)
+        action.predicates = ("controls",)
+        state.observations = [
+            Observation(action=action, new_entities_discovered=()),
+        ]
+        evaluator.update_coverage(state, ("CEO",), ("controls",))
+        assert state.known_entity_coverage == 0.0
+        assert state.known_predicate_coverage == 0.0
 
 
 class TestInvestigationState:

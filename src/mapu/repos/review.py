@@ -17,6 +17,24 @@ from mapu.types import ChangesetStatus
 class ChangesetRepo(CorpusScopedRepo[Changeset]):
     model = Changeset
 
+    async def create_changeset(
+        self,
+        actor: str,
+        actor_type: str,
+        description: str | None = None,
+        risk_level: str = "low",
+        blast_radius: dict[str, Any] | None = None,
+    ) -> Changeset:
+        cs = Changeset(
+            corpus_id=self.corpus_id,
+            actor=actor,
+            actor_type=actor_type,
+            description=description,
+            risk_level=risk_level,
+            blast_radius=blast_radius,
+        )
+        return await self.add(cs)
+
     async def transition(self, changeset_id: uuid.UUID, new_status: str) -> None:
         current = await self.get(changeset_id)
         if current is None:
@@ -32,6 +50,16 @@ class ChangesetRepo(CorpusScopedRepo[Changeset]):
         current = await self.get(changeset_id)
         if current is not None:
             current.applied_at = datetime.now(UTC)
+            await self.session.flush()
+
+    async def mark_failed(self, changeset_id: uuid.UUID) -> None:
+        await self.transition(changeset_id, ChangesetStatus.FAILED.value)
+
+    async def mark_rolled_back(self, changeset_id: uuid.UUID) -> None:
+        await self.transition(changeset_id, ChangesetStatus.ROLLED_BACK.value)
+        current = await self.get(changeset_id)
+        if current is not None:
+            current.rolled_back_at = datetime.now(UTC)
             await self.session.flush()
 
     async def append_operation(
@@ -51,6 +79,37 @@ class ChangesetRepo(CorpusScopedRepo[Changeset]):
         self.session.add(op)
         await self.session.flush()
         return op
+
+    async def operations_for_changeset(
+        self, changeset_id: uuid.UUID,
+    ) -> list[ChangesetOperation]:
+        stmt = (
+            select(ChangesetOperation)
+            .where(
+                ChangesetOperation.changeset_id == changeset_id,
+                ChangesetOperation.corpus_id == self.corpus_id,
+            )
+            .order_by(ChangesetOperation.ordinal)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def record_operation_result(
+        self,
+        operation_id: uuid.UUID,
+        result: dict[str, Any],
+    ) -> None:
+        stmt = select(ChangesetOperation).where(
+            ChangesetOperation.id == operation_id,
+            ChangesetOperation.corpus_id == self.corpus_id,
+        )
+        res = await self.session.execute(stmt)
+        op = res.scalar_one_or_none()
+        if op is None:
+            raise ValueError(f"Operation {operation_id} not found")
+        op.result = result
+        op.executed_at = datetime.now(UTC)
+        await self.session.flush()
 
     async def pending_for_review(self) -> list[Changeset]:
         stmt = select(Changeset).where(

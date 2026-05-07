@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import exists, select, text
 
@@ -21,6 +22,12 @@ class RepairCascadeDepthExceeded(Exception):
         )
         self.proposition_id = proposition_id
         self.max_depth = max_depth
+
+
+@dataclass(frozen=True)
+class DescendantInfo:
+    id: uuid.UUID
+    depth: int
 
 
 class DerivationEdgeRepo(CorpusScopedRepo[DerivationEdge]):
@@ -44,6 +51,22 @@ class DerivationEdgeRepo(CorpusScopedRepo[DerivationEdge]):
         )
         return await self.add(edge)
 
+    async def children(self, proposition_id: uuid.UUID) -> list[uuid.UUID]:
+        stmt = select(DerivationEdge.child_proposition_id).where(
+            DerivationEdge.parent_proposition_id == proposition_id,
+            DerivationEdge.corpus_id == self.corpus_id,
+        )
+        result = await self.session.execute(stmt)
+        return [row[0] for row in result.all()]
+
+    async def parents(self, proposition_id: uuid.UUID) -> list[uuid.UUID]:
+        stmt = select(DerivationEdge.parent_proposition_id).where(
+            DerivationEdge.child_proposition_id == proposition_id,
+            DerivationEdge.corpus_id == self.corpus_id,
+        )
+        result = await self.session.execute(stmt)
+        return [row[0] for row in result.all()]
+
     async def descendants_bounded(
         self, proposition_id: uuid.UUID, max_depth: int = MAX_REPAIR_CASCADE_DEPTH
     ) -> set[uuid.UUID]:
@@ -52,6 +75,12 @@ class DerivationEdgeRepo(CorpusScopedRepo[DerivationEdge]):
         Raises RepairCascadeDepthExceeded if any node reaches max_depth,
         indicating the true blast radius may extend further.
         """
+        info = await self.descendants_with_depth(proposition_id, max_depth)
+        return {d.id for d in info}
+
+    async def descendants_with_depth(
+        self, proposition_id: uuid.UUID, max_depth: int = MAX_REPAIR_CASCADE_DEPTH,
+    ) -> list[DescendantInfo]:
         stmt = text("""
             WITH RECURSIVE descendants AS (
                 SELECT child_proposition_id AS id, 1 AS depth
@@ -70,12 +99,34 @@ class DerivationEdgeRepo(CorpusScopedRepo[DerivationEdge]):
             {"prop_id": proposition_id, "corpus_id": self.corpus_id, "max_depth": max_depth},
         )
         rows = list(result)
-        ids = set()
+        infos: list[DescendantInfo] = []
         for row in rows:
-            ids.add(row[0])
             if row[1] >= max_depth:
                 raise RepairCascadeDepthExceeded(proposition_id, max_depth)
-        return ids
+            infos.append(DescendantInfo(id=row[0], depth=row[1]))
+        return infos
+
+    async def ancestors_bounded(
+        self, proposition_id: uuid.UUID, max_depth: int = MAX_REPAIR_CASCADE_DEPTH,
+    ) -> list[DescendantInfo]:
+        stmt = text("""
+            WITH RECURSIVE ancestors AS (
+                SELECT parent_proposition_id AS id, 1 AS depth
+                FROM derivation_edge
+                WHERE child_proposition_id = :prop_id AND corpus_id = :corpus_id
+                UNION
+                SELECT de.parent_proposition_id, a.depth + 1
+                FROM derivation_edge de
+                JOIN ancestors a ON de.child_proposition_id = a.id
+                WHERE de.corpus_id = :corpus_id AND a.depth < :max_depth
+            )
+            SELECT id, depth FROM ancestors
+        """)
+        result = await self.session.execute(
+            stmt,
+            {"prop_id": proposition_id, "corpus_id": self.corpus_id, "max_depth": max_depth},
+        )
+        return [DescendantInfo(id=row[0], depth=row[1]) for row in result]
 
 
 class SupersessionEdgeRepo(CorpusScopedRepo[SupersessionEdge]):

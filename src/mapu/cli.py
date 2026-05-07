@@ -280,7 +280,9 @@ async def _run_investigate(args: argparse.Namespace) -> None:
                 print("Error: No LLM provider configured. Set MAPU_LLM_PROVIDER.", file=sys.stderr)
                 sys.exit(1)
 
-            budget = InvestigationBudget(max_actions=args.max_actions)
+            budget = InvestigationBudget(
+                max_actions=min(max(args.max_actions, 1), 100),
+            )
             svc = InvestigationService(
                 session, llm, budget=budget,
                 embedding_provider=get_default_embedding_provider(),

@@ -276,6 +276,31 @@ async def repair_apply(corpus_id: str, changeset_id: str) -> dict[str, Any]:
 
 
 @server.tool()
+async def repair_rollback(corpus_id: str, changeset_id: str) -> dict[str, Any]:
+    """Roll back a previously applied repair changeset.
+
+    Reverses the operations in reverse order, restoring the prior state.
+    Only works on changesets with status 'applied'.
+    """
+    from mapu.repair.service import RepairService
+
+    cid = uuid.UUID(corpus_id)
+    csid = uuid.UUID(changeset_id)
+    factory = _get_session_factory()
+    async with factory() as session:
+        svc = RepairService(session, cid)
+        result = await svc.rollback(csid)
+        await session.commit()
+        return {
+            "changeset_id": str(result.changeset_id),
+            "success": result.success,
+            "operations_executed": result.operations_executed,
+            "recomputed_propositions": result.recomputed_propositions,
+            "errors": result.errors,
+        }
+
+
+@server.tool()
 async def create_corpus(name: str, description: str = "") -> dict[str, Any]:
     """Create a new knowledge corpus."""
     from mapu.models.corpus import Corpus
@@ -343,6 +368,15 @@ async def contribute_proposition(
     from mapu.models.entity import Handle
     from mapu.models.proposition import Proposition, PropositionParticipant
     from mapu.repos.entity import HandleRepo
+
+    _VALID_STANCES = {"asserts", "denies", "reports", "questions", "conditions"}
+    if stance not in _VALID_STANCES:
+        return {"error": f"Invalid stance '{stance}'. Must be one of: {', '.join(sorted(_VALID_STANCES))}"}
+    confidence = max(0.0, min(1.0, confidence))
+    subject_name = subject_name.strip()
+    predicate = predicate.strip().lower()
+    if object_name:
+        object_name = object_name.strip()
 
     cid = uuid.UUID(corpus_id)
     factory = _get_session_factory()
@@ -443,10 +477,22 @@ async def review_attestation(
     if decision not in ("accepted", "rejected", "quarantined"):
         return {"error": f"Invalid decision '{decision}'. Must be accepted/rejected/quarantined."}
 
+    from sqlalchemy import select
+
+    from mapu.models.attestation import Attestation
+    from mapu.repos.audit import ActivityRepo
+
     cid = uuid.UUID(corpus_id)
     aid = uuid.UUID(attestation_id)
     factory = _get_session_factory()
     async with factory() as session:
+        stmt = select(Attestation.id).where(
+            Attestation.id == aid, Attestation.corpus_id == cid,
+        )
+        result = await session.execute(stmt)
+        if result.scalar_one_or_none() is None:
+            return {"error": f"Attestation {attestation_id} not found in corpus {corpus_id}"}
+
         repo = AttestationRepo(session, cid)
         if decision == "accepted":
             await repo.accept(aid)
@@ -454,6 +500,16 @@ async def review_attestation(
             await repo.reject(aid)
         elif decision == "quarantined":
             await repo.quarantine(aid)
+
+        activity_repo = ActivityRepo(session, cid)
+        await activity_repo.log(
+            event_type="attestation_review",
+            actor=actor,
+            entity_type="attestation",
+            entity_id=aid,
+            details={"decision": decision, "reason": reason},
+        )
+
         await session.commit()
         return {
             "attestation_id": str(aid),

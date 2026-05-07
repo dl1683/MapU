@@ -318,6 +318,27 @@ class RepairController(Controller):
             errors=result.errors,
         )
 
+    @post("/rollback/{changeset_id:uuid}")
+    async def rollback(
+        self,
+        corpus_id: uuid.UUID,
+        changeset_id: uuid.UUID,
+        db_session: AsyncSession,
+    ) -> RepairApplyResponse:
+        from mapu.repair.service import RepairService
+
+        await _require_corpus(db_session, corpus_id)
+        svc = RepairService(db_session, corpus_id)
+        result = await svc.rollback(changeset_id)
+        return RepairApplyResponse(
+            changeset_id=result.changeset_id,
+            success=result.success,
+            operations_executed=result.operations_executed,
+            recomputed_propositions=result.recomputed_propositions,
+            gaps_created=result.gaps_created,
+            errors=result.errors,
+        )
+
 
 class ContributionController(Controller):
     path = "/corpora/{corpus_id:uuid}/contributions"
@@ -339,13 +360,17 @@ class ContributionController(Controller):
 
         await _require_corpus(db_session, corpus_id)
 
+        subject_name = data.subject_name.strip()
+        predicate = data.predicate.strip().lower()
+        object_name = data.object_name.strip() if data.object_name else None
+
         handle_repo = HandleRepo(db_session, corpus_id)
-        subject = await handle_repo.get_by_name_kind(data.subject_name, data.subject_kind)
+        subject = await handle_repo.get_by_name_kind(subject_name, data.subject_kind)
         if subject is None:
             subject = Handle(
                 id=uuid.uuid4(),
                 corpus_id=corpus_id,
-                canonical_name=data.subject_name,
+                canonical_name=subject_name,
                 kind=data.subject_kind,
                 aliases=[],
                 status="active",
@@ -355,14 +380,14 @@ class ContributionController(Controller):
             await db_session.flush()
 
         object_handle: Handle | None = None
-        if data.object_name:
+        if object_name:
             obj_kind = data.object_kind or "entity"
-            object_handle = await handle_repo.get_by_name_kind(data.object_name, obj_kind)
+            object_handle = await handle_repo.get_by_name_kind(object_name, obj_kind)
             if object_handle is None:
                 object_handle = Handle(
                     id=uuid.uuid4(),
                     corpus_id=corpus_id,
-                    canonical_name=data.object_name,
+                    canonical_name=object_name,
                     kind=obj_kind,
                     aliases=[],
                     status="active",
@@ -374,7 +399,7 @@ class ContributionController(Controller):
         semantic_key = _compute_semantic_key(
             frame_type=data.frame_type,
             subject_handle_id=subject.id,
-            predicate=data.predicate,
+            predicate=predicate,
             object_handle_id=object_handle.id if object_handle else None,
             value=None,
             polarity=True,
@@ -394,7 +419,7 @@ class ContributionController(Controller):
                 corpus_id=corpus_id,
                 frame_type=data.frame_type,
                 subject_handle_id=subject.id,
-                predicate=data.predicate,
+                predicate=predicate,
                 object_handle_id=object_handle.id if object_handle else None,
                 normalized_text=data.normalized_text,
                 semantic_key=semantic_key,
@@ -449,9 +474,25 @@ class ContributionController(Controller):
         data: ReviewAttestationRequest,
         db_session: AsyncSession,
     ) -> ReviewAttestationResponse:
+        from litestar.exceptions import NotFoundException
+        from sqlalchemy import select
+
+        from mapu.models.attestation import Attestation
         from mapu.repos.attestation import AttestationRepo
+        from mapu.repos.audit import ActivityRepo
 
         await _require_corpus(db_session, corpus_id)
+
+        stmt = select(Attestation.id).where(
+            Attestation.id == data.attestation_id,
+            Attestation.corpus_id == corpus_id,
+        )
+        result = await db_session.execute(stmt)
+        if result.scalar_one_or_none() is None:
+            raise NotFoundException(
+                detail=f"Attestation {data.attestation_id} not found in corpus {corpus_id}",
+            )
+
         repo = AttestationRepo(db_session, corpus_id)
         if data.decision == "accepted":
             await repo.accept(data.attestation_id)
@@ -459,6 +500,16 @@ class ContributionController(Controller):
             await repo.reject(data.attestation_id)
         elif data.decision == "quarantined":
             await repo.quarantine(data.attestation_id)
+
+        activity_repo = ActivityRepo(db_session, corpus_id)
+        await activity_repo.log(
+            event_type="attestation_review",
+            actor=data.actor,
+            entity_type="attestation",
+            entity_id=data.attestation_id,
+            details={"decision": data.decision, "reason": data.reason},
+        )
+
         return ReviewAttestationResponse(
             attestation_id=data.attestation_id,
             new_status=data.decision,

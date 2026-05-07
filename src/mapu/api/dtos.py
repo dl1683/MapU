@@ -129,7 +129,10 @@ class ContributePropositionRequest(BaseModel):
     normalized_text: str = Field(min_length=1)
     frame_type: str = "finding"
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    stance: str = "asserts"
+    stance: str = Field(
+        default="asserts",
+        pattern="^(asserts|denies|reports|questions|conditions)$",
+    )
     actor: str = "human"
 
 

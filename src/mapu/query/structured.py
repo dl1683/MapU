@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from mapu.models.attestation import Attestation
 from mapu.models.entity import Handle
@@ -117,9 +118,15 @@ class StructuredQueryExecutor:
             ])
         )
         if plan.entities_extracted:
-            stmt = stmt.where(
-                Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
-            )
+            entity = plan.entities_extracted[0]
+            if entity[0].isupper():
+                stmt = stmt.where(
+                    Handle.canonical_name.ilike(f"%{_escape_like(entity)}%")
+                )
+            else:
+                stmt = stmt.where(
+                    Proposition.normalized_text.ilike(f"%{_escape_like(entity)}%")
+                )
         if plan.predicates_extracted:
             stmt = stmt.where(
                 Proposition.predicate.ilike(f"%{_escape_like(plan.predicates_extracted[0])}%")
@@ -147,6 +154,22 @@ class StructuredQueryExecutor:
     def _base_query(self, corpus_id: uuid.UUID) -> Any:
         return (
             select(Proposition, Handle, Attestation)
+            .options(
+                load_only(
+                    Proposition.id, Proposition.normalized_text,
+                    Proposition.frame_type, Proposition.predicate,
+                    Proposition.corpus_id, Proposition.subject_handle_id,
+                    Proposition.system_created, Proposition.valid_range,
+                ),
+                load_only(
+                    Handle.id, Handle.canonical_name, Handle.kind,
+                ),
+                load_only(
+                    Attestation.proposition_id, Attestation.corpus_id,
+                    Attestation.extraction_confidence, Attestation.status,
+                    Attestation.system_invalidated,
+                ),
+            )
             .join(Handle, Proposition.subject_handle_id == Handle.id)
             .join(
                 Attestation,

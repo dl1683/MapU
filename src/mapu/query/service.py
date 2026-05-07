@@ -59,13 +59,13 @@ class QueryService:
 
         hits = await self._execute_tier(plan, request)
 
-        if not hits and plan.selected_tier < Tier.SYNTHESIS:
+        if not hits and plan.selected_tier == Tier.DIRECT:
             plan = plan.__class__(
                 intent=plan.intent,
-                selected_tier=Tier(plan.selected_tier + 1),
+                selected_tier=Tier.STRUCTURED,
                 entities_extracted=plan.entities_extracted,
                 predicates_extracted=plan.predicates_extracted,
-                escalation_reason="No results at lower tier",
+                escalation_reason="No results at direct tier",
             )
             hits = await self._execute_tier(plan, request)
 

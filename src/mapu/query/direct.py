@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from mapu.models.attestation import Attestation
 from mapu.models.entity import Handle
@@ -61,6 +62,19 @@ class DirectLookupExecutor:
     ) -> list[PropositionHit]:
         stmt = (
             select(Proposition, Handle, Attestation)
+            .options(
+                load_only(
+                    Proposition.id, Proposition.normalized_text,
+                    Proposition.frame_type, Proposition.predicate,
+                    Proposition.corpus_id, Proposition.subject_handle_id,
+                ),
+                load_only(Handle.id, Handle.canonical_name, Handle.kind),
+                load_only(
+                    Attestation.proposition_id, Attestation.corpus_id,
+                    Attestation.extraction_confidence, Attestation.status,
+                    Attestation.system_invalidated,
+                ),
+            )
             .join(Handle, Proposition.subject_handle_id == Handle.id)
             .join(
                 Attestation,
@@ -102,6 +116,19 @@ class DirectLookupExecutor:
     ) -> list[PropositionHit]:
         stmt = (
             select(Proposition, Handle, Attestation)
+            .options(
+                load_only(
+                    Proposition.id, Proposition.normalized_text,
+                    Proposition.frame_type, Proposition.predicate,
+                    Proposition.corpus_id, Proposition.subject_handle_id,
+                ),
+                load_only(Handle.id, Handle.canonical_name, Handle.kind),
+                load_only(
+                    Attestation.proposition_id, Attestation.corpus_id,
+                    Attestation.extraction_confidence, Attestation.status,
+                    Attestation.system_invalidated,
+                ),
+            )
             .join(Handle, Proposition.subject_handle_id == Handle.id)
             .join(
                 Attestation,

@@ -174,7 +174,12 @@ async def merge_handles(
     merged_handle_id: uuid.UUID,
     actor: str,
 ) -> dict[str, Any]:
-    stmt = select(Handle).where(Handle.id == merged_handle_id, Handle.corpus_id == corpus_id)
+    if canonical_handle_id == merged_handle_id:
+        raise ValueError("Cannot merge a handle with itself")
+
+    stmt = select(Handle).where(
+        Handle.id == merged_handle_id, Handle.corpus_id == corpus_id,
+    )
     result = await session.execute(stmt)
     merged = result.scalar_one_or_none()
     if merged is None:

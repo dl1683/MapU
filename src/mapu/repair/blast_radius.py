@@ -25,7 +25,7 @@ def _classify_risk(
     if affected_count > 100 or depth > 10:
         return RiskLevel.HIGH
     if affected_count > 10 or depth > 5:
-        return RiskLevel.MODERATE
+        return RiskLevel.MEDIUM
     return RiskLevel.LOW
 
 

@@ -7,12 +7,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-
-class RiskLevel(StrEnum):
-    LOW = "low"
-    MODERATE = "moderate"
-    HIGH = "high"
-    CRITICAL = "critical"
+from mapu.types import RiskLevel as RiskLevel
 
 
 class RepairOperationType(StrEnum):

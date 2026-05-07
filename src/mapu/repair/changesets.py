@@ -78,12 +78,12 @@ class ChangesetBuilder:
         return cs.id
 
 
-_OPERATION_HANDLERS = {
-    "retract_proposition": retract_proposition,
-    "supersede_proposition": supersede_proposition,
-    "reject_attestation": reject_attestation,
-    "merge_handles": merge_handles,
-    "split_handle": split_handle,
+_KNOWN_OPERATIONS = {
+    "retract_proposition",
+    "supersede_proposition",
+    "reject_attestation",
+    "merge_handles",
+    "split_handle",
 }
 
 
@@ -116,10 +116,10 @@ async def execute_changeset(
         gaps_created=0,
     )
 
+    savepoint = await session.begin_nested()
     try:
         for op in operations:
-            handler = _OPERATION_HANDLERS.get(op.operation_type)
-            if handler is None:
+            if op.operation_type not in _KNOWN_OPERATIONS:
                 raise ValueError(f"Unknown operation type: {op.operation_type}")
 
             op_result = await _dispatch_operation(
@@ -131,10 +131,12 @@ async def execute_changeset(
             if "gap_id" in op_result:
                 result.gaps_created += 1
 
+        await savepoint.commit()
         await repo.mark_applied(changeset_id)
         result.success = True
 
     except Exception as exc:
+        await savepoint.rollback()
         result.errors.append(str(exc))
         await repo.mark_failed(changeset_id)
 

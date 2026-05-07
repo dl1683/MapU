@@ -24,10 +24,10 @@ class TestRiskClassification:
         assert _classify_risk(5, 2, False) == RiskLevel.LOW
 
     def test_moderate_risk_by_count(self) -> None:
-        assert _classify_risk(15, 3, False) == RiskLevel.MODERATE
+        assert _classify_risk(15, 3, False) == RiskLevel.MEDIUM
 
     def test_moderate_risk_by_depth(self) -> None:
-        assert _classify_risk(5, 7, False) == RiskLevel.MODERATE
+        assert _classify_risk(5, 7, False) == RiskLevel.MEDIUM
 
     def test_high_risk_by_count(self) -> None:
         assert _classify_risk(150, 3, False) == RiskLevel.HIGH

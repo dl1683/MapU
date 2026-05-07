@@ -192,9 +192,12 @@ class SetFitExtractor:
 
     async def _get_model(self) -> Any:
         path = self._trained_path or self._model_id
+        device = self._device
         def _load() -> Any:
             from setfit import SetFitModel  # type: ignore[import-untyped]
-            return SetFitModel.from_pretrained(path)
+            model = SetFitModel.from_pretrained(path)
+            model.to(device)
+            return model
         return await self._runtime.get_or_load(
             "setfit", path, self._device, _load,
         )
@@ -253,12 +256,15 @@ class SetFitExtractor:
 
 
 def parse_rebel_output(generated_text: str) -> list[dict[str, str]]:
-    """Parse REBEL seq2seq output into triplet dicts."""
+    """Parse REBEL seq2seq output into triplet dicts.
+
+    REBEL format: <triplet> SUBJECT <subj> OBJECT <obj> RELATION
+    """
     triplets: list[dict[str, str]] = []
     for match in _REBEL_TRIPLET_RE.finditer(generated_text):
         head = match.group(1).strip()
-        relation = match.group(2).strip()
-        tail = match.group(3).strip()
+        tail = match.group(2).strip()
+        relation = match.group(3).strip()
         if head and relation and tail:
             triplets.append({"head": head, "relation": relation, "tail": tail})
     return triplets
@@ -324,11 +330,14 @@ class REBELExtractor:
             relation = triplet["relation"]
             tail = triplet["tail"]
 
-            raw_confidence = 0.8 if (head in entity_index or tail in entity_index) else 0.7
-            calibrated = raw_confidence * self._calibration_factor
-
             subject_span = _find_span(ctx.text, head)
             object_span = _find_span(ctx.text, tail)
+
+            if subject_span == (0, 0) and object_span == (0, 0):
+                continue
+
+            raw_confidence = 0.8 if (head in entity_index or tail in entity_index) else 0.7
+            calibrated = raw_confidence * self._calibration_factor
 
             subject = EntityMention(
                 text=head,
@@ -367,6 +376,8 @@ class REBELExtractor:
                 extraction_method=self.name,
                 extraction_confidence=calibrated,
             ))
+            sig_start = min(subject_span[0], object_span[0])
+            sig_end = max(subject_span[1], object_span[1])
             signals.append(ExtractionSignal(
                 signal_type="relation",
                 data={
@@ -376,8 +387,8 @@ class REBELExtractor:
                     "raw_confidence": raw_confidence,
                     "calibrated_confidence": calibrated,
                 },
-                start_char=ctx.start_char + subject_span[0],
-                end_char=ctx.start_char + object_span[1],
+                start_char=ctx.start_char + sig_start,
+                end_char=ctx.start_char + sig_end,
                 source=self.name,
             ))
 

@@ -160,19 +160,32 @@ class ExtractionService:
             )
 
             if stage.parallel and len(stage.extractors) > 1:
-                stage_outputs = await asyncio.gather(
+                stage_outputs = list(await asyncio.gather(
                     *(ext.extract(ctx) for ext in stage.extractors)
-                )
+                ))
+                for output in stage_outputs:
+                    accumulated_signals.extend(output.signals)
+                    accumulated_entities.extend(output.entities)
+                    all_outputs.append(output)
             else:
-                stage_outputs = []
                 for ext in stage.extractors:
+                    ctx = ExtractionContext(
+                        corpus_id=base_ctx.corpus_id,
+                        document_id=base_ctx.document_id,
+                        expression_id=base_ctx.expression_id,
+                        span_id=base_ctx.span_id,
+                        node_id=base_ctx.node_id,
+                        text=base_ctx.text,
+                        start_char=base_ctx.start_char,
+                        end_char=base_ctx.end_char,
+                        base_parse=base_ctx.base_parse,
+                        prior_signals=tuple(accumulated_signals),
+                        prior_entities=tuple(accumulated_entities),
+                    )
                     output = await ext.extract(ctx)
-                    stage_outputs.append(output)
-
-            for output in stage_outputs:
-                accumulated_signals.extend(output.signals)
-                accumulated_entities.extend(output.entities)
-                all_outputs.append(output)
+                    accumulated_signals.extend(output.signals)
+                    accumulated_entities.extend(output.entities)
+                    all_outputs.append(output)
 
         return all_outputs
 

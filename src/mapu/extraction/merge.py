@@ -138,5 +138,7 @@ def _frame_dedup_key(frame: PropositionFrameCandidate) -> str:
         frame.modality or "",
         str(frame.valid_range) if frame.valid_range else "",
         json.dumps(frame.qualifiers, sort_keys=True) if frame.qualifiers else "",
+        frame.stance.value,
+        frame.attestation_strength.value if frame.attestation_strength else "",
     ]
     return "|".join(parts)

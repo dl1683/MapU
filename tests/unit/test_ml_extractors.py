@@ -102,7 +102,7 @@ class TestGLiNERExtractor:
 
 class TestREBELOutputParsing:
     def test_parse_single_triplet(self) -> None:
-        text = "<triplet> Barack Obama <subj> president of <obj> United States"
+        text = "<triplet> Barack Obama <subj> United States <obj> president of"
         triplets = parse_rebel_output(text)
         assert len(triplets) == 1
         assert triplets[0]["head"] == "Barack Obama"
@@ -111,8 +111,8 @@ class TestREBELOutputParsing:
 
     def test_parse_multiple_triplets(self) -> None:
         text = (
-            "<triplet> Paris <subj> capital of <obj> France "
-            "<triplet> France <subj> located in <obj> Europe"
+            "<triplet> Paris <subj> France <obj> capital of "
+            "<triplet> France <subj> Europe <obj> located in"
         )
         triplets = parse_rebel_output(text)
         assert len(triplets) == 2
@@ -139,7 +139,7 @@ class TestREBELExtractor:
         runtime = LazyModelRuntime()
         mock_pipe = MagicMock()
         mock_pipe.return_value = [
-            {"generated_text": "<triplet> Acme Corp <subj> headquartered in <obj> New York"},
+            {"generated_text": "<triplet> Acme Corp <subj> New York <obj> headquartered in"},
         ]
         runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
 
@@ -158,7 +158,7 @@ class TestREBELExtractor:
         runtime = LazyModelRuntime()
         mock_pipe = MagicMock()
         mock_pipe.return_value = [
-            {"generated_text": "<triplet> X <subj> works for <obj> Y"},
+            {"generated_text": "<triplet> X <subj> Y <obj> works for"},
         ]
         runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
 
@@ -176,7 +176,7 @@ class TestREBELExtractor:
         runtime = LazyModelRuntime()
         mock_pipe = MagicMock()
         mock_pipe.return_value = [
-            {"generated_text": "<triplet> Alice <subj> works for <obj> Acme"},
+            {"generated_text": "<triplet> Alice <subj> Acme <obj> works for"},
         ]
         runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
 
@@ -204,7 +204,7 @@ class TestREBELExtractor:
         runtime = LazyModelRuntime()
         mock_pipe = MagicMock()
         mock_pipe.return_value = [
-            {"generated_text": "<triplet> Bob <subj> lives in <obj> Paris"},
+            {"generated_text": "<triplet> Bob <subj> Paris <obj> lives in"},
         ]
         runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
 
@@ -228,6 +228,33 @@ class TestREBELExtractor:
         )
         result = await ext.extract(ctx)
         assert result.frames[0].subject.kind == "person"
+
+    async def test_ungrounded_entities_skipped(self) -> None:
+        runtime = LazyModelRuntime()
+        mock_pipe = MagicMock()
+        gen = "<triplet> FooBarNotInText <subj> BazQuxNotInText <obj> some relation"
+        mock_pipe.return_value = [{"generated_text": gen}]
+        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+
+        ext = REBELExtractor(runtime=runtime)
+        ctx = _make_ctx("Something completely different here.")
+        result = await ext.extract(ctx)
+        assert len(result.frames) == 0
+        assert len(result.signals) == 0
+
+    async def test_signal_offsets_ordered(self) -> None:
+        runtime = LazyModelRuntime()
+        mock_pipe = MagicMock()
+        mock_pipe.return_value = [
+            {"generated_text": "<triplet> York <subj> New <obj> located in"},
+        ]
+        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+
+        ext = REBELExtractor(runtime=runtime)
+        ctx = _make_ctx("New York is a city.")
+        result = await ext.extract(ctx)
+        if result.signals:
+            assert result.signals[0].start_char <= result.signals[0].end_char
 
 
 class TestSetFitExtractor:

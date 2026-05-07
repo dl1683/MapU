@@ -150,11 +150,17 @@ async def _dispatch_operation(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     if operation_type == "retract_proposition":
+        raw_retraction_id = payload.get("retraction_proposition_id")
+        retraction_id = (
+            uuid.UUID(raw_retraction_id)
+            if raw_retraction_id is not None
+            else None
+        )
         return await retract_proposition(
             session=session,
             corpus_id=corpus_id,
             proposition_id=uuid.UUID(payload["proposition_id"]),
-            retraction_proposition_id=uuid.UUID(payload["retraction_proposition_id"]),
+            retraction_proposition_id=retraction_id,
             affected_ids=tuple(uuid.UUID(x) for x in payload.get("affected_ids", [])),
             reason=payload.get("reason", ""),
             actor=payload.get("actor", "system"),

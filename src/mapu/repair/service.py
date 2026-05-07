@@ -40,7 +40,11 @@ class RepairService:
                 ordinal=0,
                 payload={
                     "proposition_id": str(proposition_id),
-                    "retraction_proposition_id": str(retraction_proposition_id),
+                    "retraction_proposition_id": (
+                        str(retraction_proposition_id)
+                        if retraction_proposition_id is not None
+                        else None
+                    ),
                     "affected_ids": [str(x) for x in blast.affected_proposition_ids],
                     "recompute_only_ids": [
                         str(x) for x in blast.recompute_only_proposition_ids

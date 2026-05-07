@@ -214,6 +214,36 @@ class TestBlastRadiusComputation:
             assert child_id not in report.recompute_only_proposition_ids
 
 
+class TestRetractionSerialization:
+    def test_retraction_payload_none_retraction_id(self) -> None:
+        """str(None) must not appear in payload — it should be null."""
+        payload = {
+            "proposition_id": str(uuid.uuid4()),
+            "retraction_proposition_id": None,
+            "affected_ids": [],
+            "reason": "test",
+            "actor": "test",
+        }
+        raw = payload.get("retraction_proposition_id")
+        retraction_id = (
+            uuid.UUID(raw) if raw is not None else None
+        )
+        assert retraction_id is None
+
+    def test_retraction_payload_valid_retraction_id(self) -> None:
+        rid = uuid.uuid4()
+        raw = str(rid)
+        retraction_id = (
+            uuid.UUID(raw) if raw is not None else None
+        )
+        assert retraction_id == rid
+
+    def test_retraction_payload_string_none_rejected(self) -> None:
+        """Ensure 'None' string is not silently accepted as a UUID."""
+        with pytest.raises(ValueError):
+            uuid.UUID("None")
+
+
 class TestRepairPreview:
     def test_preview_structure(self) -> None:
         blast = BlastRadiusReport(

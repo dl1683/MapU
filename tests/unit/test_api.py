@@ -18,6 +18,7 @@ from mapu.api.dtos import (
     QueryResponse,
     RepairApplyResponse,
     RepairPreviewResponse,
+    RepairProposeRequest,
 )
 
 
@@ -180,3 +181,28 @@ class TestDTOValidation:
         restored = HitResponse.model_validate_json(json_str)
         assert restored.proposition_id == hit.proposition_id
         assert restored.confidence == hit.confidence
+
+    def test_max_results_bounds(self) -> None:
+        with pytest.raises(ValueError):
+            QueryRequestDTO(question="test", max_results=0)
+        with pytest.raises(ValueError):
+            QueryRequestDTO(question="test", max_results=501)
+
+    def test_corpus_name_max_length(self) -> None:
+        with pytest.raises(ValueError):
+            CorpusCreate(name="x" * 501)
+
+    def test_ingest_content_max_length(self) -> None:
+        with pytest.raises(ValueError):
+            IngestRequestDTO(content="x" * 10_000_001)
+
+    def test_repair_propose_request_defaults(self) -> None:
+        pid = uuid.uuid4()
+        dto = RepairProposeRequest(proposition_id=pid)
+        assert dto.operation == "retract"
+        assert dto.reason == ""
+        assert dto.actor == "user"
+
+    def test_repair_propose_rejects_invalid_operation(self) -> None:
+        with pytest.raises(ValueError):
+            RepairProposeRequest(proposition_id=uuid.uuid4(), operation="delete")

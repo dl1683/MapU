@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Protocol, runtime_checkable
 
 from mapu.evidence.types import EmbeddingModelRef, EmbeddingVector
@@ -18,18 +18,34 @@ class EmbeddingProvider(Protocol):
     async def embed_texts(self, texts: Sequence[str]) -> Sequence[EmbeddingVector]: ...
 
 
-class EmbeddingProviderFactory:
-    """Registry-based factory for embedding providers."""
+_PROVIDER_FACTORIES: dict[str, Callable[..., EmbeddingProvider]] = {}
 
-    def __init__(self) -> None:
-        self._creators: dict[str, type[EmbeddingProvider]] = {}
 
-    def register(self, provider_name: str, cls: type[EmbeddingProvider]) -> None:
-        self._creators[provider_name] = cls
+def register_embedding_provider(
+    name: str, factory: Callable[..., EmbeddingProvider],
+) -> None:
+    _PROVIDER_FACTORIES[name.lower()] = factory
 
-    def available_providers(self) -> frozenset[str]:
-        return frozenset(self._creators.keys())
 
+def _register_builtins() -> None:
+    def _make_hash(**kwargs: object) -> EmbeddingProvider:
+        from mapu.providers.embedding_local import HashEmbeddingProvider
+        return HashEmbeddingProvider(dimensions=kwargs.get("dimensions", 384))
+
+    def _make_st(**kwargs: object) -> EmbeddingProvider:
+        from mapu.providers.embedding_st import SentenceTransformerEmbeddingProvider
+        return SentenceTransformerEmbeddingProvider(
+            model_name=str(kwargs.get("model_name", "all-MiniLM-L6-v2")),
+            dimensions=int(kwargs.get("dimensions", 384)),
+            device=str(kwargs.get("device", "cpu")),
+        )
+
+    register_embedding_provider("local", _make_hash)
+    register_embedding_provider("hash-deterministic", _make_hash)
+    register_embedding_provider("sentence-transformers", _make_st)
+
+
+_register_builtins()
 
 _cached_embedding_provider: EmbeddingProvider | None = None
 
@@ -43,16 +59,18 @@ def get_default_embedding_provider() -> EmbeddingProvider:
     from mapu.config import EmbeddingSettings
 
     settings = EmbeddingSettings()
-
-    if settings.provider == "sentence-transformers":
-        from mapu.providers.embedding_st import SentenceTransformerEmbeddingProvider
-        _cached_embedding_provider = SentenceTransformerEmbeddingProvider(
-            model_name=settings.model,
-            dimensions=settings.dimensions,
-            device=settings.device,
+    provider_name = settings.provider.lower()
+    factory = _PROVIDER_FACTORIES.get(provider_name)
+    if factory is None:
+        raise ValueError(
+            f"Unknown embedding provider '{settings.provider}'. "
+            f"Registered: {', '.join(sorted(_PROVIDER_FACTORIES))}. "
+            f"Use register_embedding_provider() to add custom providers."
         )
-    else:
-        from mapu.providers.embedding_local import HashEmbeddingProvider
-        _cached_embedding_provider = HashEmbeddingProvider(dimensions=settings.dimensions)
 
+    _cached_embedding_provider = factory(
+        model_name=settings.model,
+        dimensions=settings.dimensions,
+        device=settings.device,
+    )
     return _cached_embedding_provider

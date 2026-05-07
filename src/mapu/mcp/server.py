@@ -476,6 +476,20 @@ async def contribute_proposition(
         )
         session.add(att)
         await session.flush()
+
+        from mapu.models.attestation import AttestationSituation
+        from mapu.repos.context import SituationRepo
+
+        sit_repo = SituationRepo(session, cid)
+        default_sit = await sit_repo.get_or_create_default()
+        session.add(AttestationSituation(
+            attestation_id=att.id,
+            situation_id=default_sit.id,
+            corpus_id=cid,
+            assignment_confidence=1.0,
+            assignment_basis="manual_contribution",
+        ))
+        await session.flush()
         await session.commit()
         return {
             "proposition_id": str(prop.id),

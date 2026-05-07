@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import select
 
 from mapu.models.context import QueryView, Situation
@@ -10,6 +12,25 @@ from mapu.repos.base import CorpusScopedRepo
 
 class SituationRepo(CorpusScopedRepo[Situation]):
     model = Situation
+
+    async def get_or_create_default(self) -> Situation:
+        stmt = select(Situation).where(
+            Situation.corpus_id == self.corpus_id,
+            Situation.kind == "default",
+        ).limit(1)
+        result = await self.session.execute(stmt)
+        existing = result.scalar_one_or_none()
+        if existing is not None:
+            return existing
+        situation = Situation(
+            id=uuid.uuid4(),
+            corpus_id=self.corpus_id,
+            kind="default",
+            name="default",
+        )
+        self.session.add(situation)
+        await self.session.flush()
+        return situation
 
 
 class QueryViewRepo(CorpusScopedRepo[QueryView]):

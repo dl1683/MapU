@@ -92,6 +92,58 @@ class OpenAICompatibleLLMProvider:
             return {"answer": content}
 
 
+class AnthropicLLMProvider:
+    """LLM provider using the Anthropic Messages API."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "claude-sonnet-4-6",
+        base_url: str | None = None,
+    ) -> None:
+        import httpx
+
+        self._model = model
+        self._url = (base_url or "https://api.anthropic.com") + "/v1/messages"
+        self._client = httpx.AsyncClient(
+            timeout=60.0,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+        )
+
+    async def complete_json(
+        self, request: LLMRequest,
+    ) -> Mapping[str, Any]:
+        import json
+
+        payload: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": request.max_tokens,
+            "system": request.system_prompt,
+            "messages": [
+                {"role": "user", "content": request.user_prompt},
+            ],
+        }
+        if request.temperature > 0:
+            payload["temperature"] = request.temperature
+        resp = await self._client.post(self._url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        content = data["content"][0]["text"]
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            return {"answer": content}
+
+
+_PROVIDER_FACTORIES: dict[str, type] = {
+    "openai": OpenAICompatibleLLMProvider,
+    "anthropic": AnthropicLLMProvider,
+}
+
 _cached_llm_provider: LLMProvider | None = None
 _llm_checked = False
 
@@ -109,9 +161,17 @@ def get_default_llm_provider() -> LLMProvider | None:
     if not settings.provider or not settings.api_key:
         return None
 
-    _cached_llm_provider = OpenAICompatibleLLMProvider(
-        api_key=settings.api_key,
-        model=settings.model or "gpt-4o-mini",
-        base_url=settings.base_url or None,
-    )
+    provider_type = settings.provider.lower()
+    if provider_type == "anthropic":
+        _cached_llm_provider = AnthropicLLMProvider(
+            api_key=settings.api_key,
+            model=settings.model or "claude-sonnet-4-6",
+            base_url=settings.base_url or None,
+        )
+    else:
+        _cached_llm_provider = OpenAICompatibleLLMProvider(
+            api_key=settings.api_key,
+            model=settings.model or "gpt-4o-mini",
+            base_url=settings.base_url or None,
+        )
     return _cached_llm_provider

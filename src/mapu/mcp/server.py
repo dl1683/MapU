@@ -372,11 +372,14 @@ async def contribute_proposition(
     _VALID_STANCES = {"asserts", "denies", "reports", "questions", "conditions"}
     if stance not in _VALID_STANCES:
         return {"error": f"Invalid stance '{stance}'. Must be one of: {', '.join(sorted(_VALID_STANCES))}"}
-    confidence = max(0.0, min(1.0, confidence))
+    if not isinstance(confidence, (int, float)) or confidence < 0.0 or confidence > 1.0:
+        return {"error": f"confidence must be a number between 0.0 and 1.0, got {confidence}"}
     subject_name = subject_name.strip()
     predicate = predicate.strip().lower()
     if object_name:
         object_name = object_name.strip()
+    if not subject_name or not predicate:
+        return {"error": "subject_name and predicate must not be empty"}
 
     cid = uuid.UUID(corpus_id)
     factory = _get_session_factory()
@@ -445,10 +448,21 @@ async def contribute_proposition(
                 ))
             await session.flush()
 
+        from mapu.authority.source_policy import SourcePolicyEvaluatorV1, SourcePolicyInput
+
+        policy_input = SourcePolicyInput(
+            document_type="other",
+            attestation_type="self_reported" if actor != "system" else "automated",
+            source_identity=actor,
+        )
+        evaluator = SourcePolicyEvaluatorV1(session, cid)
+        spe = await evaluator.evaluate_and_persist(prop.id, policy_input)
+
         att = Attestation(
             id=uuid.uuid4(), proposition_id=prop.id, corpus_id=cid,
             stance=stance, extraction_method=f"{actor}_contribution",
-            extraction_confidence=confidence, status="candidate",
+            extraction_confidence=confidence, source_policy_eval_id=spe.id,
+            status="candidate",
             system_created=datetime.now(UTC),
         )
         session.add(att)
@@ -486,12 +500,14 @@ async def review_attestation(
     aid = uuid.UUID(attestation_id)
     factory = _get_session_factory()
     async with factory() as session:
-        stmt = select(Attestation.id).where(
+        stmt = select(Attestation.id, Attestation.proposition_id).where(
             Attestation.id == aid, Attestation.corpus_id == cid,
         )
         result = await session.execute(stmt)
-        if result.scalar_one_or_none() is None:
+        row = result.one_or_none()
+        if row is None:
             return {"error": f"Attestation {attestation_id} not found in corpus {corpus_id}"}
+        proposition_id = row[1]
 
         repo = AttestationRepo(session, cid)
         if decision == "accepted":
@@ -500,6 +516,11 @@ async def review_attestation(
             await repo.reject(aid)
         elif decision == "quarantined":
             await repo.quarantine(aid)
+
+        from mapu.truth.service import TruthRecomputationService
+
+        truth_svc = TruthRecomputationService(session, cid)
+        await truth_svc.recompute_for_proposition(proposition_id)
 
         activity_repo = ActivityRepo(session, cid)
         await activity_repo.log(

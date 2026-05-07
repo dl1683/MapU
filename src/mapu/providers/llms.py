@@ -139,10 +139,22 @@ class AnthropicLLMProvider:
             return {"answer": content}
 
 
-_PROVIDER_FACTORIES: dict[str, type] = {
+_PROVIDER_DEFAULTS: dict[str, str] = {
+    "openai": "gpt-4o-mini",
+    "anthropic": "claude-sonnet-4-6",
+}
+
+_PROVIDER_FACTORIES: dict[str, type[LLMProvider]] = {
     "openai": OpenAICompatibleLLMProvider,
     "anthropic": AnthropicLLMProvider,
 }
+
+
+def register_llm_provider(name: str, factory: type[LLMProvider], default_model: str = "") -> None:
+    _PROVIDER_FACTORIES[name.lower()] = factory
+    if default_model:
+        _PROVIDER_DEFAULTS[name.lower()] = default_model
+
 
 _cached_llm_provider: LLMProvider | None = None
 _llm_checked = False
@@ -162,16 +174,14 @@ def get_default_llm_provider() -> LLMProvider | None:
         return None
 
     provider_type = settings.provider.lower()
-    if provider_type == "anthropic":
-        _cached_llm_provider = AnthropicLLMProvider(
-            api_key=settings.api_key,
-            model=settings.model or "claude-sonnet-4-6",
-            base_url=settings.base_url or None,
-        )
-    else:
-        _cached_llm_provider = OpenAICompatibleLLMProvider(
-            api_key=settings.api_key,
-            model=settings.model or "gpt-4o-mini",
-            base_url=settings.base_url or None,
-        )
+    factory_cls = _PROVIDER_FACTORIES.get(provider_type)
+    if factory_cls is None:
+        factory_cls = OpenAICompatibleLLMProvider
+    default_model = _PROVIDER_DEFAULTS.get(provider_type, "gpt-4o-mini")
+
+    _cached_llm_provider = factory_cls(
+        api_key=settings.api_key,
+        model=settings.model or default_model,
+        base_url=settings.base_url or None,
+    )
     return _cached_llm_provider

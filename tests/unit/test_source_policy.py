@@ -99,7 +99,7 @@ class TestSourcePolicyPersistValidation:
             uuid.uuid4(),
             SourcePolicyInput(document_type="invented_type"),
         )
-        assert spe.authority_score == pytest.approx(0.40)
+        assert spe.authority_score == pytest.approx(0.50)
 
     async def test_unknown_publication_context_uses_zero_modifier(
         self, evaluator: SourcePolicyEvaluatorV1

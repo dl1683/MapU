@@ -380,12 +380,11 @@ class TestQueryService:
         assert result.synthesis is None
 
     @pytest.mark.asyncio
-    async def test_investigation_without_llm_returns_fallback(self) -> None:
+    async def test_investigation_without_llm_falls_back_to_structured(self) -> None:
         svc = self._make_service()
         result = await svc.query(_make_request("Why did the price drop?"))
-        assert result.tier_used == Tier.INVESTIGATION
-        assert "LLM provider" in result.synthesis
-        assert len(result.hits) == 0
+        assert result.tier_used == Tier.STRUCTURED
+        assert result.metadata.get("llm_fallback") == "structured_query"
 
     @pytest.mark.asyncio
     async def test_synthesis_returned_for_hits(self) -> None:

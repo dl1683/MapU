@@ -50,15 +50,27 @@ async def _rollback_retraction(
             )
         )
 
-    await session.execute(
-        update(Attestation)
-        .where(
-            Attestation.proposition_id == proposition_id,
-            Attestation.corpus_id == corpus_id,
-            Attestation.system_invalidated.isnot(None),
+    invalidated_ids = result.get("invalidated_attestation_ids", [])
+    if invalidated_ids:
+        att_uuids = [uuid.UUID(x) for x in invalidated_ids]
+        await session.execute(
+            update(Attestation)
+            .where(
+                Attestation.id.in_(att_uuids),
+                Attestation.corpus_id == corpus_id,
+            )
+            .values(system_invalidated=None)
         )
-        .values(system_invalidated=None)
-    )
+    else:
+        await session.execute(
+            update(Attestation)
+            .where(
+                Attestation.proposition_id == proposition_id,
+                Attestation.corpus_id == corpus_id,
+                Attestation.system_invalidated.isnot(None),
+            )
+            .values(system_invalidated=None)
+        )
 
     truth_svc = TruthComputeService(session, corpus_id)
     recomputed = await truth_svc.recompute_for_proposition(proposition_id)
@@ -131,7 +143,7 @@ async def _rollback_attestation_rejection(
     att_result = await session.execute(stmt)
     att = att_result.scalar_one_or_none()
     if att is not None:
-        att.status = "accepted"
+        att.status = result.get("prior_status", "accepted")
         att.system_invalidated = None
         await session.flush()
 

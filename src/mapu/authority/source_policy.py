@@ -83,13 +83,14 @@ class SourcePolicyEvaluatorV1:
         self._corpus_id = corpus_id
 
     def score(self, inp: SourcePolicyInput) -> float:
-        base = _DOCUMENT_TYPE_SCORES.get(inp.document_type or "unknown", 0.40)
+        _UNKNOWN_DEFAULT = 0.50
+        base = _DOCUMENT_TYPE_SCORES.get(inp.document_type or "", _UNKNOWN_DEFAULT)
 
         pub_mod = _PUBLICATION_CONTEXT_MODIFIER.get(
             inp.publication_context or "", 0.0
         )
         att_mod = _ATTESTATION_TYPE_MODIFIER.get(
-            inp.attestation_type or "first_party", 0.0
+            inp.attestation_type or "", 0.0
         )
 
         raw = base + pub_mod + att_mod

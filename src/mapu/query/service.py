@@ -92,16 +92,19 @@ class QueryService:
         self, request: QueryRequest, plan: QueryPlan,
     ) -> QueryResult:
         if self._investigation is None:
+            hits = await self._structured.execute(plan, request)
+            chunk_hits = await self._chunk_fallback(request, hits)
             return QueryResult(
                 request=request,
                 intent=plan.intent,
-                tier_used=Tier.INVESTIGATION,
-                hits=(),
-                synthesis=(
-                    "Investigation requires an LLM provider "
-                    "but none was configured."
-                ),
-                metadata={"escalation_reason": plan.escalation_reason},
+                tier_used=Tier.STRUCTURED,
+                hits=tuple(hits),
+                chunk_hits=tuple(chunk_hits) if chunk_hits else (),
+                synthesis=None,
+                metadata={
+                    "escalation_reason": plan.escalation_reason,
+                    "llm_fallback": "structured_query",
+                },
             )
 
         result = await self._investigation.investigate(
@@ -153,7 +156,10 @@ class QueryService:
         request: QueryRequest,
         proposition_hits: Sequence[PropositionHit],
     ) -> list[ChunkHit]:
-        if proposition_hits or self._embedding_provider is None:
+        if self._embedding_provider is None:
+            return []
+        weak_threshold = 3
+        if proposition_hits and len(proposition_hits) >= weak_threshold:
             return []
         query_vec = await self._embedding_provider.embed_texts([request.question])
         if not query_vec:

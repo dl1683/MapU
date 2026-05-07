@@ -253,7 +253,7 @@ async def rollback_changeset(
 
         await savepoint.commit()
         await repo.mark_rolled_back(changeset_id)
-        result.success = True
+        result.success = len(result.errors) == 0
 
     except Exception as exc:
         await savepoint.rollback()

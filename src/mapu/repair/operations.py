@@ -39,6 +39,16 @@ async def retract_proposition(
         )
 
     now = datetime.now(UTC)
+    active_atts = await session.execute(
+        select(Attestation.id)
+        .where(
+            Attestation.proposition_id == proposition_id,
+            Attestation.corpus_id == corpus_id,
+            Attestation.system_invalidated.is_(None),
+        )
+    )
+    invalidated_att_ids = [str(row[0]) for row in active_atts.all()]
+
     await session.execute(
         update(Attestation)
         .where(
@@ -84,6 +94,7 @@ async def retract_proposition(
 
     return {
         "retracted_proposition_id": str(proposition_id),
+        "invalidated_attestation_ids": invalidated_att_ids,
         "recomputed_states": len(recomputed),
         "gap_id": str(gap.id),
     }
@@ -147,6 +158,7 @@ async def reject_attestation(
     if att is None:
         raise ValueError(f"Attestation {attestation_id} not found")
 
+    prior_status = att.status
     att.status = "rejected"
     att.system_invalidated = datetime.now(UTC)
     await session.flush()
@@ -169,6 +181,7 @@ async def reject_attestation(
     return {
         "attestation_id": str(attestation_id),
         "proposition_id": str(att.proposition_id),
+        "prior_status": prior_status,
         "recomputed_states": len(recomputed),
     }
 

@@ -364,6 +364,11 @@ class ContributionController(Controller):
         predicate = data.predicate.strip().lower()
         object_name = data.object_name.strip() if data.object_name else None
 
+        if not subject_name or not predicate:
+            from litestar.exceptions import ValidationException
+
+            raise ValidationException("subject_name and predicate must not be empty")
+
         handle_repo = HandleRepo(db_session, corpus_id)
         subject = await handle_repo.get_by_name_kind(subject_name, data.subject_kind)
         if subject is None:
@@ -449,6 +454,16 @@ class ContributionController(Controller):
                 ))
             await db_session.flush()
 
+        from mapu.authority.source_policy import SourcePolicyEvaluatorV1, SourcePolicyInput
+
+        policy_input = SourcePolicyInput(
+            document_type="other",
+            attestation_type="self_reported" if data.actor != "system" else "automated",
+            source_identity=data.actor,
+        )
+        evaluator = SourcePolicyEvaluatorV1(db_session, corpus_id)
+        spe = await evaluator.evaluate_and_persist(prop.id, policy_input)
+
         att = Attestation(
             id=uuid.uuid4(),
             proposition_id=prop.id,
@@ -456,6 +471,7 @@ class ContributionController(Controller):
             stance=data.stance,
             extraction_method=f"{data.actor}_contribution",
             extraction_confidence=data.confidence,
+            source_policy_eval_id=spe.id,
             status="candidate",
             system_created=datetime.now(UTC),
         )
@@ -483,15 +499,17 @@ class ContributionController(Controller):
 
         await _require_corpus(db_session, corpus_id)
 
-        stmt = select(Attestation.id).where(
+        stmt = select(Attestation.id, Attestation.proposition_id).where(
             Attestation.id == data.attestation_id,
             Attestation.corpus_id == corpus_id,
         )
         result = await db_session.execute(stmt)
-        if result.scalar_one_or_none() is None:
+        row = result.one_or_none()
+        if row is None:
             raise NotFoundException(
                 detail=f"Attestation {data.attestation_id} not found in corpus {corpus_id}",
             )
+        proposition_id = row[1]
 
         repo = AttestationRepo(db_session, corpus_id)
         if data.decision == "accepted":
@@ -500,6 +518,11 @@ class ContributionController(Controller):
             await repo.reject(data.attestation_id)
         elif data.decision == "quarantined":
             await repo.quarantine(data.attestation_id)
+
+        from mapu.truth.service import TruthRecomputationService
+
+        truth_svc = TruthRecomputationService(db_session, corpus_id)
+        await truth_svc.recompute_for_proposition(proposition_id)
 
         activity_repo = ActivityRepo(db_session, corpus_id)
         await activity_repo.log(

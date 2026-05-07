@@ -79,6 +79,8 @@ class StructuredQueryExecutor:
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
         stmt = stmt.where(Proposition.valid_range.isnot(None))
+        if request.as_of is not None:
+            stmt = stmt.where(Proposition.valid_range.contains(request.as_of))
         stmt = stmt.order_by(Proposition.system_created.desc()).limit(request.max_results * 3)
         return await self._fetch(stmt, max_results=request.max_results)
 

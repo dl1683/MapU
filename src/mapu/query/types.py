@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Any, Protocol, runtime_checkable
 
@@ -35,6 +36,7 @@ class QueryRequest:
     corpus_id: uuid.UUID
     question: str
     situation_id: uuid.UUID | None = None
+    as_of: datetime | None = None
     max_results: int = 20
 
 

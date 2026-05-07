@@ -130,6 +130,7 @@ async def _run_query(args: argparse.Namespace) -> None:
     try:
         cid = uuid.UUID(args.corpus_id)
         sid = uuid.UUID(args.situation_id) if args.situation_id else None
+        max_results = min(max(args.max_results, 1), 500)
         as_of_dt = None
         if args.as_of:
             from datetime import datetime as dt
@@ -147,7 +148,7 @@ async def _run_query(args: argparse.Namespace) -> None:
             )
             request = QueryRequest(
                 corpus_id=cid, question=args.question,
-                max_results=args.max_results, situation_id=sid,
+                max_results=max_results, situation_id=sid,
                 as_of=as_of_dt,
             )
             result = await svc.query(request)
@@ -368,12 +369,13 @@ async def _run_entities(args: argparse.Namespace) -> None:
 
     try:
         cid = uuid.UUID(args.corpus_id)
+        limit = min(max(args.limit, 1), 100)
         async with session_factory() as session:
             stmt = select(Handle).where(
                 Handle.corpus_id == cid,
                 Handle.status == "active",
                 Handle.canonical_name.ilike(f"%{_escape_like(args.name)}%"),
-            ).limit(args.limit)
+            ).limit(limit)
             result = await session.execute(stmt)
             handles = result.scalars().all()
 
@@ -434,9 +436,10 @@ async def _run_activity(args: argparse.Namespace) -> None:
 
     try:
         cid = uuid.UUID(args.corpus_id)
+        limit = min(max(args.limit, 1), 500)
         async with session_factory() as session:
             repo = ActivityRepo(session, cid)
-            activities = await repo.list(limit=args.limit)
+            activities = await repo.list(limit=limit)
 
             if args.json_output:
                 print(json.dumps([

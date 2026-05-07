@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import uuid
 from typing import Any
 
@@ -9,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 _engine = None
 _session_factory = None
+_init_lock = threading.Lock()
 
 
 def _parse_uuid(value: str, name: str = "id") -> uuid.UUID:
@@ -26,12 +28,15 @@ class _UUIDError(Exception):
 
 def _get_session_factory():
     global _engine, _session_factory
-    if _session_factory is None:
-        from mapu.config import Settings
-        from mapu.db.engine import build_engine
+    if _session_factory is not None:
+        return _session_factory
+    with _init_lock:
+        if _session_factory is None:
+            from mapu.config import Settings
+            from mapu.db.engine import build_engine
 
-        settings = Settings()
-        _engine, _session_factory = build_engine(settings.database)
+            settings = Settings()
+            _engine, _session_factory = build_engine(settings.database)
     return _session_factory
 
 

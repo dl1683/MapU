@@ -8,10 +8,12 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import load_only
+from sqlalchemy.orm import aliased, load_only
 
 from mapu.models.attestation import Attestation
+from mapu.models.authority import SourcePolicyEval
 from mapu.models.entity import Handle
+from mapu.models.evidence import TextSpan
 from mapu.models.proposition import Proposition
 from mapu.query.direct import _escape_like
 from mapu.query.types import PropositionHit, QueryIntent, QueryPlan, QueryRequest, Tier
@@ -73,13 +75,26 @@ class StructuredQueryExecutor:
     ) -> list[PropositionHit]:
         from mapu.models.lineage import SupersessionEdge
 
+        obj_handle = aliased(Handle, name="object_handle")
         stmt = (
-            select(Proposition, Handle, Attestation)
+            select(
+                Proposition, Handle, Attestation,
+                SourcePolicyEval, TextSpan, obj_handle,
+            )
             .join(Handle, Proposition.subject_handle_id == Handle.id)
             .join(
                 Attestation,
                 (Attestation.proposition_id == Proposition.id)
                 & (Attestation.corpus_id == Proposition.corpus_id),
+            )
+            .outerjoin(
+                SourcePolicyEval,
+                Attestation.source_policy_eval_id == SourcePolicyEval.id,
+            )
+            .outerjoin(TextSpan, Attestation.span_id == TextSpan.id)
+            .outerjoin(
+                obj_handle,
+                Proposition.object_handle_id == obj_handle.id,
             )
             .join(
                 SupersessionEdge,
@@ -152,8 +167,12 @@ class StructuredQueryExecutor:
         return await self._fetch(stmt)
 
     def _base_query(self, corpus_id: uuid.UUID) -> Any:
+        obj_handle = aliased(Handle, name="object_handle")
         return (
-            select(Proposition, Handle, Attestation)
+            select(
+                Proposition, Handle, Attestation,
+                SourcePolicyEval, TextSpan, obj_handle,
+            )
             .options(
                 load_only(
                     Proposition.id, Proposition.normalized_text,
@@ -169,12 +188,24 @@ class StructuredQueryExecutor:
                     Attestation.extraction_confidence, Attestation.status,
                     Attestation.system_invalidated,
                 ),
+                load_only(SourcePolicyEval.authority_score),
+                load_only(TextSpan.text),
+                load_only(obj_handle.canonical_name, obj_handle.kind),
             )
             .join(Handle, Proposition.subject_handle_id == Handle.id)
             .join(
                 Attestation,
                 (Attestation.proposition_id == Proposition.id)
                 & (Attestation.corpus_id == Proposition.corpus_id),
+            )
+            .outerjoin(
+                SourcePolicyEval,
+                Attestation.source_policy_eval_id == SourcePolicyEval.id,
+            )
+            .outerjoin(TextSpan, Attestation.span_id == TextSpan.id)
+            .outerjoin(
+                obj_handle,
+                Proposition.object_handle_id == obj_handle.id,
             )
             .where(
                 Proposition.corpus_id == corpus_id,
@@ -188,7 +219,7 @@ class StructuredQueryExecutor:
         rows = result.all()
         seen: set[uuid.UUID] = set()
         hits: list[PropositionHit] = []
-        for prop, handle, att in rows:
+        for prop, handle, att, spe, span, obj_handle in rows:
             if prop.id in seen:
                 continue
             seen.add(prop.id)
@@ -199,12 +230,12 @@ class StructuredQueryExecutor:
                 predicate=prop.predicate,
                 subject_name=handle.canonical_name,
                 subject_kind=handle.kind,
-                object_name=None,
-                object_kind=None,
+                object_name=obj_handle.canonical_name if obj_handle else None,
+                object_kind=obj_handle.kind if obj_handle else None,
                 truth_status=None,
                 extraction_confidence=att.extraction_confidence,
-                authority_score=None,
-                source_span_text=None,
+                authority_score=spe.authority_score if spe else None,
+                source_span_text=span.text if span else None,
                 relevance_score=0.85,
             ))
         return hits

@@ -7,10 +7,12 @@ from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import load_only
+from sqlalchemy.orm import aliased, load_only
 
 from mapu.models.attestation import Attestation
+from mapu.models.authority import SourcePolicyEval
 from mapu.models.entity import Handle
+from mapu.models.evidence import TextSpan
 from mapu.models.proposition import Proposition
 from mapu.query.types import PropositionHit, QueryPlan, QueryRequest, Tier
 
@@ -60,8 +62,12 @@ class DirectLookupExecutor:
     async def _lookup_by_entity(
         self, entity_text: str, corpus_id: uuid.UUID, limit: int,
     ) -> list[PropositionHit]:
+        obj_handle = aliased(Handle, name="object_handle")
         stmt = (
-            select(Proposition, Handle, Attestation)
+            select(
+                Proposition, Handle, Attestation,
+                SourcePolicyEval, TextSpan, obj_handle,
+            )
             .options(
                 load_only(
                     Proposition.id, Proposition.normalized_text,
@@ -74,12 +80,24 @@ class DirectLookupExecutor:
                     Attestation.extraction_confidence, Attestation.status,
                     Attestation.system_invalidated,
                 ),
+                load_only(SourcePolicyEval.authority_score),
+                load_only(TextSpan.text),
+                load_only(obj_handle.canonical_name, obj_handle.kind),
             )
             .join(Handle, Proposition.subject_handle_id == Handle.id)
             .join(
                 Attestation,
                 (Attestation.proposition_id == Proposition.id)
                 & (Attestation.corpus_id == Proposition.corpus_id),
+            )
+            .outerjoin(
+                SourcePolicyEval,
+                Attestation.source_policy_eval_id == SourcePolicyEval.id,
+            )
+            .outerjoin(TextSpan, Attestation.span_id == TextSpan.id)
+            .outerjoin(
+                obj_handle,
+                Proposition.object_handle_id == obj_handle.id,
             )
             .where(
                 Proposition.corpus_id == corpus_id,
@@ -100,22 +118,26 @@ class DirectLookupExecutor:
                 predicate=prop.predicate,
                 subject_name=handle.canonical_name,
                 subject_kind=handle.kind,
-                object_name=None,
-                object_kind=None,
+                object_name=obj_h.canonical_name if obj_h else None,
+                object_kind=obj_h.kind if obj_h else None,
                 truth_status=None,
                 extraction_confidence=att.extraction_confidence,
-                authority_score=None,
-                source_span_text=None,
+                authority_score=spe.authority_score if spe else None,
+                source_span_text=span.text if span else None,
                 relevance_score=1.0,
             )
-            for prop, handle, att in rows
+            for prop, handle, att, spe, span, obj_h in rows
         ]
 
     async def _lookup_by_predicate(
         self, predicate: str, corpus_id: uuid.UUID, limit: int,
     ) -> list[PropositionHit]:
+        obj_handle = aliased(Handle, name="object_handle")
         stmt = (
-            select(Proposition, Handle, Attestation)
+            select(
+                Proposition, Handle, Attestation,
+                SourcePolicyEval, TextSpan, obj_handle,
+            )
             .options(
                 load_only(
                     Proposition.id, Proposition.normalized_text,
@@ -128,12 +150,24 @@ class DirectLookupExecutor:
                     Attestation.extraction_confidence, Attestation.status,
                     Attestation.system_invalidated,
                 ),
+                load_only(SourcePolicyEval.authority_score),
+                load_only(TextSpan.text),
+                load_only(obj_handle.canonical_name, obj_handle.kind),
             )
             .join(Handle, Proposition.subject_handle_id == Handle.id)
             .join(
                 Attestation,
                 (Attestation.proposition_id == Proposition.id)
                 & (Attestation.corpus_id == Proposition.corpus_id),
+            )
+            .outerjoin(
+                SourcePolicyEval,
+                Attestation.source_policy_eval_id == SourcePolicyEval.id,
+            )
+            .outerjoin(TextSpan, Attestation.span_id == TextSpan.id)
+            .outerjoin(
+                obj_handle,
+                Proposition.object_handle_id == obj_handle.id,
             )
             .where(
                 Proposition.corpus_id == corpus_id,
@@ -154,13 +188,13 @@ class DirectLookupExecutor:
                 predicate=prop.predicate,
                 subject_name=handle.canonical_name,
                 subject_kind=handle.kind,
-                object_name=None,
-                object_kind=None,
+                object_name=obj_h.canonical_name if obj_h else None,
+                object_kind=obj_h.kind if obj_h else None,
                 truth_status=None,
                 extraction_confidence=att.extraction_confidence,
-                authority_score=None,
-                source_span_text=None,
+                authority_score=spe.authority_score if spe else None,
+                source_span_text=span.text if span else None,
                 relevance_score=0.9,
             )
-            for prop, handle, att in rows
+            for prop, handle, att, spe, span, obj_h in rows
         ]

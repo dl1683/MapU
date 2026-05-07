@@ -88,6 +88,8 @@ def _extract_query_entities(question: str) -> list[str]:
     skip = {
         "What", "Who", "Where", "When", "How", "Which",
         "Does", "Did", "Is", "Are", "The", "Can",
+        "Define", "Tell", "List", "Show", "Describe",
+        "Explain", "Find", "Give", "Identify",
     }
     for cap in capitalized:
         if cap not in skip and cap not in entities:
@@ -97,6 +99,18 @@ def _extract_query_entities(question: str) -> list[str]:
     for acr in acronyms:
         if acr not in entities:
             entities.append(acr)
+
+    if not entities:
+        noun_phrase = re.search(
+            r"(?:what is (?:a |an |the )?|who is (?:a |an |the )?|define |tell me about (?:the )?)"
+            r"(.+?)(?:\?|$)",
+            question,
+            re.IGNORECASE,
+        )
+        if noun_phrase:
+            target = noun_phrase.group(1).strip().rstrip("?. ")
+            if target:
+                entities.append(target)
 
     return entities
 

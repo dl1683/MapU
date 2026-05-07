@@ -36,7 +36,6 @@ class QueryRequest:
     question: str
     situation_id: uuid.UUID | None = None
     max_results: int = 20
-    include_candidates: bool = False
 
 
 @dataclass(frozen=True)

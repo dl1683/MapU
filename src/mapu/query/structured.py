@@ -120,6 +120,10 @@ class StructuredQueryExecutor:
             stmt = stmt.where(
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
+        if plan.predicates_extracted:
+            stmt = stmt.where(
+                Proposition.predicate.ilike(f"%{_escape_like(plan.predicates_extracted[0])}%")
+            )
         stmt = stmt.limit(request.max_results)
         return await self._fetch(stmt)
 
@@ -159,8 +163,13 @@ class StructuredQueryExecutor:
     async def _fetch(self, stmt: Any) -> list[PropositionHit]:
         result = await self._session.execute(stmt)
         rows = result.all()
-        return [
-            PropositionHit(
+        seen: set[uuid.UUID] = set()
+        hits: list[PropositionHit] = []
+        for prop, handle, att in rows:
+            if prop.id in seen:
+                continue
+            seen.add(prop.id)
+            hits.append(PropositionHit(
                 proposition_id=prop.id,
                 normalized_text=prop.normalized_text,
                 frame_type=prop.frame_type,
@@ -174,6 +183,5 @@ class StructuredQueryExecutor:
                 authority_score=None,
                 source_span_text=None,
                 relevance_score=0.85,
-            )
-            for prop, handle, att in rows
-        ]
+            ))
+        return hits

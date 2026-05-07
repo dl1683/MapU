@@ -244,6 +244,14 @@ class TestEntityExtraction:
         assert "SEC" in entities
         assert "LLC" in entities
 
+    def test_identity_noun_phrase(self) -> None:
+        entities = _extract_query_entities("What is a covenant?")
+        assert "covenant" in entities
+
+    def test_define_noun_phrase(self) -> None:
+        entities = _extract_query_entities("Define borrower")
+        assert "borrower" in entities
+
 
 class TestPredicateExtraction:
     def test_common_predicates(self) -> None:

@@ -84,9 +84,25 @@ async def _run_query(corpus_id_str: str, question: str) -> None:
         await engine.dispose()
 
 
-async def _run_ingest(corpus_id_str: str, path: str) -> None:
+def _read_ingest_file(path: str) -> tuple[bytes, str, str]:
     from pathlib import Path
 
+    file_path = Path(path)
+    if not file_path.exists():
+        print(f"File not found: {path}")
+        sys.exit(1)
+
+    content = file_path.read_bytes()
+    suffix = file_path.suffix.lower()
+    mime_map = {
+        ".txt": "text/plain",
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    return content, mime_map.get(suffix, "text/plain"), str(file_path)
+
+
+async def _run_ingest(corpus_id_str: str, path: str) -> None:
     from mapu.config import Settings
     from mapu.db.engine import build_engine
     from mapu.evidence.chunking import SpanAwareChunker
@@ -94,30 +110,17 @@ async def _run_ingest(corpus_id_str: str, path: str) -> None:
     from mapu.evidence.parsers import ParserRegistry
     from mapu.evidence.types import DocumentBlob
 
+    content, mime_type, source_uri = _read_ingest_file(path)
     settings = Settings()
     engine, session_factory = build_engine(settings.database)
 
     try:
-        file_path = Path(path)
-        if not file_path.exists():
-            print(f"File not found: {path}")
-            sys.exit(1)
-
-        content = file_path.read_bytes()
-        suffix = file_path.suffix.lower()
-        mime_map = {
-            ".txt": "text/plain",
-            ".pdf": "application/pdf",
-            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        }
-        mime_type = mime_map.get(suffix, "text/plain")
-
         cid = uuid.UUID(corpus_id_str)
         async with session_factory() as session:
             registry = ParserRegistry.create_default()
             chunker = SpanAwareChunker()
             svc = IngestionService(session, cid, registry, chunker)
-            blob = DocumentBlob(content=content, mime_type=mime_type, source_uri=str(file_path))
+            blob = DocumentBlob(content=content, mime_type=mime_type, source_uri=source_uri)
             result = await svc.ingest(blob)
             await session.commit()
 

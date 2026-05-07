@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from mapu.query.types import QueryIntent
+
+logger = logging.getLogger(__name__)
 
 _IDENTITY_PATTERNS = (
     re.compile(r"^(who|what)\s+is\b", re.IGNORECASE),
@@ -150,7 +153,10 @@ class SetFitIntentClassifier:
                         except ValueError:
                             pass
         except Exception:
-            pass
+            logger.warning(
+                "ML intent classification failed, using heuristic fallback",
+                exc_info=True,
+            )
 
         return await self._fallback.classify(question)
 

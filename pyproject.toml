@@ -44,6 +44,9 @@ dev = [
   "mapu[ml]",
 ]
 
+[project.scripts]
+mapu = "mapu.cli:main"
+
 [build-system]
 requires = ["hatchling>=1.28,<2"]
 build-backend = "hatchling.build"

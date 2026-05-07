@@ -74,6 +74,15 @@ class QuerySettings(BaseSettings):
     model_config = {"env_prefix": "MAPU_QUERY_"}
 
 
+class ServerSettings(BaseSettings):
+    host: str = "127.0.0.1"
+    port: int = 8000
+    api_key: str = ""
+    cors_origins: str = ""
+
+    model_config = {"env_prefix": "MAPU_SERVER_"}
+
+
 class Settings(BaseSettings):
     database: DatabaseSettings = DatabaseSettings()
     embedding: EmbeddingSettings = EmbeddingSettings()
@@ -82,5 +91,6 @@ class Settings(BaseSettings):
     source_policy: SourcePolicySettings = SourcePolicySettings()
     extraction: ExtractionSettings = ExtractionSettings()
     query: QuerySettings = QuerySettings()
+    server: ServerSettings = ServerSettings()
 
     model_config = {"env_prefix": "MAPU_", "env_nested_delimiter": "__"}

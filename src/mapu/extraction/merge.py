@@ -128,7 +128,7 @@ class CandidateMergeEngine:
 def _frame_dedup_key(frame: PropositionFrameCandidate) -> str:
     """Deterministic key for deduplication based on semantic content only."""
     parts = [
-        frame.frame_type.value,
+        frame.frame_type,
         frame.subject.text.lower().strip(),
         frame.subject.kind,
         frame.predicate.lower().strip(),

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
-from mapu.types import AttestationStrength, FrameType, Stance
+from mapu.types import AttestationStrength, Stance
 
 
 @dataclass(frozen=True)
@@ -67,7 +67,7 @@ class PropositionFrameCandidate:
     """A candidate proposition extracted from text, before grounding."""
 
     span_id: uuid.UUID
-    frame_type: FrameType
+    frame_type: str
     subject: EntityMention
     predicate: str
     object: EntityMention | None

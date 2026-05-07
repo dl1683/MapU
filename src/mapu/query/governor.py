@@ -89,9 +89,25 @@ _NOUN_PHRASE_RE = re.compile(
     re.IGNORECASE,
 )
 _PREDICATE_RE = re.compile(
-    r"\b(own|control|manage|employ|relate|connect|pay|owe|define|obligat|terminat|vest|acquir)\w*\b",
+    r"\b([a-z]+(?:ed|es|ing|ize|ise|ate|ify|fy))\b"
+    r"|\b([a-z]+(?:s|tion|ment|ance|ence))\b",
     re.IGNORECASE,
 )
+
+_PREDICATE_SKIP = frozenset({
+    "the", "and", "for", "are", "but", "not", "you", "all",
+    "can", "had", "her", "was", "one", "our", "out", "has",
+    "his", "how", "its", "may", "new", "now", "old", "see",
+    "way", "who", "did", "get", "let", "say", "she", "too",
+    "use", "about", "after", "also", "any", "been", "between",
+    "both", "each", "from", "have", "into", "just", "more",
+    "most", "only", "other", "over", "some", "such", "than",
+    "that", "them", "then", "there", "these", "they", "this",
+    "those", "through", "under", "very", "what", "when",
+    "where", "which", "while", "with", "would", "could",
+    "should", "does", "will", "were", "being", "their",
+    "yes", "once", "since", "before", "because", "hence",
+})
 
 _ENTITY_SKIP = frozenset({
     "What", "Who", "Where", "When", "How", "Which",
@@ -126,5 +142,8 @@ def _extract_query_entities(question: str) -> list[str]:
 
 def _extract_query_predicates(question: str) -> list[str]:
     """Extract likely predicate keywords from a query."""
-    verbs = _PREDICATE_RE.findall(question)
-    return list(set(v.lower() for v in verbs))
+    matches = _PREDICATE_RE.findall(question)
+    words = [g1 or g2 for g1, g2 in matches]
+    return list(set(
+        w.lower() for w in words if w and w.lower() not in _PREDICATE_SKIP
+    ))

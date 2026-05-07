@@ -32,8 +32,6 @@ _DEFAULT_ENTITY_TYPES: tuple[str, ...] = (
     "duration",
 )
 
-_VALID_FRAME_LABELS: frozenset[str] = frozenset(ft.value for ft in FrameType)
-
 _REBEL_TRIPLET_RE = re.compile(
     r"<triplet>\s*(.*?)\s*<subj>\s*(.*?)\s*<obj>\s*(.*?)\s*(?=<triplet>|$)"
 )
@@ -214,8 +212,6 @@ class SetFitExtractor:
         model = await self._get_model()
         predicted_label, confidence = await self._classify(model, ctx.text)
         if predicted_label is None:
-            return ExtractorOutput()
-        if predicted_label not in _VALID_FRAME_LABELS:
             return ExtractorOutput()
         if confidence < self._confidence_threshold:
             return ExtractorOutput()

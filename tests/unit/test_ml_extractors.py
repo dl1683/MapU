@@ -315,10 +315,10 @@ class TestSetFitExtractor:
         result = await ext.extract(ctx)
         assert len(result.signals) == 0
 
-    async def test_invalid_label_filtered(self) -> None:
+    async def test_novel_label_accepted(self) -> None:
         runtime = LazyModelRuntime()
         mock_model = MagicMock()
-        mock_model.predict.return_value = ["not_a_real_frame_type"]
+        mock_model.predict.return_value = ["novel_frame_type"]
         mock_model.predict_proba.side_effect = AttributeError()
         cache_key = ("setfit", "sentence-transformers/paraphrase-MiniLM-L3-v2", "cpu")
         runtime._cache[cache_key] = mock_model
@@ -326,7 +326,8 @@ class TestSetFitExtractor:
         ext = SetFitExtractor(confidence_threshold=0.1, runtime=runtime)
         ctx = _make_ctx("Something or other.")
         result = await ext.extract(ctx)
-        assert len(result.signals) == 0
+        assert len(result.signals) == 1
+        assert result.signals[0].data["predicted_frame_type"] == "novel_frame_type"
 
 
 class TestSRLExtractor:

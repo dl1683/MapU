@@ -66,7 +66,7 @@ class CandidateGrounder:
             handle_ids.append(object_handle.id)
 
         semantic_key = _compute_semantic_key(
-            frame_type=frame.frame_type.value,
+            frame_type=frame.frame_type,
             subject_handle_id=subject_handle.id,
             predicate=frame.predicate,
             object_handle_id=object_handle.id if object_handle else None,
@@ -80,7 +80,7 @@ class CandidateGrounder:
         db_valid_range = _to_pg_range(frame.valid_range)
 
         prop, created = await self._get_or_create_proposition(
-            frame_type=frame.frame_type.value,
+            frame_type=frame.frame_type,
             subject_handle_id=subject_handle.id,
             predicate=frame.predicate,
             object_handle_id=object_handle.id if object_handle else None,

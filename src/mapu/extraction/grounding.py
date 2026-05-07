@@ -40,6 +40,7 @@ class CandidateGrounder:
         self._corpus_id = corpus_id
         self._handle_cache: dict[tuple[str, str], Handle] = {}
         self._proposition_cache: dict[str, Proposition] = {}
+        self._participant_cache: set[tuple[uuid.UUID, uuid.UUID, str]] = set()
 
     async def materialize(
         self,
@@ -87,24 +88,9 @@ class CandidateGrounder:
             semantic_key=semantic_key,
         )
 
-        if created:
-            self._session.add(PropositionParticipant(
-                id=uuid.uuid4(),
-                proposition_id=prop.id,
-                handle_id=subject_handle.id,
-                corpus_id=self._corpus_id,
-                role="subject",
-                ordinal=0,
-            ))
-            if object_handle is not None:
-                self._session.add(PropositionParticipant(
-                    id=uuid.uuid4(),
-                    proposition_id=prop.id,
-                    handle_id=object_handle.id,
-                    corpus_id=self._corpus_id,
-                    role="object",
-                    ordinal=1,
-                ))
+        await self._ensure_participant(prop.id, subject_handle.id, "subject", 0)
+        if object_handle is not None:
+            await self._ensure_participant(prop.id, object_handle.id, "object", 1)
 
         attestation_status = (
             "accepted" if result.decision == AbstentionDecision.ACCEPTED
@@ -233,6 +219,40 @@ class CandidateGrounder:
         self._session.add(prop)
         self._proposition_cache[semantic_key] = prop
         return prop, True
+
+    async def _ensure_participant(
+        self,
+        proposition_id: uuid.UUID,
+        handle_id: uuid.UUID,
+        role: str,
+        ordinal: int,
+    ) -> None:
+        cache_key = (proposition_id, handle_id, role)
+        if cache_key in self._participant_cache:
+            return
+
+        from sqlalchemy import select
+
+        stmt = select(PropositionParticipant.id).where(
+            PropositionParticipant.proposition_id == proposition_id,
+            PropositionParticipant.handle_id == handle_id,
+            PropositionParticipant.corpus_id == self._corpus_id,
+            PropositionParticipant.role == role,
+        )
+        result = await self._session.execute(stmt)
+        if result.scalar_one_or_none() is not None:
+            self._participant_cache.add(cache_key)
+            return
+
+        self._session.add(PropositionParticipant(
+            id=uuid.uuid4(),
+            proposition_id=proposition_id,
+            handle_id=handle_id,
+            corpus_id=self._corpus_id,
+            role=role,
+            ordinal=ordinal,
+        ))
+        self._participant_cache.add(cache_key)
 
 
 def _to_pg_range(

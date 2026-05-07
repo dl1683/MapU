@@ -177,6 +177,7 @@ class AmendmentExtractor:
                 continue
             covered.append((m.start(), m.end()))
             deduped.append(m)
+        deduped.sort(key=lambda m: m.start())
 
         for match in deduped:
             ref_match = _nearest_preceding_ref(

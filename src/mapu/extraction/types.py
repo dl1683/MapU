@@ -12,7 +12,7 @@ from mapu.types import AttestationStrength, FrameType, Stance
 
 @dataclass(frozen=True)
 class BaseParse:
-    """spaCy base parse results consumed by downstream extractors."""
+    """spaCy base parse results. Offsets are span-local (relative to span text, not document)."""
 
     tokens: tuple[str, ...]
     pos_tags: tuple[str, ...]

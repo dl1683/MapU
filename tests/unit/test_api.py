@@ -196,6 +196,11 @@ class TestDTOValidation:
         with pytest.raises(ValueError):
             IngestRequestDTO(content="x" * 10_000_001)
 
+    def test_ingest_content_byte_length_check(self) -> None:
+        multibyte = "\U0001f600" * 2_500_001  # 4 bytes each = 10,000,004 bytes
+        with pytest.raises(ValueError, match="UTF-8"):
+            IngestRequestDTO(content=multibyte)
+
     def test_repair_propose_request_defaults(self) -> None:
         pid = uuid.uuid4()
         dto = RepairProposeRequest(proposition_id=pid)

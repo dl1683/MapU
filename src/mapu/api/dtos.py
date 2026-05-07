@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CorpusCreate(BaseModel):
@@ -47,6 +47,14 @@ class IngestRequestDTO(BaseModel):
     content: str = Field(min_length=1, max_length=10_000_000)
     mime_type: str = "text/plain"
     source_uri: str = ""
+
+    @field_validator("content")
+    @classmethod
+    def check_byte_length(cls, v: str) -> str:
+        if len(v.encode("utf-8")) > 10_000_000:
+            msg = "Content exceeds 10MB when encoded to UTF-8"
+            raise ValueError(msg)
+        return v
 
 
 class IngestResponse(BaseModel):

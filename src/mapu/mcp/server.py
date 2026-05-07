@@ -87,7 +87,8 @@ async def ingest_document(
     from mapu.evidence.parsers import ParserRegistry
     from mapu.evidence.types import DocumentBlob
 
-    if len(content) > 10_000_000:
+    content_bytes = content.encode("utf-8")
+    if len(content_bytes) > 10_000_000:
         return {"error": "Content exceeds 10MB limit"}
 
     cid = uuid.UUID(corpus_id)
@@ -97,7 +98,7 @@ async def ingest_document(
         chunker = SpanAwareChunker()
         svc = IngestionService(session, cid, registry, chunker)
         blob = DocumentBlob(
-            content=content.encode("utf-8"),
+            content=content_bytes,
             mime_type=mime_type,
             source_uri=source_uri,
         )

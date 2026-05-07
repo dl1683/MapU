@@ -285,6 +285,11 @@ class TestPredicateExtraction:
         predicates = _extract_query_predicates("What are all the covenants?")
         assert len(predicates) == 0
 
+    def test_plural_nouns_es_not_captured(self) -> None:
+        predicates = _extract_query_predicates("List all services and classes")
+        assert "services" not in predicates
+        assert "classes" not in predicates
+
 
 class TestTemplateSynthesizer:
     @pytest.mark.asyncio

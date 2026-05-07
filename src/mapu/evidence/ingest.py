@@ -228,18 +228,19 @@ class IngestionService:
 
         if self._extractors:
             try:
-                extraction_svc = ExtractionService(
-                    session=self._session,
-                    corpus_id=self._corpus_id,
-                    extractors=self._extractors,
-                    merge_engine=CandidateMergeEngine(),
-                    abstention_gate=AbstentionGate(),
-                    grounder=CandidateGrounder(self._session, self._corpus_id),
-                )
-                extraction_result = await extraction_svc.extract_expression(
-                    expr.id, spe.id,
-                )
-                result.propositions_extracted = len(extraction_result.materialized)
+                async with self._session.begin_nested():
+                    extraction_svc = ExtractionService(
+                        session=self._session,
+                        corpus_id=self._corpus_id,
+                        extractors=self._extractors,
+                        merge_engine=CandidateMergeEngine(),
+                        abstention_gate=AbstentionGate(),
+                        grounder=CandidateGrounder(self._session, self._corpus_id),
+                    )
+                    extraction_result = await extraction_svc.extract_expression(
+                        expr.id, spe.id,
+                    )
+                    result.propositions_extracted = len(extraction_result.materialized)
             except Exception:
                 pass
 

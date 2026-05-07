@@ -89,7 +89,7 @@ _NOUN_PHRASE_RE = re.compile(
     re.IGNORECASE,
 )
 _PREDICATE_RE = re.compile(
-    r"\b([a-z]{3,}(?:ed|es|ing|ize|ise|ate|ify))\b",
+    r"\b([a-z]{3,}(?:ed|ing|ize|ise|ate|ify))\b",
     re.IGNORECASE,
 )
 

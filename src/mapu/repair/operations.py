@@ -235,6 +235,14 @@ async def merge_handles(
     if canonical is None:
         raise ValueError(f"Handle {canonical_handle_id} not found")
 
+    moved_stmt = select(Proposition.id).where(
+        Proposition.corpus_id == corpus_id,
+        (Proposition.subject_handle_id == merged_handle_id)
+        | (Proposition.object_handle_id == merged_handle_id),
+    )
+    moved_result = await session.execute(moved_stmt)
+    moved_prop_ids = [row[0] for row in moved_result]
+
     await session.execute(
         update(Proposition)
         .where(
@@ -268,14 +276,7 @@ async def merge_handles(
     merged.status = "merged"
     await session.flush()
 
-    affected_stmt = select(Proposition.id).where(
-        Proposition.corpus_id == corpus_id,
-        (Proposition.subject_handle_id == canonical_handle_id)
-        | (Proposition.object_handle_id == canonical_handle_id),
-    )
-    affected_result = await session.execute(affected_stmt)
-    affected_prop_ids = [row[0] for row in affected_result]
-    await _recompute_semantic_keys(session, corpus_id, affected_prop_ids)
+    await _recompute_semantic_keys(session, corpus_id, moved_prop_ids)
 
     identity = IdentityDecisionModel(
         corpus_id=corpus_id,

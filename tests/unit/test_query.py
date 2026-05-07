@@ -384,7 +384,7 @@ class TestQueryService:
         svc = self._make_service()
         result = await svc.query(_make_request("Why did the price drop?"))
         assert result.tier_used == Tier.STRUCTURED
-        assert result.metadata.get("llm_fallback") == "structured_query"
+        assert result.metadata.get("llm_fallback") == "structured_investigation"
 
     @pytest.mark.asyncio
     async def test_synthesis_returned_for_hits(self) -> None:

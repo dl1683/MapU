@@ -19,6 +19,7 @@ from mapu.query.types import (
     EpistemicStatus,
     IntentClassifier,
     PropositionHit,
+    QueryIntent,
     QueryPlan,
     QueryRequest,
     QueryResult,
@@ -95,20 +96,7 @@ class QueryService:
         self, request: QueryRequest, plan: QueryPlan,
     ) -> QueryResult:
         if self._investigation is None:
-            hits = await self._structured.execute(plan, request)
-            chunk_hits = await self._chunk_fallback(request, hits)
-            return QueryResult(
-                request=request,
-                intent=plan.intent,
-                tier_used=Tier.STRUCTURED,
-                hits=tuple(hits),
-                chunk_hits=tuple(chunk_hits) if chunk_hits else (),
-                synthesis=None,
-                metadata={
-                    "escalation_reason": plan.escalation_reason,
-                    "llm_fallback": "structured_query",
-                },
-            )
+            return await self._structured_investigation_fallback(request, plan)
 
         result = await self._investigation.investigate(
             question=request.question,
@@ -153,6 +141,69 @@ class QueryService:
         if plan.selected_tier == Tier.SYNTHESIS:
             return await self._structured.execute(plan, request)
         return ()
+
+    async def _structured_investigation_fallback(
+        self, request: QueryRequest, plan: QueryPlan,
+    ) -> QueryResult:
+        all_hits: list[PropositionHit] = []
+        seen: set[object] = set()
+
+        initial = await self._structured.execute(plan, request)
+        for h in initial:
+            if h.proposition_id not in seen:
+                seen.add(h.proposition_id)
+                all_hits.append(h)
+
+        discovered_entities: set[str] = set()
+        for h in all_hits:
+            if h.object_name:
+                discovered_entities.add(h.object_name)
+            discovered_entities.add(h.subject_name)
+
+        known = {e.lower() for e in plan.entities_extracted}
+        new_entities = tuple(
+            e for e in discovered_entities if e.lower() not in known
+        )[:3]
+        for entity in new_entities:
+            expansion_plan = QueryPlan(
+                intent=QueryIntent.LIST,
+                selected_tier=Tier.STRUCTURED,
+                entities_extracted=(entity,),
+                predicates_extracted=plan.predicates_extracted,
+            )
+            expansion_hits = await self._structured.execute(expansion_plan, request)
+            for h in expansion_hits:
+                if h.proposition_id not in seen:
+                    seen.add(h.proposition_id)
+                    all_hits.append(h)
+
+        chunk_hits = await self._chunk_fallback(request, all_hits)
+        synthesis = await self._synthesize(request, plan, all_hits)
+        epistemic = _assess_epistemic_status(all_hits, chunk_hits, plan)
+
+        gaps: list[str] = []
+        for e in plan.entities_extracted:
+            if not any(
+                e.lower() in (h.subject_name.lower(), (h.object_name or "").lower())
+                for h in all_hits
+            ):
+                gaps.append(f"No evidence found for entity: {e}")
+
+        return QueryResult(
+            request=request,
+            intent=plan.intent,
+            tier_used=Tier.STRUCTURED,
+            hits=tuple(all_hits),
+            epistemic_status=epistemic,
+            synthesis=synthesis,
+            gaps=tuple(gaps),
+            chunk_hits=tuple(chunk_hits),
+            metadata={
+                "escalation_reason": plan.escalation_reason,
+                "llm_fallback": "structured_investigation",
+                "expansion_entities": list(new_entities),
+            },
+        )
 
     async def _chunk_fallback(
         self,

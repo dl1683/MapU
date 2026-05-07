@@ -198,6 +198,102 @@ class TestInvestigationEvaluator:
         assert state.known_predicate_coverage == 0.0
 
 
+class TestInvestigationExecutor:
+    @pytest.mark.asyncio
+    async def test_embedding_search_without_provider(self) -> None:
+        from mapu.investigation.executor import InvestigationExecutor
+        from mapu.investigation.types import InvestigationAction
+
+        session = AsyncMock()
+        executor = InvestigationExecutor(session, embedding_provider=None)
+        action = InvestigationAction(
+            kind=ActionKind.EMBEDDING_SEARCH, query="test query",
+        )
+        state = InvestigationState(budget=InvestigationBudget())
+        obs = await executor.execute_action(action, uuid.uuid4(), state)
+
+        assert state.actions_executed == 1
+        assert obs.evidence == ()
+
+    @pytest.mark.asyncio
+    async def test_embedding_search_with_provider(self) -> None:
+        from unittest.mock import patch
+
+        from mapu.evidence.types import EmbeddingModelRef
+        from mapu.investigation.executor import InvestigationExecutor
+        from mapu.investigation.types import InvestigationAction
+
+        session = AsyncMock()
+        embedder = MagicMock()
+        embedder.embed_texts = AsyncMock(return_value=[[0.1, 0.2, 0.3]])
+        embedder.model_ref = EmbeddingModelRef(
+            provider="test", model_name="test", dimensions=3,
+        )
+
+        executor = InvestigationExecutor(session, embedding_provider=embedder)
+        action = InvestigationAction(
+            kind=ActionKind.EMBEDDING_SEARCH, query="test query",
+        )
+        state = InvestigationState(budget=InvestigationBudget())
+
+        with patch(
+            "mapu.evidence.retrieval.ChunkRetrievalService"
+        ) as MockRetrieval:
+            from mapu.evidence.types import RetrievalResult
+
+            mock_svc = MagicMock()
+            mock_svc.search = AsyncMock(return_value=[
+                RetrievalResult(
+                    chunk_id=uuid.uuid4(),
+                    text="found chunk",
+                    score=0.9,
+                    expression_id=uuid.uuid4(),
+                ),
+            ])
+            MockRetrieval.return_value = mock_svc
+
+            obs = await executor.execute_action(action, uuid.uuid4(), state)
+
+        assert state.actions_executed == 1
+        assert len(obs.evidence) == 1
+        assert obs.evidence[0].normalized_text == "found chunk"
+        assert len(obs.document_ids) == 1
+
+    @pytest.mark.asyncio
+    async def test_chunk_retrieval_calls_repo(self) -> None:
+        from unittest.mock import patch
+
+        from mapu.investigation.executor import InvestigationExecutor
+        from mapu.investigation.types import InvestigationAction
+
+        session = AsyncMock()
+        executor = InvestigationExecutor(session)
+        action = InvestigationAction(
+            kind=ActionKind.CHUNK_RETRIEVAL, query="test text",
+        )
+        state = InvestigationState(budget=InvestigationBudget())
+
+        with patch("mapu.repos.evidence.ChunkRepo") as MockChunkRepo:
+            from mapu.evidence.types import RetrievalResult
+
+            mock_repo = MagicMock()
+            mock_repo.search_text = AsyncMock(return_value=[
+                RetrievalResult(
+                    chunk_id=uuid.uuid4(),
+                    text="matching chunk",
+                    score=1.0,
+                    expression_id=uuid.uuid4(),
+                ),
+            ])
+            MockChunkRepo.return_value = mock_repo
+
+            obs = await executor.execute_action(action, uuid.uuid4(), state)
+
+        assert state.actions_executed == 1
+        assert len(obs.evidence) == 1
+        assert obs.evidence[0].normalized_text == "matching chunk"
+
+
 class TestInvestigationState:
     def test_coverage_zero_when_empty(self) -> None:
         state = InvestigationState(budget=InvestigationBudget())

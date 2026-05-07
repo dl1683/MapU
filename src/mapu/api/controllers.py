@@ -140,11 +140,15 @@ class DocumentController(Controller):
         from mapu.evidence.ingest import IngestionService
         from mapu.evidence.parsers import ParserRegistry
         from mapu.evidence.types import DocumentBlob
+        from mapu.providers.embeddings import get_default_embedding_provider
 
         await _require_corpus(db_session, corpus_id)
         registry = ParserRegistry.create_default()
         chunker = SpanAwareChunker()
-        svc = IngestionService(db_session, corpus_id, registry, chunker)
+        svc = IngestionService(
+            db_session, corpus_id, registry, chunker,
+            embedding_provider=get_default_embedding_provider(),
+        )
         blob = DocumentBlob(
             content=data.content.encode("utf-8"),
             mime_type=data.mime_type,

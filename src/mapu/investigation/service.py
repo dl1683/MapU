@@ -17,6 +17,7 @@ from mapu.investigation.types import (
     InvestigationState,
     TerminationReason,
 )
+from mapu.providers.embeddings import EmbeddingProvider
 from mapu.providers.llms import LLMProvider, LLMRequest
 from mapu.query.types import PropositionHit
 
@@ -38,11 +39,12 @@ class InvestigationService:
         session: AsyncSession,
         llm: LLMProvider,
         budget: InvestigationBudget | None = None,
+        embedding_provider: EmbeddingProvider | None = None,
     ) -> None:
         self._session = session
         self._llm = llm
         self._planner = LLMInvestigationPlanner(llm)
-        self._executor = InvestigationExecutor(session)
+        self._executor = InvestigationExecutor(session, embedding_provider)
         self._evaluator = InvestigationEvaluator()
         self._budget = budget or InvestigationBudget()
 

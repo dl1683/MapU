@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from mapu.evidence.types import RetrievalResult
 from mapu.models.evidence import (
     Chunk,
     ChunkEmbedding,
@@ -52,6 +53,31 @@ class ChunkRepo(CorpusScopedRepo[Chunk]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def search_text(
+        self,
+        query: str,
+        limit: int = 20,
+    ) -> list[RetrievalResult]:
+        stmt = (
+            select(Chunk)
+            .where(
+                Chunk.corpus_id == self.corpus_id,
+                func.lower(Chunk.text).contains(query.lower()),
+            )
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        chunks = result.scalars().all()
+        return [
+            RetrievalResult(
+                chunk_id=c.id,
+                text=c.text,
+                score=1.0,
+                expression_id=c.expression_id,
+            )
+            for c in chunks
+        ]
+
 
 class ChunkEmbeddingRepo(CorpusScopedRepo[ChunkEmbedding]):
     model = ChunkEmbedding
@@ -74,3 +100,4 @@ class ChunkEmbeddingRepo(CorpusScopedRepo[ChunkEmbedding]):
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+

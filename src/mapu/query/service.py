@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.investigation.service import InvestigationService
+from mapu.providers.embeddings import EmbeddingProvider
 from mapu.providers.llms import LLMProvider
 from mapu.query.direct import DirectLookupExecutor
 from mapu.query.governor import CascadeGovernor
@@ -30,6 +31,7 @@ class QueryService:
         session: AsyncSession,
         intent_classifier: IntentClassifier,
         llm_provider: LLMProvider | None = None,
+        embedding_provider: EmbeddingProvider | None = None,
     ) -> None:
         self._session = session
         self._governor = CascadeGovernor(
@@ -42,7 +44,10 @@ class QueryService:
             LLMSynthesizer(llm_provider) if llm_provider else None
         )
         self._investigation = (
-            InvestigationService(session, llm_provider)
+            InvestigationService(
+                session, llm_provider,
+                embedding_provider=embedding_provider,
+            )
             if llm_provider else None
         )
 

@@ -29,3 +29,10 @@ class EmbeddingProviderFactory:
 
     def available_providers(self) -> frozenset[str]:
         return frozenset(self._creators.keys())
+
+
+def get_default_embedding_provider() -> EmbeddingProvider:
+    """Return the configured embedding provider, falling back to HashEmbeddingProvider."""
+    from mapu.providers.embedding_local import HashEmbeddingProvider
+
+    return HashEmbeddingProvider()

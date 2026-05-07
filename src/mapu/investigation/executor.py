@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mapu.evidence.types import RetrievalResult
 from mapu.investigation.types import (
     ActionKind,
     InvestigationAction,
@@ -14,6 +15,7 @@ from mapu.investigation.types import (
     InvestigationState,
     Observation,
 )
+from mapu.providers.embeddings import EmbeddingProvider
 from mapu.query.structured import StructuredQueryExecutor
 from mapu.query.types import (
     PropositionHit,
@@ -32,9 +34,14 @@ _ACTION_TO_INTENT: dict[ActionKind, QueryIntent] = {
 
 
 class InvestigationExecutor:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        embedding_provider: EmbeddingProvider | None = None,
+    ) -> None:
         self._session = session
         self._structured = StructuredQueryExecutor(session)
+        self._embedder = embedding_provider
 
     async def execute_action(
         self,
@@ -109,8 +116,31 @@ class InvestigationExecutor:
         corpus_id: uuid.UUID,
         state: InvestigationState,
     ) -> Observation:
+        from mapu.evidence.retrieval import ChunkRetrievalService
+
         state.actions_executed += 1
-        return Observation(action=action)
+
+        if self._embedder is None:
+            return Observation(action=action)
+
+        vectors = await self._embedder.embed_texts([action.query])
+        retrieval = ChunkRetrievalService(
+            self._session, corpus_id, self._embedder.model_ref,
+        )
+        results = await retrieval.search(vectors[0])
+
+        evidence = _chunk_results_to_evidence(results)
+        doc_ids = tuple(
+            r.expression_id for r in results if r.expression_id is not None
+        )
+        state.seen_document_ids.update(doc_ids)
+
+        return Observation(
+            action=action,
+            span_texts=tuple(r.text for r in results),
+            document_ids=doc_ids,
+            evidence=evidence,
+        )
 
     async def _execute_chunk(
         self,
@@ -118,8 +148,39 @@ class InvestigationExecutor:
         corpus_id: uuid.UUID,
         state: InvestigationState,
     ) -> Observation:
+        from mapu.repos.evidence import ChunkRepo
+
         state.actions_executed += 1
-        return Observation(action=action)
+
+        repo = ChunkRepo(self._session, corpus_id)
+        results = await repo.search_text(action.query, limit=20)
+
+        evidence = _chunk_results_to_evidence(results)
+        doc_ids = tuple(
+            r.expression_id for r in results if r.expression_id is not None
+        )
+        state.seen_document_ids.update(doc_ids)
+
+        return Observation(
+            action=action,
+            span_texts=tuple(r.text for r in results),
+            document_ids=doc_ids,
+            evidence=evidence,
+        )
+
+
+def _chunk_results_to_evidence(
+    results: Sequence[RetrievalResult],
+) -> tuple[InvestigationEvidence, ...]:
+    return tuple(
+        InvestigationEvidence(
+            proposition_id=uuid.UUID(int=0),
+            normalized_text=r.text,
+            source_span=r.text[:200] if r.text else None,
+            authority_score=r.score,
+        )
+        for r in results
+    )
 
 
 def _extract_new_entities(

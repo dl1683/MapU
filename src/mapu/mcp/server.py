@@ -103,9 +103,14 @@ async def ingest_document(
     cid = uuid.UUID(corpus_id)
     factory = _get_session_factory()
     async with factory() as session:
+        from mapu.providers.embeddings import get_default_embedding_provider
+
         registry = ParserRegistry.create_default()
         chunker = SpanAwareChunker()
-        svc = IngestionService(session, cid, registry, chunker)
+        svc = IngestionService(
+            session, cid, registry, chunker,
+            embedding_provider=get_default_embedding_provider(),
+        )
         blob = DocumentBlob(
             content=content_bytes,
             mime_type=mime_type,

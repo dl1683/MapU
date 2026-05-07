@@ -109,6 +109,7 @@ async def _run_ingest(corpus_id_str: str, path: str) -> None:
     from mapu.evidence.ingest import IngestionService
     from mapu.evidence.parsers import ParserRegistry
     from mapu.evidence.types import DocumentBlob
+    from mapu.providers.embeddings import get_default_embedding_provider
 
     content, mime_type, source_uri = _read_ingest_file(path)
     settings = Settings()
@@ -119,7 +120,10 @@ async def _run_ingest(corpus_id_str: str, path: str) -> None:
         async with session_factory() as session:
             registry = ParserRegistry.create_default()
             chunker = SpanAwareChunker()
-            svc = IngestionService(session, cid, registry, chunker)
+            svc = IngestionService(
+                session, cid, registry, chunker,
+                embedding_provider=get_default_embedding_provider(),
+            )
             blob = DocumentBlob(content=content, mime_type=mime_type, source_uri=source_uri)
             result = await svc.ingest(blob)
             await session.commit()

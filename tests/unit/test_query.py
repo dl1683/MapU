@@ -456,3 +456,21 @@ class TestProviderRegistry:
         register_llm_provider("custom", OpenAICompatibleLLMProvider, "custom-model-1")
         assert "custom" in _PROVIDER_FACTORIES
         del _PROVIDER_FACTORIES["custom"]
+
+
+class TestEmbeddingProviderRegistry:
+    def test_register_and_lookup(self) -> None:
+        from mapu.providers.embeddings import (
+            _PROVIDER_FACTORIES as EMB_FACTORIES,
+            register_embedding_provider,
+        )
+
+        register_embedding_provider("test-emb", lambda **kw: None)
+        assert "test-emb" in EMB_FACTORIES
+        del EMB_FACTORIES["test-emb"]
+
+    def test_builtins_registered(self) -> None:
+        from mapu.providers.embeddings import _PROVIDER_FACTORIES as EMB_FACTORIES
+
+        assert "local" in EMB_FACTORIES
+        assert "sentence-transformers" in EMB_FACTORIES

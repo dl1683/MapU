@@ -500,6 +500,70 @@ class TestParseFindings:
         findings = _parse_findings(raw, evidence)
         assert len(findings) == 0
 
+    def test_rejects_bool_confidence(self) -> None:
+        from mapu.investigation.service import _parse_findings
+        from mapu.investigation.types import InvestigationEvidence
+
+        evidence = (
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="A",
+                source_span=None, authority_score=0.9,
+                document_id=uuid.uuid4(),
+            ),
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="B",
+                source_span=None, authority_score=0.8,
+                document_id=uuid.uuid4(),
+            ),
+        )
+        raw = {
+            "findings": [
+                {
+                    "normalized_text": "Finding",
+                    "predicate": "relates",
+                    "subject_name": "X",
+                    "confidence": True,
+                    "evidence_indices": [0, 1],
+                },
+            ],
+        }
+        findings = _parse_findings(raw, evidence)
+        assert len(findings) == 0
+
+    def test_rejects_nan_confidence(self) -> None:
+        from mapu.investigation.service import _parse_findings
+        from mapu.investigation.types import InvestigationEvidence
+
+        evidence = (
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="A",
+                source_span=None, authority_score=0.9,
+                document_id=uuid.uuid4(),
+            ),
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="B",
+                source_span=None, authority_score=0.8,
+                document_id=uuid.uuid4(),
+            ),
+        )
+        raw = {
+            "findings": [
+                {
+                    "normalized_text": "Finding",
+                    "predicate": "relates",
+                    "subject_name": "X",
+                    "confidence": float("nan"),
+                    "evidence_indices": [0, 1],
+                },
+            ],
+        }
+        findings = _parse_findings(raw, evidence)
+        assert len(findings) == 0
+
 
 class TestInvestigationState:
     def test_coverage_zero_when_empty(self) -> None:

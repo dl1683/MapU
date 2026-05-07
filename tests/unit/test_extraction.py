@@ -190,8 +190,25 @@ class TestAmendmentExtractor:
             "Section 7.2(a) is hereby amended and restated in its entirety."
         )
         result = await extractor.extract(ctx)
-        assert len(result.signals) >= 1
-        assert any(s.signal_type == "amendment" for s in result.signals)
+        assert len(result.signals) == 1
+        assert result.signals[0].signal_type == "amendment"
+        assert "amended and restated" in result.signals[0].data["action"]
+
+    async def test_overlapping_patterns_dedup(
+        self, extractor: AmendmentExtractor
+    ) -> None:
+        ctx = _make_ctx(
+            "Section 3.1 is hereby amended and restated in its entirety "
+            "and Section 5.2 shall be deleted."
+        )
+        result = await extractor.extract(ctx)
+        assert len(result.signals) == 2
+        assert len(result.frames) == 2
+        actions = {s.data["action"] for s in result.signals}
+        assert "amended and restated in its entirety" in actions
+        refs = {f.subject.text for f in result.frames}
+        assert "Section 3.1" in refs
+        assert "Section 5.2" in refs
 
     async def test_amendment_with_reference(
         self, extractor: AmendmentExtractor

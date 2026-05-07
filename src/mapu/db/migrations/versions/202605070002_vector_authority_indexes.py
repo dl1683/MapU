@@ -36,9 +36,14 @@ def upgrade() -> None:
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_spe_authority "
             "ON source_policy_eval(authority_score DESC, id)"
         )
+        op.execute(
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_prop_corpus_created "
+            "ON proposition(corpus_id, system_created DESC)"
+        )
 
 
 def downgrade() -> None:
+    op.execute("DROP INDEX IF EXISTS idx_prop_corpus_created")
     op.execute("DROP INDEX IF EXISTS idx_spe_authority")
     op.execute("DROP INDEX IF EXISTS idx_att_accepted_spe")
     op.execute("DROP INDEX IF EXISTS idx_ce_embedding_hnsw")

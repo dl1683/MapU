@@ -31,19 +31,28 @@ class EmbeddingProviderFactory:
         return frozenset(self._creators.keys())
 
 
+_cached_embedding_provider: EmbeddingProvider | None = None
+
+
 def get_default_embedding_provider() -> EmbeddingProvider:
-    """Return the configured embedding provider, falling back to HashEmbeddingProvider."""
+    """Return the configured embedding provider (cached at process scope)."""
+    global _cached_embedding_provider
+    if _cached_embedding_provider is not None:
+        return _cached_embedding_provider
+
     from mapu.config import EmbeddingSettings
 
     settings = EmbeddingSettings()
 
     if settings.provider == "sentence-transformers":
         from mapu.providers.embedding_st import SentenceTransformerEmbeddingProvider
-        return SentenceTransformerEmbeddingProvider(
+        _cached_embedding_provider = SentenceTransformerEmbeddingProvider(
             model_name=settings.model,
             dimensions=settings.dimensions,
             device=settings.device,
         )
+    else:
+        from mapu.providers.embedding_local import HashEmbeddingProvider
+        _cached_embedding_provider = HashEmbeddingProvider(dimensions=settings.dimensions)
 
-    from mapu.providers.embedding_local import HashEmbeddingProvider
-    return HashEmbeddingProvider(dimensions=settings.dimensions)
+    return _cached_embedding_provider

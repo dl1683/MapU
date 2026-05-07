@@ -55,22 +55,23 @@ class OpenAICompatibleLLMProvider:
         model: str = "gpt-4o-mini",
         base_url: str | None = None,
     ) -> None:
-        self._api_key = api_key
+        import httpx
+
         self._model = model
-        self._base_url = base_url
+        self._url = (base_url or "https://api.openai.com/v1") + "/chat/completions"
+        self._client = httpx.AsyncClient(
+            timeout=60.0,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
 
     async def complete_json(
         self, request: LLMRequest,
     ) -> Mapping[str, Any]:
         import json
 
-        import httpx
-
-        url = (self._base_url or "https://api.openai.com/v1") + "/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-        }
         payload = {
             "model": self._model,
             "messages": [
@@ -81,10 +82,9 @@ class OpenAICompatibleLLMProvider:
             "temperature": request.temperature,
             "response_format": {"type": "json_object"},
         }
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        resp = await self._client.post(self._url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
         content = data["choices"][0]["message"]["content"]
         try:
             return json.loads(content)
@@ -92,16 +92,26 @@ class OpenAICompatibleLLMProvider:
             return {"answer": content}
 
 
+_cached_llm_provider: LLMProvider | None = None
+_llm_checked = False
+
+
 def get_default_llm_provider() -> LLMProvider | None:
-    """Return the configured LLM provider, or None if not configured."""
+    """Return the configured LLM provider (cached at process scope)."""
+    global _cached_llm_provider, _llm_checked
+    if _llm_checked:
+        return _cached_llm_provider
+
     from mapu.config import LLMSettings
 
     settings = LLMSettings()
+    _llm_checked = True
     if not settings.provider or not settings.api_key:
         return None
 
-    return OpenAICompatibleLLMProvider(
+    _cached_llm_provider = OpenAICompatibleLLMProvider(
         api_key=settings.api_key,
         model=settings.model or "gpt-4o-mini",
         base_url=settings.base_url or None,
     )
+    return _cached_llm_provider

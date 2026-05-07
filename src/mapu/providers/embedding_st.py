@@ -36,11 +36,12 @@ class SentenceTransformerEmbeddingProvider:
             dimensions=self._dims,
         )
 
+    def _encode_sync(self, texts: list[str]) -> list[EmbeddingVector]:
+        model = self._load_model()
+        embeddings = model.encode(texts, normalize_embeddings=True)
+        return [row.tolist()[:self._dims] for row in embeddings]
+
     async def embed_texts(self, texts: Sequence[str]) -> Sequence[EmbeddingVector]:
         import asyncio
 
-        model = self._load_model()
-        embeddings = await asyncio.to_thread(
-            model.encode, list(texts), normalize_embeddings=True,
-        )
-        return [row.tolist()[:self._dims] for row in embeddings]
+        return await asyncio.to_thread(self._encode_sync, list(texts))

@@ -198,6 +198,15 @@ class TestCascadeGovernor:
         assert plan.selected_tier == Tier.SYNTHESIS
 
     @pytest.mark.asyncio
+    async def test_measurement_routes_to_structured(self) -> None:
+        classifier = HeuristicIntentClassifier()
+        governor = CascadeGovernor(classifier)
+        request = _make_request("How much is the termination fee?")
+        plan = await governor.plan(request)
+        assert plan.intent == QueryIntent.MEASUREMENT
+        assert plan.selected_tier == Tier.STRUCTURED
+
+    @pytest.mark.asyncio
     async def test_entities_extracted_from_query(self) -> None:
         classifier = HeuristicIntentClassifier()
         governor = CascadeGovernor(classifier)

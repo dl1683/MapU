@@ -12,13 +12,13 @@ from mapu.query.types import (
 
 _DIRECT_INTENTS: frozenset[QueryIntent] = frozenset({
     QueryIntent.IDENTITY,
-    QueryIntent.MEASUREMENT,
 })
 
 _STRUCTURED_INTENTS: frozenset[QueryIntent] = frozenset({
     QueryIntent.LIST,
     QueryIntent.TEMPORAL,
     QueryIntent.TEMPORAL_DIFF,
+    QueryIntent.MEASUREMENT,
 })
 
 _SYNTHESIS_INTENTS: frozenset[QueryIntent] = frozenset({

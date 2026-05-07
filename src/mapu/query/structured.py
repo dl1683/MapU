@@ -82,8 +82,11 @@ class StructuredQueryExecutor:
             )
             .join(
                 SupersessionEdge,
-                (SupersessionEdge.old_proposition_id == Proposition.id)
-                | (SupersessionEdge.new_proposition_id == Proposition.id),
+                (
+                    (SupersessionEdge.old_proposition_id == Proposition.id)
+                    | (SupersessionEdge.new_proposition_id == Proposition.id)
+                )
+                & (SupersessionEdge.corpus_id == Proposition.corpus_id),
             )
             .where(
                 Proposition.corpus_id == request.corpus_id,

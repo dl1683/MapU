@@ -3,31 +3,22 @@
 # ============================================================
 
 # ----------------------------------------------------------
-# PROPRIETARY PROCESS & ENGINEERING WORKFLOW (NEVER PUBLIC)
+# PROJECT-INTERNAL (not distributed)
 # ----------------------------------------------------------
 
-# Claude Code project instructions & agent configuration
 .claude/
 CLAUDE.md
 **/CLAUDE.md
-
-# Internal process documentation & engineering methodology
 .process/
 **/.process/
-
-# Code review artifacts (any reviewer tooling)
 **/codex_*
 **/review_*
 **/*_review.md
 **/*_review.txt
 **/*_audit.md
 **/*_comparative_analysis.md
-
-# Internal decision logs that expose methodology
 **/DECISIONS_INTERNAL.md
 **/ASSUMPTIONS_INTERNAL.md
-
-# Session transcripts & agent conversation logs
 **/*.session
 **/*.session.json
 **/sessions/

@@ -36,7 +36,7 @@ class ParserSettings(BaseSettings):
 
 
 class SourcePolicySettings(BaseSettings):
-    default_document_type: str = "unknown"
+    default_document_type: str = "other"
 
     model_config = {"env_prefix": "MAPU_SOURCE_POLICY_"}
 

@@ -7,7 +7,7 @@ import contextlib
 import re
 from datetime import datetime
 
-import dateutil.parser as dateutil_parser  # type: ignore[import-untyped]
+import dateutil.parser as dateutil_parser
 
 from mapu.extraction.types import (
     EntityMention,

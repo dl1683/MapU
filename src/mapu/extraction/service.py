@@ -14,10 +14,13 @@ from mapu.extraction.grounding import CandidateGrounder, MaterializedExtraction
 from mapu.extraction.merge import CandidateMergeEngine
 from mapu.extraction.spacy_base import SpacyBaseParser
 from mapu.extraction.types import (
+    EntityMention,
     ExtractionContext,
+    ExtractionPlan,
     ExtractionSignal,
     Extractor,
     ExtractorOutput,
+    ExtractorStage,
 )
 from mapu.models.authority import SourcePolicyEval
 from mapu.models.evidence import DocumentExpression, TextSpan
@@ -38,8 +41,17 @@ class ExtractionResult:
     signals: list[ExtractionSignal] = field(default_factory=list)
 
 
+def _make_sequential_plan(extractors: list[Extractor]) -> ExtractionPlan:
+    """Wrap a flat extractor list as sequential single-extractor stages."""
+    stages = tuple(
+        ExtractorStage(name=ext.name, extractors=(ext,), parallel=False)
+        for ext in extractors
+    )
+    return ExtractionPlan(stages=stages)
+
+
 class ExtractionService:
-    """Orchestrates: spans -> base parse -> extractors -> merge -> abstention -> ground."""
+    """Orchestrates: spans -> base parse -> stages -> merge -> abstention -> ground."""
 
     def __init__(
         self,
@@ -50,14 +62,15 @@ class ExtractionService:
         abstention_gate: AbstentionGate,
         grounder: CandidateGrounder,
         spacy_parser: SpacyBaseParser | None = None,
+        plan: ExtractionPlan | None = None,
     ) -> None:
         self._session = session
         self._corpus_id = corpus_id
-        self._extractors = extractors
         self._merge = merge_engine
         self._abstention = abstention_gate
         self._grounder = grounder
         self._spacy = spacy_parser
+        self._plan = plan or _make_sequential_plan(extractors)
 
     async def extract_expression(
         self,
@@ -90,24 +103,7 @@ class ExtractionService:
                 base_parse=base_parse,
             )
 
-            accumulated_signals: list[ExtractionSignal] = []
-            outputs: list[ExtractorOutput] = []
-            for extractor in self._extractors:
-                ctx = ExtractionContext(
-                    corpus_id=ctx.corpus_id,
-                    document_id=ctx.document_id,
-                    expression_id=ctx.expression_id,
-                    span_id=ctx.span_id,
-                    node_id=ctx.node_id,
-                    text=ctx.text,
-                    start_char=ctx.start_char,
-                    end_char=ctx.end_char,
-                    base_parse=ctx.base_parse,
-                    prior_signals=tuple(accumulated_signals),
-                )
-                output = await extractor.extract(ctx)
-                accumulated_signals.extend(output.signals)
-                outputs.append(output)
+            outputs = await self._run_stages(ctx)
 
             merged = self._merge.merge(outputs)
             result.candidates_produced += len(merged.frames)
@@ -140,6 +136,45 @@ class ExtractionService:
             await self._grounder.flush()
 
         return result
+
+    async def _run_stages(
+        self, base_ctx: ExtractionContext,
+    ) -> list[ExtractorOutput]:
+        accumulated_signals: list[ExtractionSignal] = []
+        accumulated_entities: list[EntityMention] = []
+        all_outputs: list[ExtractorOutput] = []
+
+        for stage in self._plan.stages:
+            ctx = ExtractionContext(
+                corpus_id=base_ctx.corpus_id,
+                document_id=base_ctx.document_id,
+                expression_id=base_ctx.expression_id,
+                span_id=base_ctx.span_id,
+                node_id=base_ctx.node_id,
+                text=base_ctx.text,
+                start_char=base_ctx.start_char,
+                end_char=base_ctx.end_char,
+                base_parse=base_ctx.base_parse,
+                prior_signals=tuple(accumulated_signals),
+                prior_entities=tuple(accumulated_entities),
+            )
+
+            if stage.parallel and len(stage.extractors) > 1:
+                stage_outputs = await asyncio.gather(
+                    *(ext.extract(ctx) for ext in stage.extractors)
+                )
+            else:
+                stage_outputs = []
+                for ext in stage.extractors:
+                    output = await ext.extract(ctx)
+                    stage_outputs.append(output)
+
+            for output in stage_outputs:
+                accumulated_signals.extend(output.signals)
+                accumulated_entities.extend(output.entities)
+                all_outputs.append(output)
+
+        return all_outputs
 
     async def _get_document_id(self, expression_id: uuid.UUID) -> uuid.UUID:
         stmt = select(DocumentExpression.document_id).where(

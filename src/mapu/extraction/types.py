@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
@@ -35,6 +36,7 @@ class ExtractionContext:
     end_char: int
     base_parse: BaseParse | None = None
     prior_signals: tuple[ExtractionSignal, ...] = ()
+    prior_entities: tuple[EntityMention, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,7 @@ class ExtractorOutput:
 
     frames: tuple[PropositionFrameCandidate, ...] = ()
     signals: tuple[ExtractionSignal, ...] = ()
+    entities: tuple[EntityMention, ...] = ()
 
 
 @runtime_checkable
@@ -97,3 +100,31 @@ class Extractor(Protocol):
     def name(self) -> str: ...
 
     async def extract(self, ctx: ExtractionContext) -> ExtractorOutput: ...
+
+
+@runtime_checkable
+class BatchExtractor(Protocol):
+    """Protocol for extractors that support batched inference."""
+
+    @property
+    def name(self) -> str: ...
+
+    async def extract_batch(
+        self, ctxs: Sequence[ExtractionContext],
+    ) -> Sequence[ExtractorOutput]: ...
+
+
+@dataclass(frozen=True)
+class ExtractorStage:
+    """A group of extractors that run together. Parallel stages run concurrently."""
+
+    name: str
+    extractors: tuple[Extractor, ...]
+    parallel: bool = True
+
+
+@dataclass(frozen=True)
+class ExtractionPlan:
+    """Ordered stages of extraction. Each stage completes before the next starts."""
+
+    stages: tuple[ExtractorStage, ...]

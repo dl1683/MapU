@@ -45,6 +45,24 @@ class ExtractionSettings(BaseSettings):
     candidate_min: float = 0.3
     spacy_model: str = "en_core_web_sm"
 
+    gliner_enabled: bool = False
+    gliner_model: str = "urchade/gliner_small-v2.1"
+    gliner_threshold: float = 0.5
+    gliner_calibration: float = 0.75
+
+    rebel_enabled: bool = False
+    rebel_model: str = "Babelscape/rebel-large"
+    rebel_calibration: float = 0.65
+
+    setfit_enabled: bool = False
+    setfit_model: str = "sentence-transformers/paraphrase-MiniLM-L3-v2"
+    setfit_trained_path: str = ""
+    setfit_threshold: float = 0.5
+
+    srl_enabled: bool = False
+
+    ml_device: str = "cpu"
+
     model_config = {"env_prefix": "MAPU_EXTRACTION_"}
 
 

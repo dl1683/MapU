@@ -102,10 +102,12 @@ class TestDTOSerialization:
         doc_id = uuid.uuid4()
         expr_id = uuid.uuid4()
         resp = IngestResponse(
-            document_id=doc_id, expression_id=expr_id, spans=5, chunks=3,
+            document_id=doc_id, expression_id=expr_id,
+            spans=5, chunks=3, embeddings=3,
         )
         assert resp.spans == 5
         assert resp.chunks == 3
+        assert resp.embeddings == 3
 
     def test_handle_response(self) -> None:
         hid = uuid.uuid4()

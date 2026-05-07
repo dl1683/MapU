@@ -123,6 +123,7 @@ async def ingest_document(
             "expression_id": str(result.expression_id),
             "spans": result.span_count,
             "chunks": result.chunk_count,
+            "embeddings": result.embedding_count,
         }
 
 

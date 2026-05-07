@@ -160,6 +160,7 @@ class DocumentController(Controller):
             expression_id=result.expression_id,
             spans=result.span_count,
             chunks=result.chunk_count,
+            embeddings=result.embedding_count,
         )
 
 

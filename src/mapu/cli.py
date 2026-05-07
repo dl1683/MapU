@@ -132,6 +132,7 @@ async def _run_ingest(corpus_id_str: str, path: str) -> None:
             print(f"  Document ID: {result.document_id}")
             print(f"  Spans: {result.span_count}")
             print(f"  Chunks: {result.chunk_count}")
+            print(f"  Embeddings: {result.embedding_count}")
     finally:
         await engine.dispose()
 

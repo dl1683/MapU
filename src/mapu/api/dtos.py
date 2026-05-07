@@ -62,6 +62,7 @@ class IngestResponse(BaseModel):
     expression_id: uuid.UUID
     spans: int
     chunks: int
+    embeddings: int
 
 
 class HandleResponse(BaseModel):

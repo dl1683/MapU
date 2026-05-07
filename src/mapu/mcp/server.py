@@ -87,6 +87,9 @@ async def ingest_document(
     from mapu.evidence.parsers import ParserRegistry
     from mapu.evidence.types import DocumentBlob
 
+    if len(content) > 10_000_000:
+        return {"error": "Content exceeds 10MB limit"}
+
     cid = uuid.UUID(corpus_id)
     factory = _get_session_factory()
     async with factory() as session:
@@ -109,7 +112,7 @@ async def ingest_document(
 
 
 @server.tool()
-async def lookup_entity(corpus_id: str, name: str) -> dict[str, Any]:
+async def lookup_entity(corpus_id: str, name: str, limit: int = 20) -> dict[str, Any]:
     """Look up an entity handle by name in a corpus.
 
     Returns matching handles with aliases.
@@ -120,6 +123,7 @@ async def lookup_entity(corpus_id: str, name: str) -> dict[str, Any]:
     from mapu.query.direct import _escape_like
 
     cid = uuid.UUID(corpus_id)
+    limit = min(max(limit, 1), 100)
     factory = _get_session_factory()
     async with factory() as session:
         escaped = _escape_like(name)
@@ -127,7 +131,7 @@ async def lookup_entity(corpus_id: str, name: str) -> dict[str, Any]:
             Handle.corpus_id == cid,
             Handle.status == "active",
             Handle.canonical_name.ilike(f"%{escaped}%"),
-        ).limit(20)
+        ).limit(limit)
         result = await session.execute(stmt)
         handles = result.scalars().all()
         return {

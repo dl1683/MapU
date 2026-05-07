@@ -66,6 +66,18 @@ class ExtractionSettings(BaseSettings):
     model_config = {"env_prefix": "MAPU_EXTRACTION_"}
 
 
+class QuerySettings(BaseSettings):
+    coverage_threshold: float = 0.8
+    direct_lookup_intents: str = "identity,definition,single_fact"
+    structured_query_intents: str = "list,filter,temporal_range,measurement"
+    synthesis_max_propositions: int = 20
+    llm_synthesis_provider: str = ""
+    llm_synthesis_model: str = ""
+    llm_synthesis_max_tokens: int = 1024
+
+    model_config = {"env_prefix": "MAPU_QUERY_"}
+
+
 class Settings(BaseSettings):
     database: DatabaseSettings = DatabaseSettings()
     embedding: EmbeddingSettings = EmbeddingSettings()
@@ -73,5 +85,6 @@ class Settings(BaseSettings):
     parser: ParserSettings = ParserSettings()
     source_policy: SourcePolicySettings = SourcePolicySettings()
     extraction: ExtractionSettings = ExtractionSettings()
+    query: QuerySettings = QuerySettings()
 
     model_config = {"env_prefix": "MAPU_", "env_nested_delimiter": "__"}

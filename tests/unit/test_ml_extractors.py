@@ -242,6 +242,19 @@ class TestREBELExtractor:
         assert len(result.frames) == 0
         assert len(result.signals) == 0
 
+    async def test_partially_ungrounded_skipped(self) -> None:
+        runtime = LazyModelRuntime()
+        mock_pipe = MagicMock()
+        gen = "<triplet> Alice <subj> NonexistentEntity <obj> works for"
+        mock_pipe.return_value = [{"generated_text": gen}]
+        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+
+        ext = REBELExtractor(runtime=runtime)
+        ctx = _make_ctx("Alice works at a company.")
+        result = await ext.extract(ctx)
+        assert len(result.frames) == 0
+        assert len(result.signals) == 0
+
     async def test_signal_offsets_ordered(self) -> None:
         runtime = LazyModelRuntime()
         mock_pipe = MagicMock()

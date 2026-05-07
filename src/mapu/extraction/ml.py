@@ -333,7 +333,7 @@ class REBELExtractor:
             subject_span = _find_span(ctx.text, head)
             object_span = _find_span(ctx.text, tail)
 
-            if subject_span == (0, 0) and object_span == (0, 0):
+            if subject_span == (0, 0) or object_span == (0, 0):
                 continue
 
             raw_confidence = 0.8 if (head in entity_index or tail in entity_index) else 0.7

@@ -16,6 +16,7 @@ from mapu.query.structured import StructuredQueryExecutor
 from mapu.query.synthesis import LLMSynthesizer, TemplateSynthesizer
 from mapu.query.types import (
     ChunkHit,
+    EpistemicStatus,
     IntentClassifier,
     PropositionHit,
     QueryPlan,
@@ -74,12 +75,14 @@ class QueryService:
 
         chunk_hits = await self._chunk_fallback(request, hits)
         synthesis = await self._synthesize(request, plan, hits)
+        epistemic = _assess_epistemic_status(hits, chunk_hits, plan)
 
         return QueryResult(
             request=request,
             intent=plan.intent,
             tier_used=plan.selected_tier,
             hits=tuple(hits),
+            epistemic_status=epistemic,
             synthesis=synthesis,
             chunk_hits=tuple(chunk_hits),
             metadata={
@@ -200,3 +203,26 @@ class QueryService:
         return await self._template_synth.synthesize(
             request.question, hits, plan.intent,
         )
+
+
+def _assess_epistemic_status(
+    hits: Sequence[PropositionHit],
+    chunk_hits: list[ChunkHit],
+    plan: QueryPlan,
+) -> EpistemicStatus:
+    if not hits and not chunk_hits:
+        return EpistemicStatus.UNKNOWN
+
+    if not hits:
+        return EpistemicStatus.INSUFFICIENT
+
+    truth_statuses = {h.truth_status for h in hits if h.truth_status}
+    has_conflict = len(truth_statuses) > 1 and "contested" in truth_statuses
+    if has_conflict:
+        return EpistemicStatus.CONFLICTING
+
+    avg_confidence = sum(h.extraction_confidence for h in hits) / len(hits)
+    if avg_confidence < 0.5 or len(hits) < 2:
+        return EpistemicStatus.INSUFFICIENT
+
+    return EpistemicStatus.SUFFICIENT

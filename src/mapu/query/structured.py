@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import func, null, select
@@ -47,7 +48,7 @@ class StructuredQueryExecutor:
     async def _execute_list(
         self, plan: QueryPlan, request: QueryRequest,
     ) -> list[PropositionHit]:
-        stmt = self._base_query(request.corpus_id, request.situation_id)
+        stmt = self._base_query(request.corpus_id, request.situation_id, as_of=request.as_of)
         has_filter = False
         if plan.predicates_extracted:
             predicates = plan.predicates_extracted
@@ -73,14 +74,12 @@ class StructuredQueryExecutor:
     async def _execute_temporal(
         self, plan: QueryPlan, request: QueryRequest,
     ) -> list[PropositionHit]:
-        stmt = self._base_query(request.corpus_id, request.situation_id)
+        stmt = self._base_query(request.corpus_id, request.situation_id, as_of=request.as_of)
         if plan.entities_extracted:
             stmt = stmt.where(
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
         stmt = stmt.where(Proposition.valid_range.isnot(None))
-        if request.as_of is not None:
-            stmt = stmt.where(Proposition.valid_range.contains(request.as_of))
         stmt = stmt.order_by(Proposition.system_created.desc()).limit(request.max_results * 3)
         return await self._fetch(stmt, max_results=request.max_results)
 
@@ -91,7 +90,7 @@ class StructuredQueryExecutor:
 
         stmt = self._base_query(
             request.corpus_id, request.situation_id,
-            include_superseded=True,
+            include_superseded=True, as_of=request.as_of,
         )
         stmt = stmt.join(
             SupersessionEdge,
@@ -119,7 +118,7 @@ class StructuredQueryExecutor:
     ) -> list[PropositionHit]:
         from mapu.types import FrameType
 
-        stmt = self._base_query(request.corpus_id, request.situation_id).where(
+        stmt = self._base_query(request.corpus_id, request.situation_id, as_of=request.as_of).where(
             Proposition.frame_type.in_([
                 FrameType.MEASUREMENT.value,
                 FrameType.THRESHOLD.value,
@@ -149,7 +148,7 @@ class StructuredQueryExecutor:
     ) -> list[PropositionHit]:
         if not plan.entities_extracted and not plan.predicates_extracted:
             return []
-        stmt = self._base_query(request.corpus_id, request.situation_id)
+        stmt = self._base_query(request.corpus_id, request.situation_id, as_of=request.as_of)
         if plan.entities_extracted:
             stmt = stmt.where(
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
@@ -166,7 +165,7 @@ class StructuredQueryExecutor:
 
     def _base_query(
         self, corpus_id: uuid.UUID, situation_id: uuid.UUID | None = None,
-        *, include_superseded: bool = False,
+        *, include_superseded: bool = False, as_of: datetime | None = None,
     ) -> Any:
         obj_handle = aliased(Handle, name="object_handle")
         truth_col = (
@@ -239,7 +238,15 @@ class StructuredQueryExecutor:
             ).correlate(Proposition).exists()
             filters.append(~superseded)
 
-        return stmt.where(*filters)
+        stmt = stmt.where(*filters)
+
+        if as_of is not None:
+            stmt = stmt.where(
+                Proposition.valid_range.isnot(None),
+                Proposition.valid_range.contains(as_of),
+            )
+
+        return stmt
 
     async def _fetch(self, stmt: Any, max_results: int = 0) -> list[PropositionHit]:
         result = await self._session.execute(stmt)

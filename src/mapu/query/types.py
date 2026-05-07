@@ -72,6 +72,13 @@ class ChunkHit:
     expression_id: uuid.UUID
 
 
+class EpistemicStatus(StrEnum):
+    SUFFICIENT = "sufficient"
+    INSUFFICIENT = "insufficient"
+    CONFLICTING = "conflicting"
+    UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True)
 class QueryResult:
     """Result of processing a query through the cascade governor."""
@@ -80,6 +87,7 @@ class QueryResult:
     intent: QueryIntent
     tier_used: Tier
     hits: tuple[PropositionHit, ...]
+    epistemic_status: EpistemicStatus = EpistemicStatus.UNKNOWN
     synthesis: str | None = None
     gaps: tuple[str, ...] = ()
     chunk_hits: tuple[ChunkHit, ...] = ()

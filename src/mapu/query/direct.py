@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import func, null, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +46,7 @@ class DirectLookupExecutor:
                 limit=request.max_results,
                 relevance=1.0,
                 situation_id=request.situation_id,
+                as_of=request.as_of,
             )
             if hits:
                 return hits
@@ -57,6 +59,7 @@ class DirectLookupExecutor:
                 limit=request.max_results,
                 relevance=0.9,
                 situation_id=request.situation_id,
+                as_of=request.as_of,
             )
 
         return ()
@@ -69,6 +72,7 @@ class DirectLookupExecutor:
         limit: int,
         relevance: float,
         situation_id: uuid.UUID | None = None,
+        as_of: datetime | None = None,
     ) -> list[PropositionHit]:
         obj_handle = aliased(Handle, name="object_handle")
         truth_col = (
@@ -148,6 +152,12 @@ class DirectLookupExecutor:
             )
         if filters:
             stmt = stmt.where(or_(*filters))
+
+        if as_of is not None:
+            stmt = stmt.where(
+                Proposition.valid_range.isnot(None),
+                Proposition.valid_range.contains(as_of),
+            )
 
         stmt = stmt.order_by(
             SourcePolicyEval.authority_score.desc().nulls_last(),

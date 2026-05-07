@@ -22,7 +22,7 @@ class TemplateSynthesizer:
         intent: QueryIntent,
     ) -> str:
         if not hits:
-            return "No matching propositions found."
+            return "Insufficient evidence: no matching propositions found in the knowledge base."
 
         if intent == QueryIntent.IDENTITY:
             return self._identity_template(hits)
@@ -36,19 +36,17 @@ class TemplateSynthesizer:
 
     def _identity_template(self, hits: Sequence[PropositionHit]) -> str:
         h = hits[0]
-        confidence = f"{h.extraction_confidence:.0%}"
-        return (
-            f"{h.subject_name} ({h.subject_kind}): {h.normalized_text} "
-            f"(confidence: {confidence})"
-        )
+        parts = [f"{h.subject_name} ({h.subject_kind}): {h.normalized_text}"]
+        meta = _epistemic_meta(h)
+        if meta:
+            parts.append(f"[{meta}]")
+        return " ".join(parts)
 
     def _list_template(self, hits: Sequence[PropositionHit]) -> str:
         lines = [f"Found {len(hits)} results:"]
         for h in hits:
-            lines.append(
-                f"- {h.normalized_text} "
-                f"(confidence: {h.extraction_confidence:.0%})"
-            )
+            meta = _epistemic_meta(h)
+            lines.append(f"- {h.normalized_text} [{meta}]")
         return "\n".join(lines)
 
     def _temporal_diff_template(self, hits: Sequence[PropositionHit]) -> str:
@@ -60,10 +58,8 @@ class TemplateSynthesizer:
     def _measurement_template(self, hits: Sequence[PropositionHit]) -> str:
         lines = []
         for h in hits:
-            lines.append(
-                f"{h.subject_name}: {h.normalized_text} "
-                f"(confidence: {h.extraction_confidence:.0%})"
-            )
+            meta = _epistemic_meta(h)
+            lines.append(f"{h.subject_name}: {h.normalized_text} [{meta}]")
         return "\n".join(lines) if lines else "No measurements found."
 
     def _generic_template(self, hits: Sequence[PropositionHit]) -> str:
@@ -93,7 +89,7 @@ class LLMSynthesizer:
         intent: QueryIntent,
     ) -> str:
         if not hits:
-            return "No matching propositions found."
+            return "Insufficient evidence: no matching propositions found in the knowledge base."
 
         context = self._build_context(hits)
         request = LLMRequest(
@@ -116,6 +112,20 @@ class LLMSynthesizer:
                 parts.append(f"   Truth status: {h.truth_status}")
             lines.append("\n".join(parts))
         return "\n\n".join(lines)
+
+
+def _epistemic_meta(h: PropositionHit) -> str:
+    parts: list[str] = []
+    parts.append(f"confidence: {h.extraction_confidence:.0%}")
+    if h.authority_score is not None:
+        parts.append(f"authority: {h.authority_score:.2f}")
+    if h.truth_status:
+        parts.append(f"truth: {h.truth_status}")
+    if h.valid_from or h.valid_to:
+        vf = h.valid_from.date().isoformat() if h.valid_from else "..."
+        vt = h.valid_to.date().isoformat() if h.valid_to else "..."
+        parts.append(f"valid: {vf}/{vt}")
+    return ", ".join(parts)
 
 
 _SYNTHESIS_SYSTEM_PROMPT = (

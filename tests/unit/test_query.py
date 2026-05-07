@@ -315,7 +315,7 @@ class TestTemplateSynthesizer:
     async def test_empty_hits(self) -> None:
         synth = TemplateSynthesizer()
         result = await synth.synthesize("Who?", [], QueryIntent.IDENTITY)
-        assert "No matching" in result
+        assert "no matching" in result.lower()
 
     @pytest.mark.asyncio
     async def test_generic_template_truncation(self) -> None:

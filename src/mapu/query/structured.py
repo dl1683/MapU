@@ -47,19 +47,26 @@ class StructuredQueryExecutor:
         self, plan: QueryPlan, request: QueryRequest,
     ) -> list[PropositionHit]:
         stmt = self._base_query(request.corpus_id, request.situation_id)
+        has_filter = False
         if plan.predicates_extracted:
             predicates = plan.predicates_extracted
             stmt = stmt.where(
                 Proposition.predicate.ilike(f"%{_escape_like(predicates[0])}%")
             )
+            has_filter = True
         if plan.entities_extracted:
             stmt = stmt.where(
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
-        stmt = stmt.order_by(
-            SourcePolicyEval.authority_score.desc().nulls_last(),
-            Proposition.system_created.desc(),
-        ).limit(request.max_results)
+            has_filter = True
+        if has_filter:
+            stmt = stmt.order_by(
+                SourcePolicyEval.authority_score.desc().nulls_last(),
+                Proposition.system_created.desc(),
+            )
+        else:
+            stmt = stmt.order_by(Proposition.system_created.desc())
+        stmt = stmt.limit(request.max_results)
         return await self._fetch(stmt)
 
     async def _execute_temporal(

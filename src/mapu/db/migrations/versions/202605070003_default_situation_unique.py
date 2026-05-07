@@ -16,7 +16,7 @@ depends_on: str | None = None
 
 
 def upgrade() -> None:
-    op.execute(
+    _DUPES_CTE = (
         "WITH survivors AS ("
         "  SELECT DISTINCT ON (corpus_id) id, corpus_id FROM situation "
         "  WHERE kind = 'default' ORDER BY corpus_id, created_at ASC"
@@ -25,31 +25,45 @@ def upgrade() -> None:
         "  FROM situation s JOIN survivors sv USING (corpus_id) "
         "  WHERE s.kind = 'default' AND s.id != sv.id"
         ") "
-        "UPDATE attestation_situation AS ats SET situation_id = d.survivor_id "
+    )
+
+    op.execute(
+        _DUPES_CTE
+        + "DELETE FROM attestation_situation AS ats_dup "
+        "USING dupes d, attestation_situation ats_surv "
+        "WHERE ats_dup.situation_id = d.id "
+        "AND ats_dup.corpus_id = d.corpus_id "
+        "AND ats_surv.attestation_id = ats_dup.attestation_id "
+        "AND ats_surv.situation_id = d.survivor_id "
+        "AND ats_surv.invalidated_at IS NULL "
+        "AND ats_dup.invalidated_at IS NULL"
+    )
+
+    op.execute(
+        _DUPES_CTE
+        + "DELETE FROM proposition_state AS ps_dup "
+        "USING dupes d, proposition_state ps_surv "
+        "WHERE ps_dup.situation_id = d.id "
+        "AND ps_dup.corpus_id = d.corpus_id "
+        "AND ps_surv.proposition_id = ps_dup.proposition_id "
+        "AND ps_surv.situation_id = d.survivor_id "
+        "AND ps_surv.corpus_id = ps_dup.corpus_id "
+        "AND ps_surv.effective_range && ps_dup.effective_range"
+    )
+
+    op.execute(
+        _DUPES_CTE
+        + "UPDATE attestation_situation AS ats SET situation_id = d.survivor_id "
         "FROM dupes d WHERE ats.situation_id = d.id AND ats.corpus_id = d.corpus_id"
     )
     op.execute(
-        "WITH survivors AS ("
-        "  SELECT DISTINCT ON (corpus_id) id, corpus_id FROM situation "
-        "  WHERE kind = 'default' ORDER BY corpus_id, created_at ASC"
-        "), dupes AS ("
-        "  SELECT s.id, s.corpus_id, sv.id AS survivor_id "
-        "  FROM situation s JOIN survivors sv USING (corpus_id) "
-        "  WHERE s.kind = 'default' AND s.id != sv.id"
-        ") "
-        "UPDATE proposition_state AS ps SET situation_id = d.survivor_id "
+        _DUPES_CTE
+        + "UPDATE proposition_state AS ps SET situation_id = d.survivor_id "
         "FROM dupes d WHERE ps.situation_id = d.id AND ps.corpus_id = d.corpus_id"
     )
     op.execute(
-        "WITH survivors AS ("
-        "  SELECT DISTINCT ON (corpus_id) id, corpus_id FROM situation "
-        "  WHERE kind = 'default' ORDER BY corpus_id, created_at ASC"
-        "), dupes AS ("
-        "  SELECT s.id, s.corpus_id, sv.id AS survivor_id "
-        "  FROM situation s JOIN survivors sv USING (corpus_id) "
-        "  WHERE s.kind = 'default' AND s.id != sv.id"
-        ") "
-        "UPDATE situation AS ch SET parent_id = d.survivor_id "
+        _DUPES_CTE
+        + "UPDATE situation AS ch SET parent_id = d.survivor_id "
         "FROM dupes d WHERE ch.parent_id = d.id AND ch.corpus_id = d.corpus_id"
     )
     op.execute(

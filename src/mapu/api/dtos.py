@@ -67,6 +67,7 @@ class IngestResponse(BaseModel):
     spans: int
     chunks: int
     embeddings: int
+    propositions: int = 0
 
 
 class HandleResponse(BaseModel):

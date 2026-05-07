@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -12,6 +12,8 @@ from mapu.evidence.ingest import IngestionService
 from mapu.evidence.parsers import ParserRegistry
 from mapu.evidence.plaintext import PlaintextParser
 from mapu.evidence.types import DocumentBlob, ParsedDocument, ParsedNode, ParsedSpan
+from mapu.extraction import get_default_extractors
+from mapu.extraction.service import ExtractionResult
 from mapu.providers.embedding_local import HashEmbeddingProvider
 
 
@@ -114,6 +116,51 @@ class TestIngestionService:
         assert result.span_count == 0
         assert result.chunk_count == 0
         assert result.embedding_count == 0
+
+    @patch("mapu.evidence.ingest.ExtractionService")
+    async def test_ingest_with_extractors_runs_extraction(
+        self,
+        mock_extraction_cls: MagicMock,
+        registry: ParserRegistry,
+        chunker: SpanAwareChunker,
+        corpus_id: uuid.UUID,
+    ) -> None:
+        mock_svc = AsyncMock()
+        mock_svc.extract_expression.return_value = ExtractionResult(
+            expression_id=uuid.uuid4(), materialized=[MagicMock(), MagicMock()],
+        )
+        mock_extraction_cls.return_value = mock_svc
+
+        session = _make_mock_session()
+        extractors = get_default_extractors()
+        service = IngestionService(
+            session, corpus_id, registry, chunker, extractors=extractors,
+        )
+        blob = DocumentBlob(
+            content=b"Hello world. This is a test document.",
+            mime_type="text/plain",
+            source_uri="test://extraction",
+        )
+        result = await service.ingest(blob)
+        assert result.propositions_extracted == 2
+        mock_extraction_cls.assert_called_once()
+        mock_svc.extract_expression.assert_awaited_once()
+
+    async def test_ingest_without_extractors_skips_extraction(
+        self,
+        registry: ParserRegistry,
+        chunker: SpanAwareChunker,
+        corpus_id: uuid.UUID,
+    ) -> None:
+        session = _make_mock_session()
+        service = IngestionService(session, corpus_id, registry, chunker)
+        blob = DocumentBlob(
+            content=b"Hello world. This is a test document.",
+            mime_type="text/plain",
+            source_uri="test://no-extract",
+        )
+        result = await service.ingest(blob)
+        assert result.propositions_extracted == 0
 
 
 class TestIngestIndexValidation:

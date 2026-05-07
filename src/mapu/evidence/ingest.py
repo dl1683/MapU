@@ -12,6 +12,11 @@ from mapu.authority.source_policy import SourcePolicyEvaluatorV1, SourcePolicyIn
 from mapu.evidence.chunking import Chunker
 from mapu.evidence.parsers import ParserRegistry
 from mapu.evidence.types import DocumentBlob, EmbeddingModelRef
+from mapu.extraction.abstention import AbstentionGate
+from mapu.extraction.grounding import CandidateGrounder
+from mapu.extraction.merge import CandidateMergeEngine
+from mapu.extraction.service import ExtractionService
+from mapu.extraction.types import Extractor
 from mapu.models.evidence import (
     Chunk,
     ChunkEmbedding,
@@ -37,6 +42,7 @@ class IngestResult:
     authority_score: float | None = None
     span_ids: list[uuid.UUID] = field(default_factory=list)
     chunk_ids: list[uuid.UUID] = field(default_factory=list)
+    propositions_extracted: int = 0
 
 
 class IngestionService:
@@ -49,12 +55,14 @@ class IngestionService:
         parser_registry: ParserRegistry,
         chunker: Chunker,
         embedding_provider: EmbeddingProvider | None = None,
+        extractors: list[Extractor] | None = None,
     ) -> None:
         self._session = session
         self._corpus_id = corpus_id
         self._parsers = parser_registry
         self._chunker = chunker
         self._embedder = embedding_provider
+        self._extractors = extractors
 
     async def ingest(self, blob: DocumentBlob) -> IngestResult:
         parser = self._parsers.get_parser(blob.mime_type)
@@ -150,6 +158,20 @@ class IngestionService:
             result.span_ids.append(ts.id)
             result.span_count += 1
         await self._session.flush()
+
+        if self._extractors:
+            extraction_svc = ExtractionService(
+                session=self._session,
+                corpus_id=self._corpus_id,
+                extractors=self._extractors,
+                merge_engine=CandidateMergeEngine(),
+                abstention_gate=AbstentionGate(),
+                grounder=CandidateGrounder(self._session, self._corpus_id),
+            )
+            extraction_result = await extraction_svc.extract_expression(
+                expr.id, spe.id,
+            )
+            result.propositions_extracted = len(extraction_result.materialized)
 
         candidates = self._chunker.chunk(parsed)
 

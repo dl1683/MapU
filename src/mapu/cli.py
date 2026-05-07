@@ -132,9 +132,12 @@ async def _run_ingest(corpus_id_str: str, path: str) -> None:
         async with session_factory() as session:
             registry = ParserRegistry.create_default()
             chunker = SpanAwareChunker()
+            from mapu.extraction import get_default_extractors
+
             svc = IngestionService(
                 session, cid, registry, chunker,
                 embedding_provider=get_default_embedding_provider(),
+                extractors=get_default_extractors(),
             )
             blob = DocumentBlob(content=content, mime_type=mime_type, source_uri=source_uri)
             result = await svc.ingest(blob)
@@ -145,6 +148,7 @@ async def _run_ingest(corpus_id_str: str, path: str) -> None:
             print(f"  Spans: {result.span_count}")
             print(f"  Chunks: {result.chunk_count}")
             print(f"  Embeddings: {result.embedding_count}")
+            print(f"  Propositions: {result.propositions_extracted}")
     finally:
         await engine.dispose()
 

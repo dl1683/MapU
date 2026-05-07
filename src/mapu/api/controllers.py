@@ -147,6 +147,7 @@ class DocumentController(Controller):
         from mapu.evidence.ingest import IngestionService
         from mapu.evidence.parsers import ParserRegistry
         from mapu.evidence.types import DocumentBlob
+        from mapu.extraction import get_default_extractors
         from mapu.providers.embeddings import get_default_embedding_provider
 
         await _require_corpus(db_session, corpus_id)
@@ -155,6 +156,7 @@ class DocumentController(Controller):
         svc = IngestionService(
             db_session, corpus_id, registry, chunker,
             embedding_provider=get_default_embedding_provider(),
+            extractors=get_default_extractors(),
         )
         metadata: dict[str, str] = {}
         if data.document_type:
@@ -178,6 +180,7 @@ class DocumentController(Controller):
             spans=result.span_count,
             chunks=result.chunk_count,
             embeddings=result.embedding_count,
+            propositions=result.propositions_extracted,
         )
 
 

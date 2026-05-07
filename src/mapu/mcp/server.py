@@ -117,6 +117,7 @@ async def ingest_document(
     cid = uuid.UUID(corpus_id)
     factory = _get_session_factory()
     async with factory() as session:
+        from mapu.extraction import get_default_extractors
         from mapu.providers.embeddings import get_default_embedding_provider
 
         registry = ParserRegistry.create_default()
@@ -124,6 +125,7 @@ async def ingest_document(
         svc = IngestionService(
             session, cid, registry, chunker,
             embedding_provider=get_default_embedding_provider(),
+            extractors=get_default_extractors(),
         )
         metadata: dict[str, str] = {}
         if document_type:
@@ -148,6 +150,7 @@ async def ingest_document(
             "spans": result.span_count,
             "chunks": result.chunk_count,
             "embeddings": result.embedding_count,
+            "propositions": result.propositions_extracted,
         }
 
 

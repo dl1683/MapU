@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.repair.blast_radius import compute_blast_radius
-from mapu.repair.changesets import ChangesetBuilder, execute_changeset
+from mapu.repair.changesets import ChangesetBuilder, execute_changeset, rollback_changeset
 from mapu.repair.types import (
     OperationPayload,
     RepairOperationType,
@@ -135,3 +135,8 @@ class RepairService:
         repo = ChangesetRepo(self._session, self._corpus_id)
         await repo.transition(changeset_id, ChangesetStatus.AUTO_APPLIED.value)
         return await self.apply(changeset_id)
+
+    async def rollback(self, changeset_id: uuid.UUID) -> RepairResult:
+        return await rollback_changeset(
+            self._session, self._corpus_id, changeset_id,
+        )

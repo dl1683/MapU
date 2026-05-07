@@ -207,3 +207,57 @@ async def _dispatch_operation(
             actor=payload.get("actor", "system"),
         )
     raise ValueError(f"Unknown operation type: {operation_type}")
+
+
+async def rollback_changeset(
+    session: AsyncSession,
+    corpus_id: uuid.UUID,
+    changeset_id: uuid.UUID,
+) -> RepairResult:
+    from mapu.repair.rollback import dispatch_rollback
+
+    repo = ChangesetRepo(session, corpus_id)
+    cs = await repo.get(changeset_id)
+    if cs is None:
+        raise ValueError(f"Changeset {changeset_id} not found")
+
+    if cs.status != ChangesetStatus.APPLIED.value:
+        raise ValueError(
+            f"Changeset {changeset_id} has status '{cs.status}', "
+            "must be 'applied' to roll back"
+        )
+
+    operations = await repo.operations_for_changeset(changeset_id)
+
+    result = RepairResult(
+        changeset_id=changeset_id,
+        success=False,
+        operations_executed=0,
+        recomputed_propositions=0,
+        gaps_created=0,
+    )
+
+    savepoint = await session.begin_nested()
+    try:
+        for op in reversed(operations):
+            if op.result is None:
+                continue
+            rollback_result = await dispatch_rollback(
+                session, corpus_id, op.operation_type, op.payload, op.result,
+            )
+            result.operations_executed += 1
+            result.recomputed_propositions += rollback_result.get("recomputed_states", 0)
+
+        await savepoint.commit()
+        await repo.mark_rolled_back(changeset_id)
+        result.success = True
+
+    except Exception as exc:
+        await savepoint.rollback()
+        result.errors.append(str(exc))
+        try:
+            await repo.transition(changeset_id, ChangesetStatus.ROLLBACK_FAILED.value)
+        except Exception:
+            pass
+
+    return result

@@ -180,11 +180,12 @@ class InvestigationService:
         if not evidence:
             return "No evidence found to answer this question."
 
+        capped_evidence = evidence[:50]
         evidence_text = "\n".join(
             f"- {e.normalized_text}" + (
-                f" (source: {e.source_span})" if e.source_span else ""
+                f" (source: {e.source_span[:200]})" if e.source_span else ""
             )
-            for e in evidence
+            for e in capped_evidence
             if e.normalized_text
         )
 

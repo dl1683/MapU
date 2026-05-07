@@ -99,7 +99,14 @@ class SpanAwareChunker:
 
     @staticmethod
     def _find_span_index(parsed: ParsedDocument, char_pos: int) -> int | None:
-        for i, span in enumerate(parsed.spans):
-            if span.start_char <= char_pos < span.end_char:
-                return i
+        spans = parsed.spans
+        lo, hi = 0, len(spans) - 1
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            if spans[mid].end_char <= char_pos:
+                lo = mid + 1
+            elif spans[mid].start_char > char_pos:
+                hi = mid - 1
+            else:
+                return mid
         return None

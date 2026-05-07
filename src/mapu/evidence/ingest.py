@@ -56,6 +56,7 @@ class IngestionService:
         chunker: Chunker,
         embedding_provider: EmbeddingProvider | None = None,
         extractors: list[Extractor] | None = None,
+        embedding_batch_size: int = 64,
     ) -> None:
         self._session = session
         self._corpus_id = corpus_id
@@ -63,6 +64,7 @@ class IngestionService:
         self._chunker = chunker
         self._embedder = embedding_provider
         self._extractors = extractors
+        self._embedding_batch_size = embedding_batch_size
 
     async def ingest(self, blob: DocumentBlob) -> IngestResult:
         parser = self._parsers.get_parser(blob.mime_type)
@@ -208,7 +210,7 @@ class IngestionService:
 
         if self._embedder and chunk_texts:
             model_ref: EmbeddingModelRef = self._embedder.model_ref
-            batch_size = 64
+            batch_size = self._embedding_batch_size
             for offset in range(0, len(chunk_texts), batch_size):
                 batch_texts = chunk_texts[offset:offset + batch_size]
                 batch_models = chunk_models[offset:offset + batch_size]

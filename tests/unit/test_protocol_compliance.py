@@ -10,8 +10,8 @@ from mapu.evidence.plaintext import PlaintextParser
 from mapu.extraction.ml import (
     GLiNERExtractor,
     REBELExtractor,
-    SRLExtractor,
     SetFitExtractor,
+    SRLExtractor,
 )
 from mapu.extraction.rules import (
     AmendmentExtractor,

@@ -156,10 +156,20 @@ class DocumentController(Controller):
             db_session, corpus_id, registry, chunker,
             embedding_provider=get_default_embedding_provider(),
         )
+        metadata: dict[str, str] = {}
+        if data.document_type:
+            metadata["document_type"] = data.document_type
+        if data.publication_context:
+            metadata["publication_context"] = data.publication_context
+        if data.source_identity:
+            metadata["source_identity"] = data.source_identity
+        if data.independence_group:
+            metadata["independence_group"] = data.independence_group
         blob = DocumentBlob(
             content=data.content.encode("utf-8"),
             mime_type=data.mime_type,
             source_uri=data.source_uri,
+            metadata=metadata,
         )
         result = await svc.ingest(blob)
         return IngestResponse(

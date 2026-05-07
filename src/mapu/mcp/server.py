@@ -93,10 +93,17 @@ async def ingest_document(
     content: str,
     mime_type: str = "text/plain",
     source_uri: str = "",
+    document_type: str | None = None,
+    publication_context: str | None = None,
+    source_identity: str | None = None,
+    independence_group: str | None = None,
 ) -> dict[str, Any]:
     """Ingest a document into a MapU corpus.
 
     The document is parsed, chunked, and embedded for later querying.
+    Optional authority metadata (document_type, publication_context, etc.)
+    influences the computed authority score for propositions extracted from
+    this document.
     """
     from mapu.evidence.chunking import SpanAwareChunker
     from mapu.evidence.ingest import IngestionService
@@ -118,10 +125,20 @@ async def ingest_document(
             session, cid, registry, chunker,
             embedding_provider=get_default_embedding_provider(),
         )
+        metadata: dict[str, str] = {}
+        if document_type:
+            metadata["document_type"] = document_type
+        if publication_context:
+            metadata["publication_context"] = publication_context
+        if source_identity:
+            metadata["source_identity"] = source_identity
+        if independence_group:
+            metadata["independence_group"] = independence_group
         blob = DocumentBlob(
             content=content_bytes,
             mime_type=mime_type,
             source_uri=source_uri,
+            metadata=metadata,
         )
         result = await svc.ingest(blob)
         await session.commit()

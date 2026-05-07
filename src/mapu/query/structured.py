@@ -93,7 +93,9 @@ class StructuredQueryExecutor:
             stmt = stmt.where(
                 Proposition.predicate.ilike(f"%{_escape_like(plan.predicates_extracted[0])}%")
             )
-        stmt = stmt.limit(request.max_results)
+        stmt = stmt.order_by(
+            SourcePolicyEval.authority_score.desc().nulls_last(),
+        ).limit(request.max_results)
         return await self._fetch(stmt)
 
     async def _execute_measurement(
@@ -121,7 +123,9 @@ class StructuredQueryExecutor:
             stmt = stmt.where(
                 Proposition.predicate.ilike(f"%{_escape_like(plan.predicates_extracted[0])}%")
             )
-        stmt = stmt.limit(request.max_results)
+        stmt = stmt.order_by(
+            SourcePolicyEval.authority_score.desc().nulls_last(),
+        ).limit(request.max_results)
         return await self._fetch(stmt)
 
     async def _execute_generic(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from mapu.evidence.types import RetrievalResult
 from mapu.models.evidence import (
@@ -58,11 +58,14 @@ class ChunkRepo(CorpusScopedRepo[Chunk]):
         query: str,
         limit: int = 20,
     ) -> list[RetrievalResult]:
+        from mapu.query.direct import _escape_like
+
+        escaped = _escape_like(query)
         stmt = (
             select(Chunk)
             .where(
                 Chunk.corpus_id == self.corpus_id,
-                func.lower(Chunk.text).contains(query.lower()),
+                Chunk.text.ilike(f"%{escaped}%"),
             )
             .limit(limit)
         )

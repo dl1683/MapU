@@ -153,7 +153,7 @@ async def _dispatch_operation(
         raw_retraction_id = payload.get("retraction_proposition_id")
         retraction_id = (
             uuid.UUID(raw_retraction_id)
-            if raw_retraction_id is not None
+            if raw_retraction_id is not None and raw_retraction_id != "None"
             else None
         )
         return await retract_proposition(

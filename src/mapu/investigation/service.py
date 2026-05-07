@@ -279,10 +279,11 @@ def _parse_findings(
         if not isinstance(indices, list) or len(indices) < 2:
             continue
 
-        valid_indices = [
+        valid_indices = list(dict.fromkeys(
             i for i in indices
-            if isinstance(i, int) and 0 <= i < len(evidence)
-        ]
+            if isinstance(i, int) and not isinstance(i, bool)
+            and 0 <= i < len(evidence)
+        ))
         if len(valid_indices) < 2:
             continue
 

@@ -141,7 +141,10 @@ class DirectLookupExecutor:
         if filters:
             stmt = stmt.where(or_(*filters))
 
-        stmt = stmt.limit(limit)
+        stmt = stmt.order_by(
+            SourcePolicyEval.authority_score.desc().nulls_last(),
+            Attestation.extraction_confidence.desc(),
+        ).limit(limit)
         result = await self._session.execute(stmt)
         rows = result.all()
 

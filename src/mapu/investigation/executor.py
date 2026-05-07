@@ -124,6 +124,8 @@ class InvestigationExecutor:
             return Observation(action=action)
 
         vectors = await self._embedder.embed_texts([action.query])
+        if not vectors:
+            return Observation(action=action)
         retrieval = ChunkRetrievalService(
             self._session, corpus_id, self._embedder.model_ref,
         )
@@ -174,7 +176,7 @@ def _chunk_results_to_evidence(
 ) -> tuple[InvestigationEvidence, ...]:
     return tuple(
         InvestigationEvidence(
-            proposition_id=uuid.UUID(int=0),
+            proposition_id=r.chunk_id,
             normalized_text=r.text,
             source_span=r.text[:200] if r.text else None,
             authority_score=r.score,

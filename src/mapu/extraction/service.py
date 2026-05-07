@@ -136,6 +136,9 @@ class ExtractionService:
 
             result.spans_processed += 1
 
+        if result.materialized:
+            await self._grounder.flush()
+
         return result
 
     async def _get_document_id(self, expression_id: uuid.UUID) -> uuid.UUID:

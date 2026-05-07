@@ -42,6 +42,9 @@ class CandidateGrounder:
         self._proposition_cache: dict[str, Proposition] = {}
         self._participant_cache: set[tuple[uuid.UUID, uuid.UUID, str]] = set()
 
+    async def flush(self) -> None:
+        await self._session.flush()
+
     async def materialize(
         self,
         result: AbstentionResult,
@@ -128,8 +131,6 @@ class CandidateGrounder:
                 assignment_basis="default_document_situation",
             )
             self._session.add(assn)
-
-        await self._session.flush()
 
         return MaterializedExtraction(
             proposition_id=prop.id,

@@ -162,12 +162,12 @@ class AmendmentExtractor:
         signals: list[ExtractionSignal] = []
         frames: list[PropositionFrameCandidate] = []
 
-        all_refs = list(_CROSS_REF_PATTERN.finditer(ctx.text))
-        ref_starts = [r.start() for r in all_refs]
-
         raw_matches: list[re.Match[str]] = []
         for pattern in _AMENDMENT_PATTERNS:
             raw_matches.extend(pattern.finditer(ctx.text))
+
+        if not raw_matches:
+            return ExtractorOutput()
 
         raw_matches.sort(key=lambda m: m.end() - m.start(), reverse=True)
         covered: list[tuple[int, int]] = []
@@ -178,6 +178,9 @@ class AmendmentExtractor:
             covered.append((m.start(), m.end()))
             deduped.append(m)
         deduped.sort(key=lambda m: m.start())
+
+        all_refs = list(_CROSS_REF_PATTERN.finditer(ctx.text))
+        ref_starts = [r.start() for r in all_refs]
 
         for match in deduped:
             ref_match = _nearest_preceding_ref(

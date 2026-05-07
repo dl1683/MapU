@@ -88,9 +88,13 @@ class CandidateGrounder:
             semantic_key=semantic_key,
         )
 
-        await self._ensure_participant(prop.id, subject_handle.id, "subject", 0)
+        await self._ensure_participant(
+            prop.id, subject_handle.id, "subject", 0, proposition_is_new=created,
+        )
         if object_handle is not None:
-            await self._ensure_participant(prop.id, object_handle.id, "object", 1)
+            await self._ensure_participant(
+                prop.id, object_handle.id, "object", 1, proposition_is_new=created,
+            )
 
         attestation_status = (
             "accepted" if result.decision == AbstentionDecision.ACCEPTED
@@ -226,23 +230,26 @@ class CandidateGrounder:
         handle_id: uuid.UUID,
         role: str,
         ordinal: int,
+        *,
+        proposition_is_new: bool = False,
     ) -> None:
         cache_key = (proposition_id, handle_id, role)
         if cache_key in self._participant_cache:
             return
 
-        from sqlalchemy import select
+        if not proposition_is_new:
+            from sqlalchemy import select
 
-        stmt = select(PropositionParticipant.id).where(
-            PropositionParticipant.proposition_id == proposition_id,
-            PropositionParticipant.handle_id == handle_id,
-            PropositionParticipant.corpus_id == self._corpus_id,
-            PropositionParticipant.role == role,
-        )
-        result = await self._session.execute(stmt)
-        if result.scalar_one_or_none() is not None:
-            self._participant_cache.add(cache_key)
-            return
+            stmt = select(PropositionParticipant.id).where(
+                PropositionParticipant.proposition_id == proposition_id,
+                PropositionParticipant.handle_id == handle_id,
+                PropositionParticipant.corpus_id == self._corpus_id,
+                PropositionParticipant.role == role,
+            )
+            result = await self._session.execute(stmt)
+            if result.scalar_one_or_none() is not None:
+                self._participant_cache.add(cache_key)
+                return
 
         self._session.add(PropositionParticipant(
             id=uuid.uuid4(),

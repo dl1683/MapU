@@ -252,8 +252,15 @@ async def rollback_changeset(
             result.recomputed_propositions += rollback_result.get("recomputed_states", 0)
 
         await savepoint.commit()
-        await repo.mark_rolled_back(changeset_id)
-        result.success = len(result.errors) == 0
+        if result.errors:
+            result.success = False
+            try:
+                await repo.transition(changeset_id, ChangesetStatus.ROLLBACK_FAILED.value)
+            except Exception:
+                pass
+        else:
+            await repo.mark_rolled_back(changeset_id)
+            result.success = True
 
     except Exception as exc:
         await savepoint.rollback()

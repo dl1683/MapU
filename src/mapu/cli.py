@@ -134,10 +134,13 @@ async def _run_ingest(corpus_id_str: str, path: str) -> None:
             chunker = SpanAwareChunker()
             from mapu.extraction import get_default_extractors
 
+            from mapu.config import EmbeddingSettings
+
             svc = IngestionService(
                 session, cid, registry, chunker,
                 embedding_provider=get_default_embedding_provider(),
                 extractors=get_default_extractors(),
+                embedding_batch_size=EmbeddingSettings().batch_size,
             )
             blob = DocumentBlob(content=content, mime_type=mime_type, source_uri=source_uri)
             result = await svc.ingest(blob)

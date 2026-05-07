@@ -163,6 +163,8 @@ class DocumentController(Controller):
         from mapu.extraction import get_default_extractors
         from mapu.providers.embeddings import get_default_embedding_provider
 
+        from mapu.config import EmbeddingSettings
+
         await _require_corpus(db_session, corpus_id)
         registry = ParserRegistry.create_default()
         chunker = SpanAwareChunker()
@@ -170,6 +172,7 @@ class DocumentController(Controller):
             db_session, corpus_id, registry, chunker,
             embedding_provider=get_default_embedding_provider(),
             extractors=get_default_extractors(),
+            embedding_batch_size=EmbeddingSettings().batch_size,
         )
         metadata: dict[str, str] = {}
         if data.document_type:
@@ -519,9 +522,9 @@ class ContributionController(Controller):
         elif data.decision == "quarantined":
             await repo.quarantine(data.attestation_id)
 
-        from mapu.truth.service import TruthRecomputationService
+        from mapu.truth.service import TruthComputeService
 
-        truth_svc = TruthRecomputationService(db_session, corpus_id)
+        truth_svc = TruthComputeService(db_session, corpus_id)
         await truth_svc.recompute_for_proposition(proposition_id)
 
         activity_repo = ActivityRepo(db_session, corpus_id)

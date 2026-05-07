@@ -128,12 +128,15 @@ async def ingest_document(
         from mapu.extraction import get_default_extractors
         from mapu.providers.embeddings import get_default_embedding_provider
 
+        from mapu.config import EmbeddingSettings
+
         registry = ParserRegistry.create_default()
         chunker = SpanAwareChunker()
         svc = IngestionService(
             session, cid, registry, chunker,
             embedding_provider=get_default_embedding_provider(),
             extractors=get_default_extractors(),
+            embedding_batch_size=EmbeddingSettings().batch_size,
         )
         metadata: dict[str, str] = {}
         if document_type:
@@ -517,9 +520,9 @@ async def review_attestation(
         elif decision == "quarantined":
             await repo.quarantine(aid)
 
-        from mapu.truth.service import TruthRecomputationService
+        from mapu.truth.service import TruthComputeService
 
-        truth_svc = TruthRecomputationService(session, cid)
+        truth_svc = TruthComputeService(session, cid)
         await truth_svc.recompute_for_proposition(proposition_id)
 
         activity_repo = ActivityRepo(session, cid)

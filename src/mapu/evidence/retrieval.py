@@ -48,7 +48,7 @@ class ChunkRetrievalService:
             JOIN chunk c ON c.id = ce.chunk_id AND c.corpus_id = ce.corpus_id
             WHERE ce.corpus_id = :corpus_id
               AND ce.model_name = :model_name
-              AND ce.dimensions = :dims
+              AND ce.dimensions = {dims}
             ORDER BY ce.embedding::vector({dims}) <=> :query_vec::vector({dims})
             LIMIT :top_k
         """)
@@ -59,7 +59,6 @@ class ChunkRetrievalService:
                 "query_vec": str(query_vector),
                 "corpus_id": self._corpus_id,
                 "model_name": self._model_ref.tag,
-                "dims": dims,
                 "top_k": cfg.top_k,
             },
         )

@@ -585,6 +585,7 @@ class ContributionController(Controller):
         return ReviewAttestationResponse(
             attestation_id=data.attestation_id,
             new_status=data.decision,
+            changeset_id=changeset.id,
         )
 
 

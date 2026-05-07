@@ -158,6 +158,7 @@ class ReviewAttestationRequest(BaseModel):
 class ReviewAttestationResponse(BaseModel):
     attestation_id: uuid.UUID
     new_status: str
+    changeset_id: uuid.UUID | None = None
 
 
 class HealthResponse(BaseModel):

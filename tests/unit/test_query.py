@@ -39,6 +39,7 @@ def _make_hit(
     confidence: float = 0.9,
     frame_type: str = "definition",
     predicate: str = "defines",
+    truth_status: str | None = None,
 ) -> PropositionHit:
     return PropositionHit(
         proposition_id=uuid.uuid4(),
@@ -49,7 +50,7 @@ def _make_hit(
         subject_kind=kind,
         object_name=None,
         object_kind=None,
-        truth_status=None,
+        truth_status=truth_status,
         extraction_confidence=confidence,
         authority_score=None,
         source_span_text=None,
@@ -474,3 +475,61 @@ class TestEmbeddingProviderRegistry:
 
         assert "local" in EMB_FACTORIES
         assert "sentence-transformers" in EMB_FACTORIES
+
+
+class TestEpistemicStatus:
+    def test_no_hits_yields_unknown(self) -> None:
+        from mapu.query.service import _assess_epistemic_status
+        from mapu.query.types import EpistemicStatus, QueryPlan, Tier
+
+        plan = QueryPlan(
+            intent=QueryIntent.IDENTITY,
+            selected_tier=Tier.DIRECT,
+            entities_extracted=(),
+            predicates_extracted=(),
+        )
+        result = _assess_epistemic_status([], [], plan)
+        assert result == EpistemicStatus.UNKNOWN
+
+    def test_high_confidence_hits_yield_sufficient(self) -> None:
+        from mapu.query.service import _assess_epistemic_status
+        from mapu.query.types import EpistemicStatus, QueryPlan, Tier
+
+        plan = QueryPlan(
+            intent=QueryIntent.LIST,
+            selected_tier=Tier.STRUCTURED,
+            entities_extracted=("Acme",),
+            predicates_extracted=(),
+        )
+        hits = [_make_hit(confidence=0.9), _make_hit(confidence=0.85)]
+        result = _assess_epistemic_status(hits, [], plan)
+        assert result == EpistemicStatus.SUFFICIENT
+
+    def test_low_confidence_yields_insufficient(self) -> None:
+        from mapu.query.service import _assess_epistemic_status
+        from mapu.query.types import EpistemicStatus, QueryPlan, Tier
+
+        plan = QueryPlan(
+            intent=QueryIntent.IDENTITY,
+            selected_tier=Tier.DIRECT,
+            entities_extracted=(),
+            predicates_extracted=(),
+        )
+        hits = [_make_hit(confidence=0.3)]
+        result = _assess_epistemic_status(hits, [], plan)
+        assert result == EpistemicStatus.INSUFFICIENT
+
+    def test_conflicting_truth_yields_conflicting(self) -> None:
+        from mapu.query.service import _assess_epistemic_status
+        from mapu.query.types import EpistemicStatus, QueryPlan, Tier
+
+        plan = QueryPlan(
+            intent=QueryIntent.LIST,
+            selected_tier=Tier.STRUCTURED,
+            entities_extracted=(),
+            predicates_extracted=(),
+        )
+        h1 = _make_hit(confidence=0.9, truth_status="accepted")
+        h2 = _make_hit(confidence=0.9, truth_status="contested")
+        result = _assess_epistemic_status([h1, h2], [], plan)
+        assert result == EpistemicStatus.CONFLICTING

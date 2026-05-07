@@ -202,15 +202,15 @@ async def seed_golden_example(
             session.add(att_sit)
     await session.flush()
 
-    for sf in example.supersessions:
-        old_prop = seeded.propositions[sf.old_proposition_idx]
-        new_prop = seeded.propositions[sf.new_proposition_idx]
+    for sup in example.supersessions:
+        old_prop = seeded.propositions[sup.old_proposition_idx]
+        new_prop = seeded.propositions[sup.new_proposition_idx]
         edge = SupersessionEdge(
             corpus_id=corpus.id,
             old_proposition_id=old_prop.id,
             new_proposition_id=new_prop.id,
-            supersession_type=sf.supersession_type,
-            effective_at=datetime.fromisoformat(sf.effective_at.replace("Z", "+00:00")),
+            supersession_type=sup.supersession_type,
+            effective_at=datetime.fromisoformat(sup.effective_at.replace("Z", "+00:00")),
             created_at=NOW,
         )
         session.add(edge)

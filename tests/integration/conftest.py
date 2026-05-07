@@ -3,24 +3,31 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from mapu.models.corpus import Corpus
 
 
 @pytest.fixture(scope="session")
-def postgres_container():
-    from testcontainers.postgres import PostgresContainer
+def postgres_container() -> Generator[Any, None, None]:
+    from testcontainers.postgres import PostgresContainer  # type: ignore[import-untyped]
 
     with PostgresContainer("pgvector/pgvector:pg17", driver=None) as pg:
         yield pg
 
 
 @pytest.fixture(scope="session")
-def database_url(postgres_container) -> str:
+def database_url(postgres_container: Any) -> str:
     host = postgres_container.get_container_host_ip()
     port = postgres_container.get_exposed_port(5432)
     user = postgres_container.username
@@ -30,7 +37,7 @@ def database_url(postgres_container) -> str:
 
 
 @pytest.fixture(scope="session")
-def _migrated_database(database_url):
+def _migrated_database(database_url: str) -> Generator[None, None, None]:
     """Run Alembic migrations against the test database."""
     from alembic import command
     from alembic.config import Config
@@ -44,7 +51,7 @@ def _migrated_database(database_url):
 
 
 @pytest.fixture(scope="session")
-def async_engine(database_url, _migrated_database):
+def async_engine(database_url: str, _migrated_database: None) -> Generator[AsyncEngine, None, None]:
     engine = create_async_engine(database_url, echo=False)
     yield engine
     import asyncio
@@ -52,12 +59,12 @@ def async_engine(database_url, _migrated_database):
 
 
 @pytest.fixture(scope="session")
-def session_factory(async_engine) -> async_sessionmaker[AsyncSession]:
+def session_factory(async_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(async_engine, expire_on_commit=False)
 
 
 @pytest.fixture
-async def session(session_factory) -> AsyncSession:
+async def session(session_factory: async_sessionmaker[AsyncSession]) -> AsyncGenerator[AsyncSession, None]:
     async with session_factory() as session:
         await session.begin()
         yield session

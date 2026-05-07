@@ -11,20 +11,6 @@ from mapu.evidence.pdf import PdfParser
 from mapu.evidence.types import DocumentBlob
 
 
-def _make_pdf(pages: list[str]) -> bytes:
-    """Create a minimal PDF with given page texts."""
-    writer = PdfWriter()
-    for text in pages:
-        writer.add_blank_page(width=612, height=792)
-        page = writer.pages[-1]
-        page.merge_page(
-            PdfWriter()._create_text_page(text)  # noqa: SLF001
-        )
-    buf = io.BytesIO()
-    writer.write(buf)
-    return buf.getvalue()
-
-
 def _make_simple_pdf(text: str) -> bytes:
     """Create a trivial one-page PDF with pypdf."""
     writer = PdfWriter()

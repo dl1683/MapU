@@ -134,7 +134,7 @@ class TestIngestIndexValidation:
                 return parsed
 
         registry = ParserRegistry()
-        registry.register(BadParser())  # type: ignore[arg-type]
+        registry.register(BadParser())
         return registry
 
     async def test_negative_parent_index_rejected(

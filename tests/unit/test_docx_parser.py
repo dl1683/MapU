@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 
 import pytest
-from docx import Document  # type: ignore[import-untyped]
+from docx import Document
 
 from mapu.evidence.docx import DocxParser
 from mapu.evidence.types import DocumentBlob

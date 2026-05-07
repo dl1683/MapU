@@ -27,12 +27,12 @@ class PropositionFixture:
     subject_handle_idx: int = 0
     predicate: str = ""
     object_handle_idx: int | None = None
-    value: dict | None = None
+    value: dict[str, object] | None = None
     polarity: bool = True
     modality: str | None = None
     valid_range: tuple[str | None, str | None] | None = None
     normalized_text: str = ""
-    qualifiers: dict = field(default_factory=dict)
+    qualifiers: dict[str, object] = field(default_factory=dict)
     semantic_key: str = ""
 
 

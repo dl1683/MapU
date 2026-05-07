@@ -6,7 +6,7 @@ import contextlib
 import re
 from datetime import datetime
 
-import dateutil.parser as dateutil_parser
+import dateutil.parser as dateutil_parser  # type: ignore[import-untyped]
 
 from mapu.extraction.types import (
     EntityMention,
@@ -241,7 +241,6 @@ def _nearest_preceding_ref(
     text: str,
 ) -> re.Match[str] | None:
     sentence_start = _find_sentence_start(text, position)
-    best: re.Match[str] | None = None
     for ref in reversed(refs):
         if ref.start() >= position:
             continue
@@ -250,9 +249,8 @@ def _nearest_preceding_ref(
         prefix = text[max(sentence_start, ref.start() - 30):ref.start()]
         if _SUBORDINATE_PREFIX.search(prefix):
             continue
-        best = ref
-        break
-    return best
+        return ref
+    return None
 
 
 def _is_decimal_period(text: str, i: int) -> bool:

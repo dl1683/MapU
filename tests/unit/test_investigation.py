@@ -401,11 +401,13 @@ class TestParseFindings:
                 proposition_id=uuid.uuid4(),
                 normalized_text="A",
                 source_span=None, authority_score=0.9,
+                document_id=uuid.uuid4(),
             ),
             InvestigationEvidence(
                 proposition_id=uuid.uuid4(),
                 normalized_text="B",
                 source_span=None, authority_score=0.8,
+                document_id=uuid.uuid4(),
             ),
         )
         raw = {

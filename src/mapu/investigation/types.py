@@ -58,6 +58,7 @@ class InvestigationEvidence:
     source_span: str | None
     authority_score: float | None
     document_id: uuid.UUID | None = None
+    is_proposition: bool = True
 
 
 @dataclass(frozen=True)

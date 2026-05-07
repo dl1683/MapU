@@ -183,6 +183,7 @@ def _chunk_results_to_evidence(
             source_span=r.text[:200] if r.text else None,
             authority_score=r.score,
             document_id=r.expression_id,
+            is_proposition=False,
         )
         for r in results
     )

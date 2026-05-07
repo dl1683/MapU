@@ -273,6 +273,8 @@ class InvestigationService:
         findings: tuple[DerivedPropositionDraft, ...],
         corpus_id: uuid.UUID,
     ) -> list[uuid.UUID]:
+        from sqlalchemy.exc import IntegrityError
+
         if not findings:
             return []
 
@@ -322,7 +324,11 @@ class InvestigationService:
                 system_created=now,
             )
             self._session.add(prop)
-            await self._session.flush()
+            try:
+                await self._session.flush()
+            except IntegrityError:
+                await self._session.rollback()
+                continue
 
             self._session.add(PropositionParticipant(
                 id=uuid.uuid4(),
@@ -442,8 +448,18 @@ def _parse_findings(
         if len(valid_indices) < 2:
             continue
 
+        doc_ids = {
+            evidence[i].document_id for i in valid_indices
+            if evidence[i].document_id is not None
+        }
+        if len(doc_ids) < 2:
+            continue
+
+        prop_indices = [
+            i for i in valid_indices if evidence[i].is_proposition
+        ]
         basis = tuple(
-            evidence[i].proposition_id for i in valid_indices
+            evidence[i].proposition_id for i in prop_indices
         )
         confidence = f.get("confidence", 0.5)
         if not isinstance(confidence, (int, float)):

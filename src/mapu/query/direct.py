@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, null, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, load_only
 
@@ -70,11 +70,16 @@ class DirectLookupExecutor:
         situation_id: uuid.UUID | None = None,
     ) -> list[PropositionHit]:
         obj_handle = aliased(Handle, name="object_handle")
+        truth_col = (
+            PropositionState.truth_status
+            if situation_id is not None
+            else null().label("truth_status")
+        )
         stmt = (
             select(
                 Proposition, Handle, Attestation,
                 SourcePolicyEval, TextSpan, obj_handle,
-                PropositionState.truth_status,
+                truth_col,
             )
             .options(
                 load_only(
@@ -115,13 +120,6 @@ class DirectLookupExecutor:
                 (PropositionState.proposition_id == Proposition.id)
                 & (PropositionState.corpus_id == Proposition.corpus_id)
                 & (PropositionState.situation_id == situation_id)
-                & (func.upper(PropositionState.effective_range).is_(None)),
-            )
-        else:
-            stmt = stmt.outerjoin(
-                PropositionState,
-                (PropositionState.proposition_id == Proposition.id)
-                & (PropositionState.corpus_id == Proposition.corpus_id)
                 & (func.upper(PropositionState.effective_range).is_(None)),
             )
 

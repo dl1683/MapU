@@ -43,6 +43,7 @@ async def query(corpus_id: str, question: str, max_results: int = 20) -> dict[st
     from mapu.query.types import QueryRequest
 
     cid = uuid.UUID(corpus_id)
+    max_results = min(max(max_results, 1), 500)
     factory = _get_session_factory()
     async with factory() as session:
         classifier = HeuristicIntentClassifier()
@@ -238,15 +239,16 @@ async def create_corpus(name: str, description: str = "") -> dict[str, Any]:
 
 
 @server.tool()
-async def list_corpora() -> dict[str, Any]:
+async def list_corpora(limit: int = 100) -> dict[str, Any]:
     """List all available knowledge corpora."""
     from sqlalchemy import select
 
     from mapu.models.corpus import Corpus
 
+    limit = min(max(limit, 1), 500)
     factory = _get_session_factory()
     async with factory() as session:
-        stmt = select(Corpus).order_by(Corpus.created_at.desc())
+        stmt = select(Corpus).order_by(Corpus.created_at.desc()).limit(limit)
         result = await session.execute(stmt)
         corpora = result.scalars().all()
         return {

@@ -27,6 +27,15 @@ from mapu.api.dtos import (
 from mapu.models.corpus import Corpus
 
 
+async def _require_corpus(db_session: AsyncSession, corpus_id: uuid.UUID) -> None:
+    from litestar.exceptions import NotFoundException
+
+    stmt = select(Corpus.id).where(Corpus.id == corpus_id).limit(1)
+    result = await db_session.execute(stmt)
+    if result.scalar_one_or_none() is None:
+        raise NotFoundException(detail=f"Corpus {corpus_id} not found")
+
+
 class HealthController(Controller):
     path = "/health"
 
@@ -39,8 +48,11 @@ class CorpusController(Controller):
     path = "/corpora"
 
     @get()
-    async def list_corpora(self, db_session: AsyncSession) -> list[CorpusResponse]:
-        stmt = select(Corpus).order_by(Corpus.created_at.desc())
+    async def list_corpora(
+        self, db_session: AsyncSession, limit: int = 100,
+    ) -> list[CorpusResponse]:
+        limit = min(max(limit, 1), 500)
+        stmt = select(Corpus).order_by(Corpus.created_at.desc()).limit(limit)
         result = await db_session.execute(stmt)
         return [
             CorpusResponse(id=c.id, name=c.name, description=c.description)
@@ -84,6 +96,7 @@ class QueryController(Controller):
         from mapu.query.service import QueryService
         from mapu.query.types import QueryRequest
 
+        await _require_corpus(db_session, corpus_id)
         classifier = HeuristicIntentClassifier()
         svc = QueryService(db_session, classifier)
         request = QueryRequest(
@@ -128,6 +141,7 @@ class DocumentController(Controller):
         from mapu.evidence.parsers import ParserRegistry
         from mapu.evidence.types import DocumentBlob
 
+        await _require_corpus(db_session, corpus_id)
         registry = ParserRegistry.create_default()
         chunker = SpanAwareChunker()
         svc = IngestionService(db_session, corpus_id, registry, chunker)
@@ -159,6 +173,8 @@ class EntityController(Controller):
         from mapu.models.entity import Handle
         from mapu.query.direct import _escape_like
 
+        await _require_corpus(db_session, corpus_id)
+        limit = min(max(limit, 1), 100)
         stmt = select(Handle).where(
             Handle.corpus_id == corpus_id,
             Handle.status == "active",
@@ -191,6 +207,7 @@ class RepairController(Controller):
     ) -> RepairPreviewResponse:
         from mapu.repair.blast_radius import compute_blast_radius
 
+        await _require_corpus(db_session, corpus_id)
         report = await compute_blast_radius(db_session, corpus_id, proposition_id)
         return RepairPreviewResponse(
             root_proposition_id=report.root_proposition_id,
@@ -210,6 +227,7 @@ class RepairController(Controller):
     ) -> RepairProposeResponse:
         from mapu.repair.service import RepairService
 
+        await _require_corpus(db_session, corpus_id)
         svc = RepairService(db_session, corpus_id)
         preview = await svc.preview_retraction(
             proposition_id=data.proposition_id,
@@ -234,6 +252,7 @@ class RepairController(Controller):
         from mapu.repos.review import ChangesetRepo
         from mapu.types import ChangesetStatus
 
+        await _require_corpus(db_session, corpus_id)
         repo = ChangesetRepo(db_session, corpus_id)
         await repo.transition(changeset_id, ChangesetStatus.APPROVED.value)
         return RepairApproveResponse(
@@ -250,6 +269,7 @@ class RepairController(Controller):
     ) -> RepairApplyResponse:
         from mapu.repair.service import RepairService
 
+        await _require_corpus(db_session, corpus_id)
         svc = RepairService(db_session, corpus_id)
         result = await svc.apply(changeset_id)
         return RepairApplyResponse(

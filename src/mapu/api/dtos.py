@@ -44,7 +44,7 @@ class QueryResponse(BaseModel):
 
 
 class IngestRequestDTO(BaseModel):
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=10_000_000)
     mime_type: str = "text/plain"
     source_uri: str = ""
 

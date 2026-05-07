@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -51,10 +51,12 @@ class ChunkHitResponse(BaseModel):
 class QueryResponse(BaseModel):
     intent: str
     tier_used: str
+    epistemic_status: str = "unknown"
     synthesis: str | None = None
     hits: list[HitResponse]
     gaps: list[str]
     chunk_hits: list[ChunkHitResponse] = []
+    metadata: dict[str, Any] = {}
 
 
 class IngestRequestDTO(BaseModel):
@@ -164,3 +166,84 @@ class ReviewAttestationResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str
+
+
+class InvestigationBudgetDTO(BaseModel):
+    max_llm_calls: int = Field(default=10, ge=1, le=50)
+    max_actions: int = Field(default=25, ge=1, le=100)
+    max_documents_read: int = Field(default=50, ge=1, le=200)
+    target_coverage: float = Field(default=0.9, ge=0.1, le=1.0)
+
+
+class InvestigationRequestDTO(BaseModel):
+    question: str = Field(min_length=1)
+    initial_entities: list[str] = []
+    initial_predicates: list[str] = []
+    situation_id: uuid.UUID | None = None
+    budget: InvestigationBudgetDTO = InvestigationBudgetDTO()
+
+
+class InvestigationEvidenceResponse(BaseModel):
+    proposition_id: uuid.UUID
+    normalized_text: str
+    source_span: str | None = None
+    authority_score: float | None = None
+    document_id: uuid.UUID | None = None
+    is_proposition: bool = True
+
+
+class DerivedFindingResponse(BaseModel):
+    normalized_text: str
+    predicate: str
+    subject_name: str
+    object_name: str | None = None
+    confidence: float
+
+
+class InvestigationResponse(BaseModel):
+    answer: str
+    evidence: list[InvestigationEvidenceResponse]
+    gaps: list[str]
+    findings: list[DerivedFindingResponse]
+    persisted_proposition_ids: list[uuid.UUID]
+    termination_reason: str
+    metadata: dict[str, Any] = {}
+
+
+class ActivityResponse(BaseModel):
+    id: uuid.UUID
+    event_type: str
+    actor: str
+    entity_type: str | None = None
+    entity_id: uuid.UUID | None = None
+    details: dict[str, Any] = {}
+    created_at: datetime
+
+
+class GapResponse(BaseModel):
+    id: uuid.UUID
+    kind: str
+    description: str
+    severity: str
+    status: str
+    detected_by: str
+    created_at: datetime
+    resolved_at: datetime | None = None
+
+
+class SituationCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=500)
+    kind: str = "user"
+    parent_id: uuid.UUID | None = None
+    document_id: uuid.UUID | None = None
+    assumptions: dict[str, Any] = {}
+
+
+class SituationResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    kind: str
+    parent_id: uuid.UUID | None = None
+    document_id: uuid.UUID | None = None
+    assumptions: dict[str, Any] = {}
+    created_at: datetime

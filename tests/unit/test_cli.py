@@ -2,12 +2,28 @@
 
 from __future__ import annotations
 
+import argparse
 import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from mapu.cli import main
+
+
+def _make_query_args(
+    corpus_id: str = "00000000-0000-0000-0000-000000000001",
+    question: str = "What is X?",
+    json_output: bool = False,
+) -> argparse.Namespace:
+    return argparse.Namespace(
+        corpus_id=corpus_id,
+        question=question,
+        max_results=20,
+        situation_id=None,
+        as_of=None,
+        json_output=json_output,
+    )
 
 
 class TestCLIParsing:
@@ -59,6 +75,58 @@ class TestCLIParsing:
             main()
             mock_asyncio.run.assert_called_once()
 
+    def test_investigate_dispatches(self) -> None:
+        cid = "00000000-0000-0000-0000-000000000001"
+        with (
+            patch.object(sys, "argv", ["mapu", "investigate", cid, "Why?"]),
+            patch("mapu.cli.asyncio") as mock_asyncio,
+        ):
+            main()
+            mock_asyncio.run.assert_called_once()
+
+    def test_corpus_create_dispatches(self) -> None:
+        with (
+            patch.object(sys, "argv", ["mapu", "corpus", "create", "TestCorpus"]),
+            patch("mapu.cli.asyncio") as mock_asyncio,
+        ):
+            main()
+            mock_asyncio.run.assert_called_once()
+
+    def test_corpus_list_dispatches(self) -> None:
+        with (
+            patch.object(sys, "argv", ["mapu", "corpus", "list"]),
+            patch("mapu.cli.asyncio") as mock_asyncio,
+        ):
+            main()
+            mock_asyncio.run.assert_called_once()
+
+    def test_entities_dispatches(self) -> None:
+        cid = "00000000-0000-0000-0000-000000000001"
+        with (
+            patch.object(sys, "argv", ["mapu", "entities", cid, "Acme"]),
+            patch("mapu.cli.asyncio") as mock_asyncio,
+        ):
+            main()
+            mock_asyncio.run.assert_called_once()
+
+    def test_gaps_dispatches(self) -> None:
+        cid = "00000000-0000-0000-0000-000000000001"
+        with (
+            patch.object(sys, "argv", ["mapu", "gaps", cid]),
+            patch("mapu.cli.asyncio") as mock_asyncio,
+        ):
+            main()
+            mock_asyncio.run.assert_called_once()
+
+    def test_activity_dispatches(self) -> None:
+        cid = "00000000-0000-0000-0000-000000000001"
+        with (
+            patch.object(sys, "argv", ["mapu", "activity", cid]),
+            patch("mapu.cli.asyncio") as mock_asyncio,
+        ):
+            main()
+            mock_asyncio.run.assert_called_once()
+
 
 class TestRunServe:
     def test_run_serve_calls_uvicorn(self) -> None:
@@ -99,13 +167,15 @@ class TestRunQuery:
         mock_factory = lambda: mock_session  # noqa: E731
         mock_engine = AsyncMock()
 
+        args = _make_query_args()
         with (
-            patch("mapu.config.Settings"),
-            patch("mapu.db.engine.build_engine", return_value=(mock_engine, mock_factory)),
+            patch("mapu.cli._build_engine", return_value=(mock_engine, mock_factory)),
             patch("mapu.query.service.QueryService", return_value=mock_svc),
             patch("mapu.query.intent.HeuristicIntentClassifier"),
+            patch("mapu.providers.embeddings.get_default_embedding_provider"),
+            patch("mapu.providers.llms.get_default_llm_provider"),
         ):
-            await _run_query("00000000-0000-0000-0000-000000000001", "What is X?")
+            await _run_query(args)
 
         captured = capsys.readouterr()
         assert "Answer text" in captured.out
@@ -137,13 +207,15 @@ class TestRunQuery:
         mock_factory = lambda: mock_session  # noqa: E731
         mock_engine = AsyncMock()
 
+        args = _make_query_args()
         with (
-            patch("mapu.config.Settings"),
-            patch("mapu.db.engine.build_engine", return_value=(mock_engine, mock_factory)),
+            patch("mapu.cli._build_engine", return_value=(mock_engine, mock_factory)),
             patch("mapu.query.service.QueryService", return_value=mock_svc),
             patch("mapu.query.intent.HeuristicIntentClassifier"),
+            patch("mapu.providers.embeddings.get_default_embedding_provider"),
+            patch("mapu.providers.llms.get_default_llm_provider"),
         ):
-            await _run_query("00000000-0000-0000-0000-000000000001", "What is X?")
+            await _run_query(args)
 
         captured = capsys.readouterr()
         assert "defines" in captured.out

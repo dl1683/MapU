@@ -38,6 +38,24 @@ class SituationRepo(CorpusScopedRepo[Situation]):
             return result.scalar_one()
         return situation
 
+    async def list(self, *, limit: int = 100) -> list[Situation]:
+        stmt = (
+            select(Situation)
+            .where(Situation.corpus_id == self.corpus_id)
+            .order_by(Situation.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get(self, situation_id: uuid.UUID) -> Situation | None:
+        stmt = select(Situation).where(
+            Situation.corpus_id == self.corpus_id,
+            Situation.id == situation_id,
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
 
 class QueryViewRepo(CorpusScopedRepo[QueryView]):
     model = QueryView

@@ -9,16 +9,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.api.dtos import (
+    ActivityResponse,
     ChunkHitResponse,
     ContributePropositionRequest,
     ContributePropositionResponse,
     CorpusCreate,
     CorpusResponse,
+    DerivedFindingResponse,
+    GapResponse,
     HandleResponse,
     HealthResponse,
     HitResponse,
     IngestRequestDTO,
     IngestResponse,
+    InvestigationEvidenceResponse,
+    InvestigationRequestDTO,
+    InvestigationResponse,
     QueryRequestDTO,
     QueryResponse,
     RepairApplyResponse,
@@ -28,6 +34,8 @@ from mapu.api.dtos import (
     RepairProposeResponse,
     ReviewAttestationRequest,
     ReviewAttestationResponse,
+    SituationCreate,
+    SituationResponse,
 )
 from mapu.models.corpus import Corpus
 
@@ -122,7 +130,9 @@ class QueryController(Controller):
         return QueryResponse(
             intent=result.intent.value,
             tier_used=result.tier_used.name,
+            epistemic_status=result.epistemic_status.value,
             synthesis=result.synthesis,
+            metadata=result.metadata,
             hits=[
                 HitResponse(
                     proposition_id=h.proposition_id,
@@ -589,6 +599,227 @@ class ContributionController(Controller):
         )
 
 
+class InvestigationController(Controller):
+    path = "/corpora/{corpus_id:uuid}/investigations"
+
+    @post()
+    async def investigate(
+        self,
+        corpus_id: uuid.UUID,
+        data: InvestigationRequestDTO,
+        db_session: AsyncSession,
+    ) -> InvestigationResponse:
+        from mapu.investigation.service import InvestigationService
+        from mapu.investigation.types import InvestigationBudget
+        from mapu.providers.embeddings import get_default_embedding_provider
+        from mapu.providers.llms import get_default_llm_provider
+
+        await _require_corpus(db_session, corpus_id)
+        llm = get_default_llm_provider()
+        if llm is None:
+            from litestar.exceptions import ClientException
+
+            raise ClientException(
+                detail="No LLM provider configured. Set MAPU_LLM_PROVIDER.",
+                status_code=422,
+            )
+        budget = InvestigationBudget(
+            max_llm_calls=data.budget.max_llm_calls,
+            max_actions=data.budget.max_actions,
+            max_documents_read=data.budget.max_documents_read,
+            target_coverage=data.budget.target_coverage,
+        )
+        svc = InvestigationService(
+            db_session, llm, budget=budget,
+            embedding_provider=get_default_embedding_provider(),
+        )
+        result = await svc.investigate(
+            question=data.question,
+            corpus_id=corpus_id,
+            initial_entities=tuple(data.initial_entities),
+            initial_predicates=tuple(data.initial_predicates),
+            situation_id=data.situation_id,
+        )
+        return InvestigationResponse(
+            answer=result.answer,
+            evidence=[
+                InvestigationEvidenceResponse(
+                    proposition_id=e.proposition_id,
+                    normalized_text=e.normalized_text,
+                    source_span=e.source_span,
+                    authority_score=e.authority_score,
+                    document_id=e.document_id,
+                    is_proposition=e.is_proposition,
+                )
+                for e in result.evidence
+            ],
+            gaps=list(result.gaps),
+            findings=[
+                DerivedFindingResponse(
+                    normalized_text=f.normalized_text,
+                    predicate=f.predicate,
+                    subject_name=f.subject_name,
+                    object_name=f.object_name,
+                    confidence=f.confidence,
+                )
+                for f in result.findings
+            ],
+            persisted_proposition_ids=list(result.persisted_proposition_ids),
+            termination_reason=result.termination_reason.value,
+            metadata=result.metadata,
+        )
+
+
+class ActivityController(Controller):
+    path = "/corpora/{corpus_id:uuid}/activity"
+
+    @get()
+    async def list_activity(
+        self,
+        corpus_id: uuid.UUID,
+        db_session: AsyncSession,
+        limit: int = 50,
+        event_type: str | None = None,
+        entity_type: str | None = None,
+        entity_id: uuid.UUID | None = None,
+    ) -> list[ActivityResponse]:
+        from mapu.repos.audit import ActivityRepo
+
+        await _require_corpus(db_session, corpus_id)
+        repo = ActivityRepo(db_session, corpus_id)
+        activities = await repo.list(
+            event_type=event_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            limit=min(max(limit, 1), 500),
+        )
+        return [
+            ActivityResponse(
+                id=a.id,
+                event_type=a.event_type,
+                actor=a.actor,
+                entity_type=a.entity_type,
+                entity_id=a.entity_id,
+                details=a.details,
+                created_at=a.created_at,
+            )
+            for a in activities
+        ]
+
+
+class GapController(Controller):
+    path = "/corpora/{corpus_id:uuid}/gaps"
+
+    @get()
+    async def list_gaps(
+        self,
+        corpus_id: uuid.UUID,
+        db_session: AsyncSession,
+        status: str = "open",
+        kind: str | None = None,
+        severity: str | None = None,
+        limit: int = 100,
+    ) -> list[GapResponse]:
+        from mapu.repos.gap import GapRepo
+
+        await _require_corpus(db_session, corpus_id)
+        repo = GapRepo(db_session, corpus_id)
+        gaps = await repo.list(
+            status=status if status else None,
+            kind=kind,
+            severity=severity,
+            limit=min(max(limit, 1), 500),
+        )
+        return [
+            GapResponse(
+                id=g.id,
+                kind=g.kind,
+                description=g.description,
+                severity=g.severity,
+                status=g.status,
+                detected_by=g.detected_by,
+                created_at=g.created_at,
+                resolved_at=g.resolved_at,
+            )
+            for g in gaps
+        ]
+
+
+class SituationController(Controller):
+    path = "/corpora/{corpus_id:uuid}/situations"
+
+    @get()
+    async def list_situations(
+        self,
+        corpus_id: uuid.UUID,
+        db_session: AsyncSession,
+        limit: int = 100,
+    ) -> list[SituationResponse]:
+        from mapu.repos.context import SituationRepo
+
+        await _require_corpus(db_session, corpus_id)
+        repo = SituationRepo(db_session, corpus_id)
+        situations = await repo.list(limit=min(max(limit, 1), 500))
+        return [
+            SituationResponse(
+                id=s.id, name=s.name, kind=s.kind,
+                parent_id=s.parent_id, document_id=s.document_id,
+                assumptions=s.assumptions, created_at=s.created_at,
+            )
+            for s in situations
+        ]
+
+    @post()
+    async def create_situation(
+        self,
+        corpus_id: uuid.UUID,
+        data: SituationCreate,
+        db_session: AsyncSession,
+    ) -> SituationResponse:
+        from mapu.models.context import Situation
+
+        await _require_corpus(db_session, corpus_id)
+        situation = Situation(
+            corpus_id=corpus_id,
+            name=data.name,
+            kind=data.kind,
+            parent_id=data.parent_id,
+            document_id=data.document_id,
+            assumptions=data.assumptions,
+        )
+        db_session.add(situation)
+        await db_session.flush()
+        return SituationResponse(
+            id=situation.id, name=situation.name, kind=situation.kind,
+            parent_id=situation.parent_id, document_id=situation.document_id,
+            assumptions=situation.assumptions, created_at=situation.created_at,
+        )
+
+    @get("/{situation_id:uuid}")
+    async def get_situation(
+        self,
+        corpus_id: uuid.UUID,
+        situation_id: uuid.UUID,
+        db_session: AsyncSession,
+    ) -> SituationResponse:
+        from litestar.exceptions import NotFoundException
+
+        from mapu.repos.context import SituationRepo
+
+        await _require_corpus(db_session, corpus_id)
+        repo = SituationRepo(db_session, corpus_id)
+        situation = await repo.get(situation_id)
+        if situation is None:
+            raise NotFoundException(
+                detail=f"Situation {situation_id} not found in corpus {corpus_id}",
+            )
+        return SituationResponse(
+            id=situation.id, name=situation.name, kind=situation.kind,
+            parent_id=situation.parent_id, document_id=situation.document_id,
+            assumptions=situation.assumptions, created_at=situation.created_at,
+        )
+
+
 def all_controllers() -> list[type[Controller]]:
     return [
         HealthController,
@@ -598,4 +829,8 @@ def all_controllers() -> list[type[Controller]]:
         EntityController,
         RepairController,
         ContributionController,
+        InvestigationController,
+        ActivityController,
+        GapController,
+        SituationController,
     ]

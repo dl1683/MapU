@@ -80,6 +80,7 @@ async def query(
         return {
             "intent": result.intent.value,
             "tier_used": result.tier_used.name,
+            "epistemic_status": result.epistemic_status.value,
             "synthesis": result.synthesis,
             "hits": [
                 {
@@ -92,7 +93,7 @@ async def query(
                     "authority_score": h.authority_score,
                     "truth_status": h.truth_status,
                     "source_span_text": h.source_span_text,
-                    "expression_id": str(h.document_id) if h.document_id else None,
+                    "document_id": str(h.document_id) if h.document_id else None,
                     "valid_from": h.valid_from.isoformat() if h.valid_from else None,
                     "valid_to": h.valid_to.isoformat() if h.valid_to else None,
                 }
@@ -558,6 +559,179 @@ async def review_attestation(
         return {
             "attestation_id": str(aid),
             "new_status": decision,
+        }
+
+
+@server.tool()
+async def investigate(
+    corpus_id: str,
+    question: str,
+    initial_entities: list[str] | None = None,
+    initial_predicates: list[str] | None = None,
+    situation_id: str | None = None,
+    max_llm_calls: int = 10,
+    max_actions: int = 25,
+    max_documents_read: int = 50,
+    target_coverage: float = 0.9,
+) -> dict[str, Any]:
+    """Run a multi-step investigation that reasons across documents.
+
+    The investigation engine plans retrieval actions, executes them,
+    synthesizes findings, and persists derived propositions.
+    Requires an LLM provider to be configured.
+    """
+    from mapu.investigation.service import InvestigationService
+    from mapu.investigation.types import InvestigationBudget
+
+    cid = uuid.UUID(corpus_id)
+    sid = uuid.UUID(situation_id) if situation_id else None
+    max_llm_calls = min(max(max_llm_calls, 1), 50)
+    max_actions = min(max(max_actions, 1), 100)
+    max_documents_read = min(max(max_documents_read, 1), 200)
+    target_coverage = min(max(target_coverage, 0.1), 1.0)
+
+    factory = _get_session_factory()
+    async with factory() as session:
+        from mapu.providers.embeddings import get_default_embedding_provider
+        from mapu.providers.llms import get_default_llm_provider
+
+        llm = get_default_llm_provider()
+        if llm is None:
+            return {"error": "No LLM provider configured. Set MAPU_LLM_PROVIDER."}
+
+        budget = InvestigationBudget(
+            max_llm_calls=max_llm_calls,
+            max_actions=max_actions,
+            max_documents_read=max_documents_read,
+            target_coverage=target_coverage,
+        )
+        svc = InvestigationService(
+            session, llm, budget=budget,
+            embedding_provider=get_default_embedding_provider(),
+        )
+        result = await svc.investigate(
+            question=question,
+            corpus_id=cid,
+            initial_entities=tuple(initial_entities or []),
+            initial_predicates=tuple(initial_predicates or []),
+            situation_id=sid,
+        )
+        await session.commit()
+        return {
+            "answer": result.answer,
+            "evidence": [
+                {
+                    "proposition_id": str(e.proposition_id),
+                    "normalized_text": e.normalized_text,
+                    "source_span": e.source_span,
+                    "authority_score": e.authority_score,
+                    "document_id": str(e.document_id) if e.document_id else None,
+                    "is_proposition": e.is_proposition,
+                }
+                for e in result.evidence
+            ],
+            "gaps": list(result.gaps),
+            "findings": [
+                {
+                    "normalized_text": f.normalized_text,
+                    "predicate": f.predicate,
+                    "subject_name": f.subject_name,
+                    "object_name": f.object_name,
+                    "confidence": f.confidence,
+                }
+                for f in result.findings
+            ],
+            "persisted_proposition_ids": [
+                str(pid) for pid in result.persisted_proposition_ids
+            ],
+            "termination_reason": result.termination_reason.value,
+            "metadata": result.metadata,
+        }
+
+
+@server.tool()
+async def list_gaps(
+    corpus_id: str,
+    status: str = "open",
+    kind: str | None = None,
+    severity: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """List knowledge gaps in a corpus.
+
+    Gaps represent missing documents, missing evidence, or unresolved
+    contradictions. Filter by status (open/resolved), kind, or severity.
+    """
+    from mapu.repos.gap import GapRepo
+
+    cid = uuid.UUID(corpus_id)
+    limit = min(max(limit, 1), 500)
+    factory = _get_session_factory()
+    async with factory() as session:
+        repo = GapRepo(session, cid)
+        gaps = await repo.list(
+            status=status if status else None,
+            kind=kind,
+            severity=severity,
+            limit=limit,
+        )
+        return {
+            "gaps": [
+                {
+                    "id": str(g.id),
+                    "kind": g.kind,
+                    "description": g.description,
+                    "severity": g.severity,
+                    "status": g.status,
+                    "detected_by": g.detected_by,
+                    "created_at": g.created_at.isoformat(),
+                    "resolved_at": g.resolved_at.isoformat() if g.resolved_at else None,
+                }
+                for g in gaps
+            ],
+        }
+
+
+@server.tool()
+async def list_activity(
+    corpus_id: str,
+    limit: int = 50,
+    event_type: str | None = None,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+) -> dict[str, Any]:
+    """List activity log entries for a corpus.
+
+    The activity log is an immutable audit trail of all operations
+    performed on the corpus: ingestion, review, repair, investigation.
+    """
+    from mapu.repos.audit import ActivityRepo
+
+    cid = uuid.UUID(corpus_id)
+    eid = uuid.UUID(entity_id) if entity_id else None
+    limit = min(max(limit, 1), 500)
+    factory = _get_session_factory()
+    async with factory() as session:
+        repo = ActivityRepo(session, cid)
+        activities = await repo.list(
+            event_type=event_type,
+            entity_type=entity_type,
+            entity_id=eid,
+            limit=limit,
+        )
+        return {
+            "activities": [
+                {
+                    "id": str(a.id),
+                    "event_type": a.event_type,
+                    "actor": a.actor,
+                    "entity_type": a.entity_type,
+                    "entity_id": str(a.entity_id) if a.entity_id else None,
+                    "details": a.details,
+                    "created_at": a.created_at.isoformat(),
+                }
+                for a in activities
+            ],
         }
 
 

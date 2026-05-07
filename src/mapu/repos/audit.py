@@ -47,3 +47,22 @@ class ActivityRepo(CorpusScopedRepo[Activity]):
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list(
+        self,
+        *,
+        event_type: str | None = None,
+        entity_type: str | None = None,
+        entity_id: uuid.UUID | None = None,
+        limit: int = 50,
+    ) -> list[Activity]:
+        stmt = select(Activity).where(Activity.corpus_id == self.corpus_id)
+        if event_type is not None:
+            stmt = stmt.where(Activity.event_type == event_type)
+        if entity_type is not None:
+            stmt = stmt.where(Activity.entity_type == entity_type)
+        if entity_id is not None:
+            stmt = stmt.where(Activity.entity_id == entity_id)
+        stmt = stmt.order_by(Activity.created_at.desc()).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

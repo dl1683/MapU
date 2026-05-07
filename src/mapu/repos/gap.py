@@ -63,3 +63,22 @@ class GapRepo(CorpusScopedRepo[Gap]):
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list(
+        self,
+        *,
+        status: str | None = "open",
+        kind: str | None = None,
+        severity: str | None = None,
+        limit: int = 100,
+    ) -> list[Gap]:
+        stmt = select(Gap).where(Gap.corpus_id == self.corpus_id)
+        if status is not None:
+            stmt = stmt.where(Gap.status == status)
+        if kind is not None:
+            stmt = stmt.where(Gap.kind == kind)
+        if severity is not None:
+            stmt = stmt.where(Gap.severity == severity)
+        stmt = stmt.order_by(Gap.created_at.desc()).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

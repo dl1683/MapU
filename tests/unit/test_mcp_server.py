@@ -404,3 +404,211 @@ class TestContributePropositionValidation:
         )
         assert "error" in result
         assert "stance" in result["error"]
+
+
+class TestQueryEpistemicStatus:
+    @pytest.mark.asyncio
+    async def test_query_includes_epistemic_status(self) -> None:
+        from mapu.query.types import (
+            EpistemicStatus,
+            QueryIntent,
+            QueryRequest,
+            QueryResult,
+            Tier,
+        )
+
+        cid = uuid.uuid4()
+        mock_result = QueryResult(
+            request=QueryRequest(corpus_id=cid, question="test"),
+            intent=QueryIntent.IDENTITY,
+            tier_used=Tier.DIRECT,
+            synthesis=None,
+            hits=(),
+            gaps=(),
+            metadata={"test": True},
+            epistemic_status=EpistemicStatus.INSUFFICIENT,
+        )
+
+        mock_svc = AsyncMock()
+        mock_svc.query = AsyncMock(return_value=mock_result)
+        session = _mock_session()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.query.intent.HeuristicIntentClassifier"),
+            patch("mapu.query.service.QueryService", return_value=mock_svc),
+        ):
+            from mapu.mcp.server import query
+
+            result = await query(corpus_id=str(cid), question="test")
+
+        assert result["epistemic_status"] == "insufficient"
+        assert result["metadata"] == {"test": True}
+
+
+class TestInvestigateTool:
+    @pytest.mark.asyncio
+    async def test_investigate_returns_answer_and_evidence(self) -> None:
+        from mapu.investigation.types import (
+            InvestigationEvidence,
+            InvestigationResult,
+            TerminationReason,
+        )
+
+        ev = InvestigationEvidence(
+            proposition_id=uuid.uuid4(),
+            normalized_text="X causes Y",
+            source_span="from doc",
+            authority_score=0.8,
+            document_id=uuid.uuid4(),
+        )
+        mock_result = InvestigationResult(
+            answer="X causes Y based on evidence",
+            evidence=(ev,),
+            gaps=("missing context",),
+            findings=(),
+            metadata={"actions_executed": 3},
+            termination_reason=TerminationReason.COVERAGE_MET,
+        )
+
+        mock_svc = AsyncMock()
+        mock_svc.investigate = AsyncMock(return_value=mock_result)
+        session = _mock_session()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.investigation.service.InvestigationService", return_value=mock_svc),
+            patch("mapu.providers.llms.get_default_llm_provider", return_value=MagicMock()),
+            patch("mapu.providers.embeddings.get_default_embedding_provider"),
+        ):
+            from mapu.mcp.server import investigate
+
+            result = await investigate(
+                corpus_id=str(uuid.uuid4()),
+                question="What causes Y?",
+            )
+
+        assert result["answer"] == "X causes Y based on evidence"
+        assert len(result["evidence"]) == 1
+        assert result["gaps"] == ["missing context"]
+        assert result["termination_reason"] == "coverage_met"
+
+    @pytest.mark.asyncio
+    async def test_investigate_without_llm_returns_error(self) -> None:
+        session = _mock_session()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.providers.llms.get_default_llm_provider", return_value=None),
+            patch("mapu.providers.embeddings.get_default_embedding_provider"),
+        ):
+            from mapu.mcp.server import investigate
+
+            result = await investigate(
+                corpus_id=str(uuid.uuid4()),
+                question="What causes Y?",
+            )
+
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_investigate_clamps_budget(self) -> None:
+        from mapu.investigation.types import (
+            InvestigationResult,
+            TerminationReason,
+        )
+
+        mock_result = InvestigationResult(
+            answer="answer",
+            evidence=(),
+            gaps=(),
+            findings=(),
+            metadata={},
+            termination_reason=TerminationReason.PLANNER_STOP,
+        )
+        mock_svc = AsyncMock()
+        mock_svc.investigate = AsyncMock(return_value=mock_result)
+        session = _mock_session()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.investigation.service.InvestigationService", return_value=mock_svc),
+            patch("mapu.investigation.types.InvestigationBudget") as mock_budget_cls,
+            patch("mapu.providers.llms.get_default_llm_provider", return_value=MagicMock()),
+            patch("mapu.providers.embeddings.get_default_embedding_provider"),
+        ):
+            from mapu.mcp.server import investigate
+
+            await investigate(
+                corpus_id=str(uuid.uuid4()),
+                question="test",
+                max_llm_calls=999,
+                max_actions=999,
+            )
+
+        call_kwargs = mock_budget_cls.call_args[1]
+        assert call_kwargs["max_llm_calls"] == 50
+        assert call_kwargs["max_actions"] == 100
+
+
+class TestListGapsTool:
+    @pytest.mark.asyncio
+    async def test_list_gaps_returns_gaps(self) -> None:
+        from datetime import UTC, datetime
+
+        gap = MagicMock()
+        gap.id = uuid.uuid4()
+        gap.kind = "missing_evidence"
+        gap.description = "No data for entity X"
+        gap.severity = "moderate"
+        gap.status = "open"
+        gap.detected_by = "investigation"
+        gap.created_at = datetime(2026, 1, 1, tzinfo=UTC)
+        gap.resolved_at = None
+
+        mock_repo = AsyncMock()
+        mock_repo.list = AsyncMock(return_value=[gap])
+        session = _mock_session()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.repos.gap.GapRepo", return_value=mock_repo),
+        ):
+            from mapu.mcp.server import list_gaps
+
+            result = await list_gaps(corpus_id=str(uuid.uuid4()))
+
+        assert len(result["gaps"]) == 1
+        assert result["gaps"][0]["kind"] == "missing_evidence"
+        assert result["gaps"][0]["status"] == "open"
+
+
+class TestListActivityTool:
+    @pytest.mark.asyncio
+    async def test_list_activity_returns_events(self) -> None:
+        from datetime import UTC, datetime
+
+        activity = MagicMock()
+        activity.id = uuid.uuid4()
+        activity.event_type = "ingestion"
+        activity.actor = "system"
+        activity.entity_type = "document"
+        activity.entity_id = uuid.uuid4()
+        activity.details = {"doc": "test.pdf"}
+        activity.created_at = datetime(2026, 1, 1, tzinfo=UTC)
+
+        mock_repo = AsyncMock()
+        mock_repo.list = AsyncMock(return_value=[activity])
+        session = _mock_session()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.repos.audit.ActivityRepo", return_value=mock_repo),
+        ):
+            from mapu.mcp.server import list_activity
+
+            result = await list_activity(corpus_id=str(uuid.uuid4()))
+
+        assert len(result["activities"]) == 1
+        assert result["activities"][0]["event_type"] == "ingestion"
+        assert result["activities"][0]["actor"] == "system"

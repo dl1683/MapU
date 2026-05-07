@@ -132,6 +132,8 @@ class CandidateGrounder:
             )
             self._session.add(assn)
 
+        await self._session.flush()
+
         return MaterializedExtraction(
             proposition_id=prop.id,
             attestation_id=att.id,

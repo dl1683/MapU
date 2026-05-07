@@ -270,3 +270,47 @@ class TestRepairPreview:
         )
         assert preview.risk_level == RiskLevel.LOW
         assert len(preview.operations) == 1
+
+
+class TestRollbackDispatch:
+    @pytest.mark.asyncio
+    async def test_unsupported_operation_raises(self) -> None:
+        from mapu.repair.rollback import dispatch_rollback
+
+        with pytest.raises(ValueError, match="Rollback not supported"):
+            await dispatch_rollback(
+                AsyncMock(), uuid.uuid4(), "nonexistent_operation", {}, {},
+            )
+
+    @pytest.mark.asyncio
+    async def test_retraction_missing_attestation_ids_raises(self) -> None:
+        from mapu.repair.rollback import dispatch_rollback
+
+        with pytest.raises(ValueError, match="missing invalidated_attestation_ids"):
+            await dispatch_rollback(
+                AsyncMock(), uuid.uuid4(), "retract_proposition",
+                {"proposition_id": str(uuid.uuid4())},
+                {"gap_id": str(uuid.uuid4())},
+            )
+
+    @pytest.mark.asyncio
+    async def test_merge_missing_snapshots_raises(self) -> None:
+        from mapu.repair.rollback import dispatch_rollback
+
+        with pytest.raises(ValueError, match="missing proposition_snapshots"):
+            await dispatch_rollback(
+                AsyncMock(), uuid.uuid4(), "merge_handles",
+                {},
+                {"canonical_handle_id": str(uuid.uuid4()), "merged_handle_id": str(uuid.uuid4())},
+            )
+
+    @pytest.mark.asyncio
+    async def test_split_missing_moved_ids_raises(self) -> None:
+        from mapu.repair.rollback import dispatch_rollback
+
+        with pytest.raises(ValueError, match="missing moved_proposition_ids"):
+            await dispatch_rollback(
+                AsyncMock(), uuid.uuid4(), "split_handle",
+                {},
+                {"original_handle_id": str(uuid.uuid4()), "new_handle_id": str(uuid.uuid4())},
+            )

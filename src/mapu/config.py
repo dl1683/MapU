@@ -67,8 +67,6 @@ class ExtractionSettings(BaseSettings):
 
 
 class QuerySettings(BaseSettings):
-    direct_lookup_intents: str = "identity,definition,single_fact"
-    structured_query_intents: str = "list,filter,temporal_range,measurement"
     synthesis_max_propositions: int = 20
     llm_synthesis_provider: str = ""
     llm_synthesis_model: str = ""

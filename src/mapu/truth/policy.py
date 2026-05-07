@@ -88,6 +88,7 @@ class EvidenceStrength:
         return wins >= min_dimensions
 
 
+# Distinct from source_policy scores: these override truth adjudication, not document trustworthiness.
 AUTHORITY_OVERRIDE_CLASSES: dict[str, float] = {
     "retraction_notice": 0.97,
     "court_order": 0.95,

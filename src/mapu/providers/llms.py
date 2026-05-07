@@ -169,8 +169,8 @@ def get_default_llm_provider() -> LLMProvider | None:
     from mapu.config import LLMSettings
 
     settings = LLMSettings()
-    _llm_checked = True
     if not settings.provider or not settings.api_key:
+        _llm_checked = True
         return None
 
     provider_type = settings.provider.lower()
@@ -188,4 +188,5 @@ def get_default_llm_provider() -> LLMProvider | None:
         model=settings.model or default_model,
         base_url=settings.base_url or None,
     )
+    _llm_checked = True
     return _cached_llm_provider

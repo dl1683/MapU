@@ -200,7 +200,7 @@ async def _recompute_semantic_keys(
     )
     result = await session.execute(stmt)
     props = result.scalars().all()
-    count = 0
+    pending: list[tuple[Proposition, str]] = []
     for prop in props:
         valid_range = None
         if prop.valid_range is not None:
@@ -217,8 +217,28 @@ async def _recompute_semantic_keys(
             valid_range=valid_range,
         )
         if new_key != prop.semantic_key:
-            prop.semantic_key = new_key
-            count += 1
+            pending.append((prop, new_key))
+
+    new_keys = {k for _, k in pending}
+    if new_keys:
+        collision_stmt = select(Proposition.semantic_key).where(
+            Proposition.corpus_id == corpus_id,
+            Proposition.semantic_key.in_(new_keys),
+            ~Proposition.id.in_(proposition_ids),
+        )
+        collision_result = await session.execute(collision_stmt)
+        existing_keys = {row[0] for row in collision_result}
+        for prop, new_key in pending:
+            if new_key in existing_keys:
+                raise ValueError(
+                    f"Semantic key collision after handle change for proposition {prop.id}: "
+                    f"another proposition already has key {new_key[:40]}..."
+                )
+
+    count = 0
+    for prop, new_key in pending:
+        prop.semantic_key = new_key
+        count += 1
     if count:
         await session.flush()
     return count
@@ -265,6 +285,19 @@ async def merge_handles(
         for row in moved_result
     ]
     moved_prop_ids = [uuid.UUID(s["id"]) for s in prop_snapshots]
+
+    participant_stmt = select(
+        PropositionParticipant.id,
+        PropositionParticipant.handle_id,
+    ).where(
+        PropositionParticipant.handle_id == merged_handle_id,
+        PropositionParticipant.corpus_id == corpus_id,
+    )
+    part_result = await session.execute(participant_stmt)
+    participant_snapshots = [
+        {"id": str(row[0]), "prior_handle": str(row[1])}
+        for row in part_result
+    ]
 
     prior_canonical_aliases = list(canonical.aliases or [])
 
@@ -332,6 +365,7 @@ async def merge_handles(
         "merged_handle_id": str(merged_handle_id),
         "moved_proposition_ids": [str(p) for p in moved_prop_ids],
         "proposition_snapshots": prop_snapshots,
+        "participant_snapshots": participant_snapshots,
         "prior_canonical_aliases": prior_canonical_aliases,
         "identity_decision_id": str(identity.id),
     }

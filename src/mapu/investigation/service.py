@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -527,10 +528,10 @@ def _parse_findings(
             not evidence[i].is_proposition for i in valid_indices
         )
         raw_confidence = f.get("confidence")
-        if not isinstance(raw_confidence, (int, float)):
+        if not isinstance(raw_confidence, (int, float)) or isinstance(raw_confidence, bool):
             continue
         confidence = float(raw_confidence)
-        if confidence < 0.0 or confidence > 1.0:
+        if not (0.0 <= confidence <= 1.0) or not math.isfinite(confidence):
             continue
         if has_chunk_evidence and len(prop_indices) < len(valid_indices):
             confidence *= 0.85

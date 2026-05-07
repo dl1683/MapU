@@ -92,7 +92,7 @@ async def query(
                     "authority_score": h.authority_score,
                     "truth_status": h.truth_status,
                     "source_span_text": h.source_span_text,
-                    "document_id": str(h.document_id) if h.document_id else None,
+                    "expression_id": str(h.document_id) if h.document_id else None,
                     "valid_from": h.valid_from.isoformat() if h.valid_from else None,
                     "valid_to": h.valid_to.isoformat() if h.valid_to else None,
                 }

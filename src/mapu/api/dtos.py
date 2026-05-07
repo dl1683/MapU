@@ -37,7 +37,7 @@ class HitResponse(BaseModel):
     authority_score: float | None = None
     truth_status: str | None = None
     source_span_text: str | None = None
-    document_id: uuid.UUID | None = None
+    expression_id: uuid.UUID | None = None
     valid_from: datetime | None = None
     valid_to: datetime | None = None
 

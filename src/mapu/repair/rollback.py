@@ -196,15 +196,15 @@ async def _rollback_merge_handles(
             prop.object_handle_id = prior_obj
 
     moved_ids = [uuid.UUID(snap["id"]) for snap in snapshots]
-    if moved_ids:
+
+    part_snapshots = result.get("participant_snapshots", [])
+    for ps in part_snapshots:
+        part_id = uuid.UUID(ps["id"])
+        prior_handle = uuid.UUID(ps["prior_handle"])
         await session.execute(
             update(PropositionParticipant)
-            .where(
-                PropositionParticipant.proposition_id.in_(moved_ids),
-                PropositionParticipant.handle_id == canonical_id,
-                PropositionParticipant.corpus_id == corpus_id,
-            )
-            .values(handle_id=merged_id)
+            .where(PropositionParticipant.id == part_id)
+            .values(handle_id=prior_handle)
         )
 
     canonical_handle = await session.get(Handle, canonical_id)

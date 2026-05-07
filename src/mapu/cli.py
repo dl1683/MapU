@@ -61,26 +61,27 @@ async def _run_query(corpus_id_str: str, question: str) -> None:
     settings = Settings()
     engine, session_factory = build_engine(settings.database)
 
-    cid = uuid.UUID(corpus_id_str)
-    async with session_factory() as session:
-        classifier = HeuristicIntentClassifier()
-        svc = QueryService(session, classifier)
-        request = QueryRequest(corpus_id=cid, question=question)
-        result = await svc.query(request)
+    try:
+        cid = uuid.UUID(corpus_id_str)
+        async with session_factory() as session:
+            classifier = HeuristicIntentClassifier()
+            svc = QueryService(session, classifier)
+            request = QueryRequest(corpus_id=cid, question=question)
+            result = await svc.query(request)
 
-        if result.synthesis:
-            print(result.synthesis)
-        else:
-            for h in result.hits:
-                print(f"  [{h.predicate}] {h.subject_name} → {h.object_name or ''}: "
-                      f"{h.normalized_text}")
+            if result.synthesis:
+                print(result.synthesis)
+            else:
+                for h in result.hits:
+                    print(f"  [{h.predicate}] {h.subject_name} -> {h.object_name or ''}: "
+                          f"{h.normalized_text}")
 
-        if result.gaps:
-            print("\nGaps:")
-            for g in result.gaps:
-                print(f"  - {g}")
-
-    await engine.dispose()
+            if result.gaps:
+                print("\nGaps:")
+                for g in result.gaps:
+                    print(f"  - {g}")
+    finally:
+        await engine.dispose()
 
 
 async def _run_ingest(corpus_id_str: str, path: str) -> None:
@@ -96,35 +97,36 @@ async def _run_ingest(corpus_id_str: str, path: str) -> None:
     settings = Settings()
     engine, session_factory = build_engine(settings.database)
 
-    file_path = Path(path)
-    if not file_path.exists():
-        print(f"File not found: {path}")
-        sys.exit(1)
+    try:
+        file_path = Path(path)
+        if not file_path.exists():
+            print(f"File not found: {path}")
+            sys.exit(1)
 
-    content = file_path.read_bytes()
-    suffix = file_path.suffix.lower()
-    mime_map = {
-        ".txt": "text/plain",
-        ".pdf": "application/pdf",
-        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    }
-    mime_type = mime_map.get(suffix, "text/plain")
+        content = file_path.read_bytes()
+        suffix = file_path.suffix.lower()
+        mime_map = {
+            ".txt": "text/plain",
+            ".pdf": "application/pdf",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }
+        mime_type = mime_map.get(suffix, "text/plain")
 
-    cid = uuid.UUID(corpus_id_str)
-    async with session_factory() as session:
-        registry = ParserRegistry()
-        chunker = SpanAwareChunker()
-        svc = IngestionService(session, cid, registry, chunker)
-        blob = DocumentBlob(content=content, mime_type=mime_type, source_uri=str(file_path))
-        result = await svc.ingest(blob)
-        await session.commit()
+        cid = uuid.UUID(corpus_id_str)
+        async with session_factory() as session:
+            registry = ParserRegistry.create_default()
+            chunker = SpanAwareChunker()
+            svc = IngestionService(session, cid, registry, chunker)
+            blob = DocumentBlob(content=content, mime_type=mime_type, source_uri=str(file_path))
+            result = await svc.ingest(blob)
+            await session.commit()
 
-        print(f"Ingested: {path}")
-        print(f"  Document ID: {result.document_id}")
-        print(f"  Spans: {result.span_count}")
-        print(f"  Chunks: {result.chunk_count}")
-
-    await engine.dispose()
+            print(f"Ingested: {path}")
+            print(f"  Document ID: {result.document_id}")
+            print(f"  Spans: {result.span_count}")
+            print(f"  Chunks: {result.chunk_count}")
+    finally:
+        await engine.dispose()
 
 
 if __name__ == "__main__":

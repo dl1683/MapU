@@ -89,7 +89,7 @@ async def ingest_document(
     cid = uuid.UUID(corpus_id)
     factory = _get_session_factory()
     async with factory() as session:
-        registry = ParserRegistry()
+        registry = ParserRegistry.create_default()
         chunker = SpanAwareChunker()
         svc = IngestionService(session, cid, registry, chunker)
         blob = DocumentBlob(
@@ -197,9 +197,9 @@ async def repair_propose(
 
 @server.tool()
 async def repair_apply(corpus_id: str, changeset_id: str) -> dict[str, Any]:
-    """Execute an approved repair changeset.
+    """Approve and execute a proposed repair changeset.
 
-    The changeset must have been previously proposed and approved via repair_propose.
+    Atomically approves and applies the changeset created by repair_propose.
     """
     from mapu.repair.service import RepairService
 

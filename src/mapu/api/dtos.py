@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import uuid
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CorpusCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=500)
     description: str = ""
 
 
@@ -19,8 +20,8 @@ class CorpusResponse(BaseModel):
 
 
 class QueryRequestDTO(BaseModel):
-    question: str
-    max_results: int = 20
+    question: str = Field(min_length=1)
+    max_results: int = Field(default=20, ge=1, le=500)
     situation_id: uuid.UUID | None = None
 
 
@@ -43,7 +44,7 @@ class QueryResponse(BaseModel):
 
 
 class IngestRequestDTO(BaseModel):
-    content: str
+    content: str = Field(min_length=1)
     mime_type: str = "text/plain"
     source_uri: str = ""
 
@@ -73,7 +74,7 @@ class RepairPreviewResponse(BaseModel):
 
 class RepairProposeRequest(BaseModel):
     proposition_id: uuid.UUID
-    operation: str = "retract"
+    operation: Literal["retract"] = "retract"
     reason: str = ""
     actor: str = "user"
 
@@ -82,6 +83,11 @@ class RepairProposeResponse(BaseModel):
     changeset_id: uuid.UUID
     risk_level: str
     affected_count: int
+
+
+class RepairApproveResponse(BaseModel):
+    changeset_id: uuid.UUID
+    status: str
 
 
 class RepairApplyResponse(BaseModel):

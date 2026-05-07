@@ -26,6 +26,18 @@ class ParserRegistry:
     def __init__(self) -> None:
         self._parsers: dict[str, DocumentParser] = {}
 
+    @classmethod
+    def create_default(cls) -> ParserRegistry:
+        from mapu.evidence.docx import DocxParser
+        from mapu.evidence.pdf import PdfParser
+        from mapu.evidence.plaintext import PlaintextParser
+
+        registry = cls()
+        registry.register(PlaintextParser())
+        registry.register(PdfParser())
+        registry.register(DocxParser())
+        return registry
+
     def register(self, parser: DocumentParser) -> None:
         for mime_type in parser.supported_mime_types:
             self._parsers[mime_type] = parser

@@ -19,6 +19,7 @@ from mapu.api.dtos import (
     QueryRequestDTO,
     QueryResponse,
     RepairApplyResponse,
+    RepairApproveResponse,
     RepairPreviewResponse,
     RepairProposeRequest,
     RepairProposeResponse,
@@ -127,7 +128,7 @@ class DocumentController(Controller):
         from mapu.evidence.parsers import ParserRegistry
         from mapu.evidence.types import DocumentBlob
 
-        registry = ParserRegistry()
+        registry = ParserRegistry.create_default()
         chunker = SpanAwareChunker()
         svc = IngestionService(db_session, corpus_id, registry, chunker)
         blob = DocumentBlob(
@@ -223,6 +224,23 @@ class RepairController(Controller):
             affected_count=len(preview.blast_radius.affected_proposition_ids),
         )
 
+    @post("/approve/{changeset_id:uuid}")
+    async def approve(
+        self,
+        corpus_id: uuid.UUID,
+        changeset_id: uuid.UUID,
+        db_session: AsyncSession,
+    ) -> RepairApproveResponse:
+        from mapu.repos.review import ChangesetRepo
+        from mapu.types import ChangesetStatus
+
+        repo = ChangesetRepo(db_session, corpus_id)
+        await repo.transition(changeset_id, ChangesetStatus.APPROVED.value)
+        return RepairApproveResponse(
+            changeset_id=changeset_id,
+            status=ChangesetStatus.APPROVED.value,
+        )
+
     @post("/apply/{changeset_id:uuid}")
     async def apply(
         self,
@@ -233,7 +251,7 @@ class RepairController(Controller):
         from mapu.repair.service import RepairService
 
         svc = RepairService(db_session, corpus_id)
-        result = await svc.approve_and_apply(changeset_id)
+        result = await svc.apply(changeset_id)
         return RepairApplyResponse(
             changeset_id=result.changeset_id,
             success=result.success,

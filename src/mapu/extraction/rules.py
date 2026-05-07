@@ -6,7 +6,7 @@ import contextlib
 import re
 from datetime import datetime
 
-import dateutil.parser as dateutil_parser  # type: ignore[import-untyped]
+import dateutil.parser as dateutil_parser
 
 from mapu.extraction.types import (
     EntityMention,
@@ -32,7 +32,7 @@ _DATE_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 _CROSS_REF_PATTERN = re.compile(
     r"(?:Section|Clause|Article|Paragraph|Schedule|Exhibit|Appendix)"
-    r"\s+(\d+(?:\.\d+)*(?:\([a-z]\))?)",
+    r"\s+([A-Z](?:-\d+)?\b|\d+(?:\.\d+)*(?:\([a-z]\))?)",
     re.IGNORECASE,
 )
 

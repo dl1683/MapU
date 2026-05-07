@@ -20,7 +20,7 @@ from mapu.models.corpus import Corpus
 
 @pytest.fixture(scope="session")
 def postgres_container() -> Generator[Any, None, None]:
-    from testcontainers.postgres import PostgresContainer  # type: ignore[import-not-found]
+    from testcontainers.postgres import PostgresContainer  # type: ignore[import-untyped]
 
     with PostgresContainer("pgvector/pgvector:pg17", driver=None) as pg:
         yield pg

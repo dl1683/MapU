@@ -466,3 +466,60 @@ class TestAbstentionGate:
         frame = _make_frame(confidence=-0.1)
         with pytest.raises(ValueError, match="extraction_confidence"):
             gate.evaluate((frame,))
+
+
+class TestCrossRefLetterIDs:
+    """Cross-reference pattern should match letter-based IDs (Exhibit A, Schedule B)."""
+
+    @pytest.fixture
+    def extractor(self) -> CrossReferenceExtractor:
+        return CrossReferenceExtractor()
+
+    async def test_exhibit_letter(self, extractor: CrossReferenceExtractor) -> None:
+        ctx = _make_ctx("See Exhibit A for the schedule of payments.")
+        result = await extractor.extract(ctx)
+        assert len(result.signals) == 1
+        assert result.signals[0].data["section_id"] == "A"
+
+    async def test_schedule_letter(self, extractor: CrossReferenceExtractor) -> None:
+        ctx = _make_ctx("As set forth in Schedule B of this Agreement.")
+        result = await extractor.extract(ctx)
+        assert len(result.signals) == 1
+        assert result.signals[0].data["section_id"] == "B"
+
+    async def test_appendix_letter_with_number(
+        self, extractor: CrossReferenceExtractor
+    ) -> None:
+        ctx = _make_ctx("Refer to Appendix C-2 for definitions.")
+        result = await extractor.extract(ctx)
+        assert len(result.signals) == 1
+        assert result.signals[0].data["section_id"] == "C-2"
+
+    async def test_numeric_still_works(self, extractor: CrossReferenceExtractor) -> None:
+        ctx = _make_ctx("Pursuant to Section 3.2(a) of the Agreement.")
+        result = await extractor.extract(ctx)
+        assert len(result.signals) == 1
+        assert result.signals[0].data["section_id"] == "3.2(a)"
+
+
+class TestAmendmentConjunctionLimitation:
+    """Documents known limitation: conjunction targets use nearest-preceding heuristic.
+
+    'Section 1.1 and Section 2.2 is hereby amended' targets Section 2.2 (nearest),
+    not Section 1.1 (first). Conjunction awareness requires syntactic parsing (Phase 4+).
+    """
+
+    @pytest.fixture
+    def extractor(self) -> AmendmentExtractor:
+        return AmendmentExtractor()
+
+    async def test_conjunction_targets_nearest(
+        self, extractor: AmendmentExtractor
+    ) -> None:
+        ctx = _make_ctx(
+            "Section 1.1 and Section 2.2 is hereby amended."
+        )
+        result = await extractor.extract(ctx)
+        assert len(result.signals) == 1
+        # Known limitation: targets nearest (Section 2.2), not first (Section 1.1)
+        assert result.signals[0].data["target_reference"] == "Section 2.2"

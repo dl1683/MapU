@@ -87,7 +87,10 @@ class StructuredQueryExecutor:
     ) -> list[PropositionHit]:
         from mapu.models.lineage import SupersessionEdge
 
-        stmt = self._base_query(request.corpus_id, request.situation_id)
+        stmt = self._base_query(
+            request.corpus_id, request.situation_id,
+            include_superseded=True,
+        )
         stmt = stmt.join(
             SupersessionEdge,
             (
@@ -161,6 +164,7 @@ class StructuredQueryExecutor:
 
     def _base_query(
         self, corpus_id: uuid.UUID, situation_id: uuid.UUID | None = None,
+        *, include_superseded: bool = False,
     ) -> Any:
         obj_handle = aliased(Handle, name="object_handle")
         truth_col = (
@@ -219,17 +223,21 @@ class StructuredQueryExecutor:
                 & (func.upper(PropositionState.effective_range).is_(None)),
             )
 
-        superseded = select(SupersessionEdge.id).where(
-            SupersessionEdge.old_proposition_id == Proposition.id,
-            SupersessionEdge.corpus_id == Proposition.corpus_id,
-        ).correlate(Proposition).exists()
-
-        return stmt.where(
+        filters = [
             Proposition.corpus_id == corpus_id,
             Attestation.status == "accepted",
             Attestation.system_invalidated.is_(None),
-            ~superseded,
-        )
+        ]
+
+        if not include_superseded:
+            superseded = select(SupersessionEdge.id).where(
+                SupersessionEdge.old_proposition_id == Proposition.id,
+                SupersessionEdge.corpus_id == Proposition.corpus_id,
+                SupersessionEdge.effective_at <= func.now(),
+            ).correlate(Proposition).exists()
+            filters.append(~superseded)
+
+        return stmt.where(*filters)
 
     async def _fetch(self, stmt: Any, max_results: int = 0) -> list[PropositionHit]:
         result = await self._session.execute(stmt)

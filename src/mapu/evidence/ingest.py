@@ -91,6 +91,7 @@ class IngestionService:
             publication_context=blob.metadata.get("publication_context"),
             attestation_type=blob.metadata.get("attestation_type"),
             independence_group=blob.metadata.get("independence_group"),
+            source_identity=blob.metadata.get("source_identity"),
         )
         evaluator = SourcePolicyEvaluatorV1(self._session, self._corpus_id)
         spe = await evaluator.evaluate_and_persist(doc.id, policy_input)

@@ -68,6 +68,7 @@ class SourcePolicyInput:
     publication_context: str | None = None
     attestation_type: str | None = None
     independence_group: str | None = None
+    source_identity: str | None = None
 
 
 class SourcePolicyEvaluatorV1:
@@ -110,6 +111,7 @@ class SourcePolicyEvaluatorV1:
             publication_context=inp.publication_context,
             attestation_type=inp.attestation_type,
             independence_group=inp.independence_group,
+            source_identity=inp.source_identity,
             evaluated_at=datetime.now(UTC),
         )
         self._session.add(spe)

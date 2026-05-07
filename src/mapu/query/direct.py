@@ -127,6 +127,7 @@ class DirectLookupExecutor:
         superseded = select(SupersessionEdge.id).where(
             SupersessionEdge.old_proposition_id == Proposition.id,
             SupersessionEdge.corpus_id == Proposition.corpus_id,
+            SupersessionEdge.effective_at <= func.now(),
         ).correlate(Proposition).exists()
 
         stmt = stmt.where(

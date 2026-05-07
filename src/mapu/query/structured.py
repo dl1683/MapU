@@ -231,10 +231,11 @@ class StructuredQueryExecutor:
         ]
 
         if not include_superseded:
+            supersession_cutoff = as_of if as_of is not None else func.now()
             superseded = select(SupersessionEdge.id).where(
                 SupersessionEdge.old_proposition_id == Proposition.id,
                 SupersessionEdge.corpus_id == Proposition.corpus_id,
-                SupersessionEdge.effective_at <= func.now(),
+                SupersessionEdge.effective_at <= supersession_cutoff,
             ).correlate(Proposition).exists()
             filters.append(~superseded)
 

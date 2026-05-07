@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mapu.evidence.retrieval import ChunkRetrievalService, RetrievalConfig
 from mapu.investigation.service import InvestigationService
 from mapu.providers.embeddings import EmbeddingProvider
 from mapu.providers.llms import LLMProvider
@@ -14,6 +15,7 @@ from mapu.query.governor import CascadeGovernor
 from mapu.query.structured import StructuredQueryExecutor
 from mapu.query.synthesis import LLMSynthesizer, TemplateSynthesizer
 from mapu.query.types import (
+    ChunkHit,
     IntentClassifier,
     PropositionHit,
     QueryPlan,
@@ -34,6 +36,7 @@ class QueryService:
         embedding_provider: EmbeddingProvider | None = None,
     ) -> None:
         self._session = session
+        self._embedding_provider = embedding_provider
         self._governor = CascadeGovernor(
             intent_classifier=intent_classifier,
         )
@@ -69,6 +72,7 @@ class QueryService:
             )
             hits = await self._execute_tier(plan, request)
 
+        chunk_hits = await self._chunk_fallback(request, hits)
         synthesis = await self._synthesize(request, plan, hits)
 
         return QueryResult(
@@ -77,6 +81,7 @@ class QueryService:
             tier_used=plan.selected_tier,
             hits=tuple(hits),
             synthesis=synthesis,
+            chunk_hits=tuple(chunk_hits),
             metadata={
                 "entities": plan.entities_extracted,
                 "predicates": plan.predicates_extracted,
@@ -142,6 +147,33 @@ class QueryService:
         if plan.selected_tier == Tier.SYNTHESIS:
             return await self._structured.execute(plan, request)
         return ()
+
+    async def _chunk_fallback(
+        self,
+        request: QueryRequest,
+        proposition_hits: Sequence[PropositionHit],
+    ) -> list[ChunkHit]:
+        if proposition_hits or self._embedding_provider is None:
+            return []
+        query_vec = await self._embedding_provider.embed_texts([request.question])
+        if not query_vec:
+            return []
+        retrieval = ChunkRetrievalService(
+            self._session, request.corpus_id, self._embedding_provider.model_ref,
+        )
+        results = await retrieval.search(
+            list(query_vec[0]),
+            RetrievalConfig(top_k=min(request.max_results, 10)),
+        )
+        return [
+            ChunkHit(
+                chunk_id=r.chunk_id,
+                text=r.text,
+                score=r.score,
+                expression_id=r.expression_id,
+            )
+            for r in results
+        ]
 
     async def _synthesize(
         self, request: QueryRequest, plan: QueryPlan, hits: Sequence[PropositionHit],

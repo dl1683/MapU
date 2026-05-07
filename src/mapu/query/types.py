@@ -59,6 +59,16 @@ class PropositionHit:
 
 
 @dataclass(frozen=True)
+class ChunkHit:
+    """A chunk matched by vector similarity retrieval."""
+
+    chunk_id: uuid.UUID
+    text: str
+    score: float
+    expression_id: uuid.UUID
+
+
+@dataclass(frozen=True)
 class QueryResult:
     """Result of processing a query through the cascade governor."""
 
@@ -68,6 +78,7 @@ class QueryResult:
     hits: tuple[PropositionHit, ...]
     synthesis: str | None = None
     gaps: tuple[str, ...] = ()
+    chunk_hits: tuple[ChunkHit, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

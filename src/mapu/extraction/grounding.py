@@ -56,82 +56,81 @@ class CandidateGrounder:
 
         frame = result.frame
 
-        with self._session.no_autoflush:
-            subject_handle = await self._resolve_handle(frame.subject)
-            handle_ids = [subject_handle.id]
+        subject_handle = await self._resolve_handle(frame.subject)
+        handle_ids = [subject_handle.id]
 
-            object_handle: Handle | None = None
-            if frame.object is not None:
-                object_handle = await self._resolve_handle(frame.object)
-                handle_ids.append(object_handle.id)
+        object_handle: Handle | None = None
+        if frame.object is not None:
+            object_handle = await self._resolve_handle(frame.object)
+            handle_ids.append(object_handle.id)
 
-            semantic_key = _compute_semantic_key(
-                frame_type=frame.frame_type.value,
-                subject_handle_id=subject_handle.id,
-                predicate=frame.predicate,
-                object_handle_id=object_handle.id if object_handle else None,
-                value=frame.value,
-                polarity=frame.polarity,
-                modality=frame.modality,
-                valid_range=frame.valid_range,
-            )
+        semantic_key = _compute_semantic_key(
+            frame_type=frame.frame_type.value,
+            subject_handle_id=subject_handle.id,
+            predicate=frame.predicate,
+            object_handle_id=object_handle.id if object_handle else None,
+            value=frame.value,
+            polarity=frame.polarity,
+            modality=frame.modality,
+            valid_range=frame.valid_range,
+        )
 
-            db_valid_range = _to_pg_range(frame.valid_range)
+        db_valid_range = _to_pg_range(frame.valid_range)
 
-            prop, created = await self._get_or_create_proposition(
-                frame_type=frame.frame_type.value,
-                subject_handle_id=subject_handle.id,
-                predicate=frame.predicate,
-                object_handle_id=object_handle.id if object_handle else None,
-                value=frame.value,
-                polarity=frame.polarity,
-                modality=frame.modality,
-                valid_range=db_valid_range,
-                normalized_text=frame.normalized_text,
-                qualifiers=frame.qualifiers,
-                semantic_key=semantic_key,
-            )
+        prop, created = await self._get_or_create_proposition(
+            frame_type=frame.frame_type.value,
+            subject_handle_id=subject_handle.id,
+            predicate=frame.predicate,
+            object_handle_id=object_handle.id if object_handle else None,
+            value=frame.value,
+            polarity=frame.polarity,
+            modality=frame.modality,
+            valid_range=db_valid_range,
+            normalized_text=frame.normalized_text,
+            qualifiers=frame.qualifiers,
+            semantic_key=semantic_key,
+        )
 
+        await self._ensure_participant(
+            prop.id, subject_handle.id, "subject", 0, proposition_is_new=created,
+        )
+        if object_handle is not None:
             await self._ensure_participant(
-                prop.id, subject_handle.id, "subject", 0, proposition_is_new=created,
-            )
-            if object_handle is not None:
-                await self._ensure_participant(
-                    prop.id, object_handle.id, "object", 1, proposition_is_new=created,
-                )
-
-            attestation_status = (
-                "accepted" if result.decision == AbstentionDecision.ACCEPTED
-                else "candidate"
+                prop.id, object_handle.id, "object", 1, proposition_is_new=created,
             )
 
-            att = Attestation(
-                id=uuid.uuid4(),
-                span_id=frame.span_id,
-                proposition_id=prop.id,
+        attestation_status = (
+            "accepted" if result.decision == AbstentionDecision.ACCEPTED
+            else "candidate"
+        )
+
+        att = Attestation(
+            id=uuid.uuid4(),
+            span_id=frame.span_id,
+            proposition_id=prop.id,
+            corpus_id=self._corpus_id,
+            source_policy_eval_id=source_policy_eval_id,
+            stance=frame.stance.value,
+            extraction_method=frame.extraction_method,
+            extraction_confidence=frame.extraction_confidence,
+            attestation_strength=(
+                frame.attestation_strength.value
+                if frame.attestation_strength else None
+            ),
+            status=attestation_status,
+            system_created=datetime.now(UTC),
+        )
+        self._session.add(att)
+
+        if default_situation_id is not None:
+            assn = AttestationSituation(
+                attestation_id=att.id,
+                situation_id=default_situation_id,
                 corpus_id=self._corpus_id,
-                source_policy_eval_id=source_policy_eval_id,
-                stance=frame.stance.value,
-                extraction_method=frame.extraction_method,
-                extraction_confidence=frame.extraction_confidence,
-                attestation_strength=(
-                    frame.attestation_strength.value
-                    if frame.attestation_strength else None
-                ),
-                status=attestation_status,
-                system_created=datetime.now(UTC),
+                assignment_confidence=1.0,
+                assignment_basis="default_document_situation",
             )
-            self._session.add(att)
-
-            if default_situation_id is not None:
-                assn = AttestationSituation(
-                    attestation_id=att.id,
-                    situation_id=default_situation_id,
-                    corpus_id=self._corpus_id,
-                    assignment_confidence=1.0,
-                    assignment_basis="default_document_situation",
-                )
-                self._session.add(assn)
+            self._session.add(assn)
 
         return MaterializedExtraction(
             proposition_id=prop.id,

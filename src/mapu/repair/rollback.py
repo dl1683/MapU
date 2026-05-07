@@ -188,27 +188,41 @@ async def _rollback_merge_handles(
             "Cannot rollback merge: operation result missing proposition_snapshots or participant_snapshots"
         )
     snapshots = result["proposition_snapshots"]
+    moved_ids: list[uuid.UUID] = []
+    subj_groups: dict[uuid.UUID, list[uuid.UUID]] = {}
+    obj_groups: dict[uuid.UUID, list[uuid.UUID]] = {}
     for snap in snapshots:
         prop_id = uuid.UUID(snap["id"])
+        moved_ids.append(prop_id)
         prior_subj = uuid.UUID(snap["prior_subject"])
-        prior_obj = uuid.UUID(snap["prior_object"]) if snap.get("prior_object") else None
-        prop = await session.get(Proposition, prop_id)
-        if prop is None:
-            continue
-        prop.subject_handle_id = prior_subj
-        if prior_obj is not None:
-            prop.object_handle_id = prior_obj
+        subj_groups.setdefault(prior_subj, []).append(prop_id)
+        if snap.get("prior_object"):
+            prior_obj = uuid.UUID(snap["prior_object"])
+            obj_groups.setdefault(prior_obj, []).append(prop_id)
 
-    moved_ids = [uuid.UUID(snap["id"]) for snap in snapshots]
+    for handle_id, prop_ids in subj_groups.items():
+        await session.execute(
+            update(Proposition)
+            .where(Proposition.id.in_(prop_ids))
+            .values(subject_handle_id=handle_id)
+        )
+    for handle_id, prop_ids in obj_groups.items():
+        await session.execute(
+            update(Proposition)
+            .where(Proposition.id.in_(prop_ids))
+            .values(object_handle_id=handle_id)
+        )
 
     part_snapshots = result["participant_snapshots"]
+    part_groups: dict[uuid.UUID, list[uuid.UUID]] = {}
     for ps in part_snapshots:
-        part_id = uuid.UUID(ps["id"])
         prior_handle = uuid.UUID(ps["prior_handle"])
+        part_groups.setdefault(prior_handle, []).append(uuid.UUID(ps["id"]))
+    for handle_id, part_ids in part_groups.items():
         await session.execute(
             update(PropositionParticipant)
-            .where(PropositionParticipant.id == part_id)
-            .values(handle_id=prior_handle)
+            .where(PropositionParticipant.id.in_(part_ids))
+            .values(handle_id=handle_id)
         )
 
     canonical_handle = await session.get(Handle, canonical_id)

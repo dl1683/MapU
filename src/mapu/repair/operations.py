@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -294,6 +295,13 @@ async def merge_handles(
         for row in moved_result
     ]
     moved_prop_ids = [uuid.UUID(s["id"]) for s in prop_snapshots]
+
+    _MERGE_SNAPSHOT_WARN_THRESHOLD = 500
+    if len(prop_snapshots) > _MERGE_SNAPSHOT_WARN_THRESHOLD:
+        logging.getLogger(__name__).warning(
+            "merge_handles: %d propositions affected — large rollback snapshot",
+            len(prop_snapshots),
+        )
 
     participant_stmt = select(
         PropositionParticipant.id,

@@ -16,6 +16,12 @@ depends_on: str | None = None
 
 
 def upgrade() -> None:
+    op.execute(
+        "DELETE FROM situation WHERE id NOT IN ("
+        "  SELECT DISTINCT ON (corpus_id) id FROM situation "
+        "  WHERE kind = 'default' ORDER BY corpus_id, created_at ASC"
+        ") AND kind = 'default'"
+    )
     with op.get_context().autocommit_block():
         op.execute(
             "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_situation_corpus_default "

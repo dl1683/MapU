@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from mapu.models.context import QueryView, Situation
 from mapu.repos.base import CorpusScopedRepo
@@ -32,7 +33,7 @@ class SituationRepo(CorpusScopedRepo[Situation]):
             async with self.session.begin_nested():
                 self.session.add(situation)
                 await self.session.flush()
-        except Exception:
+        except IntegrityError:
             result = await self.session.execute(stmt)
             return result.scalar_one()
         return situation

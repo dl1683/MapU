@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -300,10 +301,10 @@ def _compute_semantic_key(
         str(subject_handle_id),
         predicate,
         str(object_handle_id) if object_handle_id else "",
-        str(sorted(value.items())) if value else "",
+        json.dumps(value, sort_keys=True) if value else "",
         str(polarity),
         modality or "",
-        str(sorted(qualifiers.items())) if qualifiers else "",
+        json.dumps(qualifiers, sort_keys=True) if qualifiers else "",
         range_str,
     ]
     content = "|".join(parts)

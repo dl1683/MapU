@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.models.attestation import Attestation, AttestationSituation
@@ -56,6 +56,8 @@ class TruthComputeService:
                 state_id=existing.id,
                 changed=False,
             )
+
+        await self._close_current_range(proposition_id, situation_id)
 
         state = PropositionState(
             proposition_id=proposition_id,
@@ -118,6 +120,25 @@ class TruthComputeService:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def _close_current_range(
+        self,
+        proposition_id: uuid.UUID,
+        situation_id: uuid.UUID,
+    ) -> None:
+        stmt = (
+            update(PropositionState)
+            .where(
+                PropositionState.proposition_id == proposition_id,
+                PropositionState.situation_id == situation_id,
+                PropositionState.corpus_id == self._corpus_id,
+                func.upper(PropositionState.effective_range).is_(None),
+            )
+            .values(effective_range=text(
+                "tstzrange(lower(effective_range), now(), '[)')"
+            ))
+        )
+        await self._session.execute(stmt)
 
     async def _situations_for_proposition(
         self, proposition_id: uuid.UUID,

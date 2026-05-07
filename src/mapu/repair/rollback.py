@@ -9,7 +9,9 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.models.attestation import Attestation
+from mapu.models.entity import Handle, IdentityDecisionModel
 from mapu.models.lineage import SupersessionEdge
+from mapu.models.proposition import Proposition, PropositionParticipant
 from mapu.repos.audit import ActivityRepo
 from mapu.truth.service import TruthComputeService
 
@@ -27,6 +29,10 @@ async def dispatch_rollback(
         return await _rollback_supersession(session, corpus_id, payload, result)
     if operation_type == "reject_attestation":
         return await _rollback_attestation_rejection(session, corpus_id, payload, result)
+    if operation_type == "merge_handles":
+        return await _rollback_merge_handles(session, corpus_id, payload, result)
+    if operation_type == "split_handle":
+        return await _rollback_split_handle(session, corpus_id, payload, result)
     raise ValueError(f"Rollback not supported for operation: {operation_type}")
 
 
@@ -51,26 +57,19 @@ async def _rollback_retraction(
         )
 
     invalidated_ids = result.get("invalidated_attestation_ids", [])
-    if invalidated_ids:
-        att_uuids = [uuid.UUID(x) for x in invalidated_ids]
-        await session.execute(
-            update(Attestation)
-            .where(
-                Attestation.id.in_(att_uuids),
-                Attestation.corpus_id == corpus_id,
-            )
-            .values(system_invalidated=None)
+    if not invalidated_ids:
+        raise ValueError(
+            "Cannot rollback retraction: operation result missing invalidated_attestation_ids"
         )
-    else:
-        await session.execute(
-            update(Attestation)
-            .where(
-                Attestation.proposition_id == proposition_id,
-                Attestation.corpus_id == corpus_id,
-                Attestation.system_invalidated.isnot(None),
-            )
-            .values(system_invalidated=None)
+    att_uuids = [uuid.UUID(x) for x in invalidated_ids]
+    await session.execute(
+        update(Attestation)
+        .where(
+            Attestation.id.in_(att_uuids),
+            Attestation.corpus_id == corpus_id,
         )
+        .values(system_invalidated=None)
+    )
 
     truth_svc = TruthComputeService(session, corpus_id)
     recomputed = await truth_svc.recompute_for_proposition(proposition_id)
@@ -162,3 +161,139 @@ async def _rollback_attestation_rejection(
     )
 
     return {"recomputed_states": len(recomputed)}
+
+
+async def _rollback_merge_handles(
+    session: AsyncSession,
+    corpus_id: uuid.UUID,
+    payload: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    canonical_id = uuid.UUID(result["canonical_handle_id"])
+    merged_id = uuid.UUID(result["merged_handle_id"])
+    moved_ids = [uuid.UUID(x) for x in result.get("moved_proposition_ids", [])]
+
+    if moved_ids:
+        await session.execute(
+            update(Proposition)
+            .where(
+                Proposition.id.in_(moved_ids),
+                Proposition.subject_handle_id == canonical_id,
+                Proposition.corpus_id == corpus_id,
+            )
+            .values(subject_handle_id=merged_id)
+        )
+        await session.execute(
+            update(Proposition)
+            .where(
+                Proposition.id.in_(moved_ids),
+                Proposition.object_handle_id == canonical_id,
+                Proposition.corpus_id == corpus_id,
+            )
+            .values(object_handle_id=merged_id)
+        )
+        await session.execute(
+            update(PropositionParticipant)
+            .where(
+                PropositionParticipant.proposition_id.in_(moved_ids),
+                PropositionParticipant.handle_id == canonical_id,
+                PropositionParticipant.corpus_id == corpus_id,
+            )
+            .values(handle_id=merged_id)
+        )
+
+    merged_handle = await session.get(Handle, merged_id)
+    if merged_handle is not None:
+        merged_handle.status = "active"
+
+    raw_decision_id = result.get("identity_decision_id")
+    if raw_decision_id:
+        await session.execute(
+            delete(IdentityDecisionModel).where(
+                IdentityDecisionModel.id == uuid.UUID(raw_decision_id),
+            )
+        )
+
+    await session.flush()
+
+    activity_repo = ActivityRepo(session, corpus_id)
+    await activity_repo.log(
+        event_type="rollback_merge_handles",
+        actor="system",
+        entity_type="handle",
+        entity_id=merged_id,
+        details={"original_result": result},
+    )
+
+    return {"restored_handle_id": str(merged_id), "moved_back": len(moved_ids)}
+
+
+async def _rollback_split_handle(
+    session: AsyncSession,
+    corpus_id: uuid.UUID,
+    payload: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    original_id = uuid.UUID(result["original_handle_id"])
+    new_id = uuid.UUID(result["new_handle_id"])
+
+    moved_stmt = select(Proposition.id).where(
+        Proposition.corpus_id == corpus_id,
+        (Proposition.subject_handle_id == new_id)
+        | (Proposition.object_handle_id == new_id),
+    )
+    moved_result = await session.execute(moved_stmt)
+    moved_ids = [row[0] for row in moved_result]
+
+    if moved_ids:
+        await session.execute(
+            update(Proposition)
+            .where(
+                Proposition.id.in_(moved_ids),
+                Proposition.subject_handle_id == new_id,
+                Proposition.corpus_id == corpus_id,
+            )
+            .values(subject_handle_id=original_id)
+        )
+        await session.execute(
+            update(Proposition)
+            .where(
+                Proposition.id.in_(moved_ids),
+                Proposition.object_handle_id == new_id,
+                Proposition.corpus_id == corpus_id,
+            )
+            .values(object_handle_id=original_id)
+        )
+        await session.execute(
+            update(PropositionParticipant)
+            .where(
+                PropositionParticipant.handle_id == new_id,
+                PropositionParticipant.corpus_id == corpus_id,
+            )
+            .values(handle_id=original_id)
+        )
+
+    raw_decision_id = result.get("identity_decision_id")
+    if raw_decision_id:
+        await session.execute(
+            delete(IdentityDecisionModel).where(
+                IdentityDecisionModel.id == uuid.UUID(raw_decision_id),
+            )
+        )
+
+    new_handle = await session.get(Handle, new_id)
+    if new_handle is not None:
+        await session.delete(new_handle)
+
+    await session.flush()
+
+    activity_repo = ActivityRepo(session, corpus_id)
+    await activity_repo.log(
+        event_type="rollback_split_handle",
+        actor="system",
+        entity_type="handle",
+        entity_id=original_id,
+        details={"original_result": result},
+    )
+
+    return {"original_handle_id": str(original_id), "moved_back": len(moved_ids)}

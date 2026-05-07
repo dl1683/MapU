@@ -38,10 +38,12 @@ async def query(
     question: str,
     max_results: int = 20,
     situation_id: str | None = None,
+    as_of: str | None = None,
 ) -> dict[str, Any]:
     """Ask a question against a MapU knowledge corpus.
 
     Returns structured results with proposition hits, synthesis, and gaps.
+    Pass as_of as an ISO 8601 datetime to get truth as of that point in time.
     """
     from mapu.query.intent import HeuristicIntentClassifier
     from mapu.query.service import QueryService
@@ -50,6 +52,11 @@ async def query(
     cid = uuid.UUID(corpus_id)
     sid = uuid.UUID(situation_id) if situation_id else None
     max_results = min(max(max_results, 1), 500)
+    as_of_dt = None
+    if as_of is not None:
+        from datetime import datetime as dt
+
+        as_of_dt = dt.fromisoformat(as_of)
     factory = _get_session_factory()
     async with factory() as session:
         from mapu.providers.embeddings import get_default_embedding_provider
@@ -64,6 +71,7 @@ async def query(
         request = QueryRequest(
             corpus_id=cid, question=question,
             max_results=max_results, situation_id=sid,
+            as_of=as_of_dt,
         )
         result = await svc.query(request)
         return {
@@ -451,20 +459,10 @@ async def contribute_proposition(
                 ))
             await session.flush()
 
-        from mapu.authority.source_policy import SourcePolicyEvaluatorV1, SourcePolicyInput
-
-        policy_input = SourcePolicyInput(
-            document_type="other",
-            attestation_type="self_reported" if actor != "system" else "automated",
-            source_identity=actor,
-        )
-        evaluator = SourcePolicyEvaluatorV1(session, cid)
-        spe = await evaluator.evaluate_and_persist(prop.id, policy_input)
-
         att = Attestation(
             id=uuid.uuid4(), proposition_id=prop.id, corpus_id=cid,
             stance=stance, extraction_method=f"{actor}_contribution",
-            extraction_confidence=confidence, source_policy_eval_id=spe.id,
+            extraction_confidence=confidence,
             status="candidate",
             system_created=datetime.now(UTC),
         )

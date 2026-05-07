@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -16,7 +17,7 @@ class EmbeddingSettings(BaseSettings):
     provider: str = "local"
     model: str = "hash-deterministic"
     dimensions: int = 384
-    batch_size: int = 64
+    batch_size: int = Field(default=64, gt=0)
     device: str = "cpu"
 
     model_config = {"env_prefix": "MAPU_EMBEDDING_"}

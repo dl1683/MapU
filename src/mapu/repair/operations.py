@@ -318,6 +318,7 @@ async def merge_handles(
     return {
         "canonical_handle_id": str(canonical_handle_id),
         "merged_handle_id": str(merged_handle_id),
+        "moved_proposition_ids": [str(p) for p in moved_prop_ids],
         "identity_decision_id": str(identity.id),
     }
 

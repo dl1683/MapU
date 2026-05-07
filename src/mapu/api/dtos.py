@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -23,6 +24,7 @@ class QueryRequestDTO(BaseModel):
     question: str = Field(min_length=1)
     max_results: int = Field(default=20, ge=1, le=500)
     situation_id: uuid.UUID | None = None
+    as_of: datetime | None = None
 
 
 class HitResponse(BaseModel):

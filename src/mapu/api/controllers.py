@@ -116,6 +116,7 @@ class QueryController(Controller):
             question=data.question,
             max_results=data.max_results,
             situation_id=data.situation_id,
+            as_of=data.as_of,
         )
         result = await svc.query(request)
         return QueryResponse(
@@ -457,16 +458,6 @@ class ContributionController(Controller):
                 ))
             await db_session.flush()
 
-        from mapu.authority.source_policy import SourcePolicyEvaluatorV1, SourcePolicyInput
-
-        policy_input = SourcePolicyInput(
-            document_type="other",
-            attestation_type="self_reported" if data.actor != "system" else "automated",
-            source_identity=data.actor,
-        )
-        evaluator = SourcePolicyEvaluatorV1(db_session, corpus_id)
-        spe = await evaluator.evaluate_and_persist(prop.id, policy_input)
-
         att = Attestation(
             id=uuid.uuid4(),
             proposition_id=prop.id,
@@ -474,7 +465,6 @@ class ContributionController(Controller):
             stance=data.stance,
             extraction_method=f"{data.actor}_contribution",
             extraction_confidence=data.confidence,
-            source_policy_eval_id=spe.id,
             status="candidate",
             system_created=datetime.now(UTC),
         )

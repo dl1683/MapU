@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mapu.extraction.grounding import _compute_semantic_key
 from mapu.models.attestation import Attestation
 from mapu.models.entity import Handle, IdentityDecisionModel
 from mapu.models.proposition import Proposition, PropositionParticipant
@@ -172,6 +173,44 @@ async def reject_attestation(
     }
 
 
+async def _recompute_semantic_keys(
+    session: AsyncSession,
+    corpus_id: uuid.UUID,
+    proposition_ids: list[uuid.UUID],
+) -> int:
+    """Recompute semantic_key for propositions after handle changes."""
+    if not proposition_ids:
+        return 0
+    stmt = select(Proposition).where(
+        Proposition.id.in_(proposition_ids),
+        Proposition.corpus_id == corpus_id,
+    )
+    result = await session.execute(stmt)
+    props = result.scalars().all()
+    count = 0
+    for prop in props:
+        valid_range = None
+        if prop.valid_range is not None:
+            valid_range = (prop.valid_range.lower, prop.valid_range.upper)
+        new_key = _compute_semantic_key(
+            frame_type=prop.frame_type,
+            subject_handle_id=prop.subject_handle_id,
+            predicate=prop.predicate,
+            object_handle_id=prop.object_handle_id,
+            value=prop.value,
+            polarity=prop.polarity,
+            modality=prop.modality,
+            qualifiers=prop.qualifiers,
+            valid_range=valid_range,
+        )
+        if new_key != prop.semantic_key:
+            prop.semantic_key = new_key
+            count += 1
+    if count:
+        await session.flush()
+    return count
+
+
 async def merge_handles(
     session: AsyncSession,
     corpus_id: uuid.UUID,
@@ -228,6 +267,15 @@ async def merge_handles(
 
     merged.status = "merged"
     await session.flush()
+
+    affected_stmt = select(Proposition.id).where(
+        Proposition.corpus_id == corpus_id,
+        (Proposition.subject_handle_id == canonical_handle_id)
+        | (Proposition.object_handle_id == canonical_handle_id),
+    )
+    affected_result = await session.execute(affected_stmt)
+    affected_prop_ids = [row[0] for row in affected_result]
+    await _recompute_semantic_keys(session, corpus_id, affected_prop_ids)
 
     identity = IdentityDecisionModel(
         corpus_id=corpus_id,
@@ -300,6 +348,10 @@ async def split_handle(
         .values(handle_id=new_handle.id)
     )
     await session.flush()
+
+    await _recompute_semantic_keys(
+        session, corpus_id, proposition_ids_to_move,
+    )
 
     identity = IdentityDecisionModel(
         corpus_id=corpus_id,

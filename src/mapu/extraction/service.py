@@ -172,9 +172,13 @@ class ExtractionService:
             )
 
     async def _load_spans(self, expression_id: uuid.UUID) -> list[TextSpan]:
-        stmt = select(TextSpan).where(
-            TextSpan.expression_id == expression_id,
-            TextSpan.corpus_id == self._corpus_id,
+        stmt = (
+            select(TextSpan)
+            .where(
+                TextSpan.expression_id == expression_id,
+                TextSpan.corpus_id == self._corpus_id,
+            )
+            .order_by(TextSpan.start_char, TextSpan.id)
         )
         r = await self._session.execute(stmt)
         return list(r.scalars().all())

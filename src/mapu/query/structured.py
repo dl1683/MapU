@@ -189,7 +189,7 @@ class StructuredQueryExecutor:
                     Attestation.system_invalidated,
                 ),
                 load_only(SourcePolicyEval.authority_score),
-                load_only(TextSpan.text),
+                load_only(TextSpan.text, TextSpan.expression_id),
                 load_only(obj_handle.canonical_name, obj_handle.kind),
             )
             .join(Handle, Proposition.subject_handle_id == Handle.id)
@@ -247,6 +247,7 @@ class StructuredQueryExecutor:
                 authority_score=spe.authority_score if spe else None,
                 source_span_text=span.text if span else None,
                 relevance_score=0.85,
+                document_id=span.expression_id if span else None,
             ))
             if max_results and len(hits) >= max_results:
                 break

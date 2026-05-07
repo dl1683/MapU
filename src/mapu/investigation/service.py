@@ -21,6 +21,7 @@ from mapu.investigation.types import (
     InvestigationState,
     TerminationReason,
 )
+from mapu.models.attestation import Attestation
 from mapu.models.entity import Handle
 from mapu.models.lineage import DerivationEdge
 from mapu.models.proposition import Proposition, PropositionParticipant
@@ -129,6 +130,7 @@ class InvestigationService:
                     normalized_text=hit.normalized_text,
                     source_span=hit.source_span_text,
                     authority_score=hit.authority_score,
+                    document_id=hit.document_id,
                 ))
 
         for obs in state.observations:
@@ -358,6 +360,18 @@ class InvestigationService:
                             confidence=draft.confidence,
                             created_at=now,
                         ))
+                    self._session.add(Attestation(
+                        id=uuid.uuid4(),
+                        span_id=None,
+                        proposition_id=prop_id,
+                        corpus_id=corpus_id,
+                        source_policy_eval_id=None,
+                        stance="derived",
+                        extraction_method="investigation",
+                        extraction_confidence=draft.confidence,
+                        status="accepted",
+                        system_created=now,
+                    ))
                     await self._session.flush()
             except IntegrityError:
                 continue

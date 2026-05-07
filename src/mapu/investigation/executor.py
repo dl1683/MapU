@@ -94,6 +94,7 @@ class InvestigationExecutor:
                 normalized_text=h.normalized_text,
                 source_span=h.source_span_text,
                 authority_score=h.authority_score,
+                document_id=h.document_id,
             )
             for h in hits
             if h.proposition_id not in state.seen_proposition_ids

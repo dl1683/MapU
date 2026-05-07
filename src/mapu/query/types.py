@@ -55,6 +55,7 @@ class PropositionHit:
     authority_score: float | None
     source_span_text: str | None
     relevance_score: float
+    document_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)

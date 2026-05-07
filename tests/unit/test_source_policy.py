@@ -92,35 +92,35 @@ class TestSourcePolicyPersistValidation:
         session.flush = AsyncMock()
         return SourcePolicyEvaluatorV1(session, uuid.uuid4())
 
-    async def test_invalid_document_type_rejected(
+    async def test_unknown_document_type_uses_default_score(
         self, evaluator: SourcePolicyEvaluatorV1
     ) -> None:
-        with pytest.raises(ValueError, match="Invalid document_type"):
-            await evaluator.evaluate_and_persist(
-                uuid.uuid4(),
-                SourcePolicyInput(document_type="invented_type"),
-            )
+        spe = await evaluator.evaluate_and_persist(
+            uuid.uuid4(),
+            SourcePolicyInput(document_type="invented_type"),
+        )
+        assert spe.authority_score == pytest.approx(0.40)
 
-    async def test_invalid_publication_context_rejected(
+    async def test_unknown_publication_context_uses_zero_modifier(
         self, evaluator: SourcePolicyEvaluatorV1
     ) -> None:
-        with pytest.raises(ValueError, match="Invalid publication_context"):
-            await evaluator.evaluate_and_persist(
-                uuid.uuid4(),
-                SourcePolicyInput(
-                    document_type="contract",
-                    publication_context="invented_context",
-                ),
-            )
+        spe = await evaluator.evaluate_and_persist(
+            uuid.uuid4(),
+            SourcePolicyInput(
+                document_type="contract",
+                publication_context="invented_context",
+            ),
+        )
+        assert spe.authority_score == pytest.approx(0.78)
 
-    async def test_invalid_attestation_type_rejected(
+    async def test_unknown_attestation_type_uses_zero_modifier(
         self, evaluator: SourcePolicyEvaluatorV1
     ) -> None:
-        with pytest.raises(ValueError, match="Invalid attestation_type"):
-            await evaluator.evaluate_and_persist(
-                uuid.uuid4(),
-                SourcePolicyInput(
-                    document_type="contract",
-                    attestation_type="invented_type",
-                ),
-            )
+        spe = await evaluator.evaluate_and_persist(
+            uuid.uuid4(),
+            SourcePolicyInput(
+                document_type="contract",
+                attestation_type="invented_type",
+            ),
+        )
+        assert spe.authority_score == pytest.approx(0.78)

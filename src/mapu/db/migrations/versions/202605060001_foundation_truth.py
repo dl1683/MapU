@@ -181,12 +181,7 @@ def upgrade() -> None:
     CREATE TABLE proposition (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       corpus_id UUID NOT NULL REFERENCES corpus(id),
-      frame_type TEXT NOT NULL CHECK (frame_type IN (
-        'obligation', 'definition', 'finding', 'measurement', 'constraint',
-        'relationship', 'event', 'event_definition', 'policy', 'representation',
-        'rule', 'threshold', 'classification', 'vulnerability', 'deprecation',
-        'interface_contract', 'performance_claim', 'dependency', 'status'
-      )),
+      frame_type TEXT NOT NULL,
       subject_handle_id UUID NOT NULL,
       predicate TEXT NOT NULL,
       object_handle_id UUID,
@@ -225,24 +220,10 @@ def upgrade() -> None:
       corpus_id UUID NOT NULL REFERENCES corpus(id),
       policy_version TEXT NOT NULL DEFAULT 'v1',
       evaluator TEXT NOT NULL DEFAULT 'rule_based',
-      document_type TEXT CHECK (document_type IS NULL OR document_type IN (
-        'contract', 'amendment', 'court_order', 'court_opinion', 'statute',
-        'regulation', 'sec_filing', 'earnings_call_transcript', 'press_release',
-        'peer_reviewed_article', 'clinical_trial_report', 'retraction_notice',
-        'cve_record', 'code_file', 'government_filing', 'public_registry',
-        'leaked_document', 'state_media_report', 'internal_document', 'other'
-      )),
+      document_type TEXT,
       formality DOUBLE PRECISION CHECK (formality >= 0 AND formality <= 1),
-      attestation_type TEXT CHECK (attestation_type IS NULL OR attestation_type IN (
-        'first_party', 'third_party', 'government', 'expert_opinion',
-        'peer_reviewed', 'self_reported', 'hearsay', 'automated'
-      )),
-      publication_context TEXT CHECK (publication_context IS NULL OR publication_context IN (
-        'official_filing', 'peer_reviewed_journal', 'court_opinion',
-        'regulatory_bulletin', 'press_release', 'earnings_call',
-        'internal_document', 'leaked_document', 'social_media',
-        'government_registry', 'cve_database', 'code_repository'
-      )),
+      attestation_type TEXT,
+      publication_context TEXT,
       cross_reference_count INT NOT NULL DEFAULT 0 CHECK (cross_reference_count >= 0),
       provenance_verified BOOLEAN NOT NULL DEFAULT FALSE,
       source_identity TEXT,

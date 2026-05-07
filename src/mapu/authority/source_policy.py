@@ -99,22 +99,6 @@ class SourcePolicyEvaluatorV1:
         document_id: uuid.UUID,
         inp: SourcePolicyInput,
     ) -> SourcePolicyEval:
-        if (
-            inp.document_type is not None
-            and inp.document_type not in _DOCUMENT_TYPE_SCORES
-        ):
-            raise ValueError(f"Invalid document_type: {inp.document_type!r}")
-        if (
-            inp.publication_context is not None
-            and inp.publication_context not in _PUBLICATION_CONTEXT_MODIFIER
-        ):
-            raise ValueError(f"Invalid publication_context: {inp.publication_context!r}")
-        if (
-            inp.attestation_type is not None
-            and inp.attestation_type not in _ATTESTATION_TYPE_MODIFIER
-        ):
-            raise ValueError(f"Invalid attestation_type: {inp.attestation_type!r}")
-
         authority_score = self.score(inp)
 
         spe = SourcePolicyEval(

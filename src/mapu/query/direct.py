@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, load_only
 
@@ -14,6 +14,7 @@ from mapu.models.authority import SourcePolicyEval
 from mapu.models.entity import Handle
 from mapu.models.evidence import TextSpan
 from mapu.models.proposition import Proposition
+from mapu.models.truth import PropositionState
 from mapu.query.types import PropositionHit, QueryPlan, QueryRequest, Tier
 
 
@@ -42,6 +43,7 @@ class DirectLookupExecutor:
                 predicate_texts=(),
                 limit=request.max_results,
                 relevance=1.0,
+                situation_id=request.situation_id,
             )
             if hits:
                 return hits
@@ -53,6 +55,7 @@ class DirectLookupExecutor:
                 predicate_texts=plan.predicates_extracted,
                 limit=request.max_results,
                 relevance=0.9,
+                situation_id=request.situation_id,
             )
 
         return ()
@@ -64,12 +67,14 @@ class DirectLookupExecutor:
         predicate_texts: tuple[str, ...],
         limit: int,
         relevance: float,
+        situation_id: uuid.UUID | None = None,
     ) -> list[PropositionHit]:
         obj_handle = aliased(Handle, name="object_handle")
         stmt = (
             select(
                 Proposition, Handle, Attestation,
                 SourcePolicyEval, TextSpan, obj_handle,
+                PropositionState.truth_status,
             )
             .options(
                 load_only(
@@ -102,11 +107,28 @@ class DirectLookupExecutor:
                 obj_handle,
                 Proposition.object_handle_id == obj_handle.id,
             )
-            .where(
-                Proposition.corpus_id == corpus_id,
-                Attestation.status == "accepted",
-                Attestation.system_invalidated.is_(None),
+        )
+
+        if situation_id is not None:
+            stmt = stmt.outerjoin(
+                PropositionState,
+                (PropositionState.proposition_id == Proposition.id)
+                & (PropositionState.corpus_id == Proposition.corpus_id)
+                & (PropositionState.situation_id == situation_id)
+                & (func.upper(PropositionState.effective_range).is_(None)),
             )
+        else:
+            stmt = stmt.outerjoin(
+                PropositionState,
+                (PropositionState.proposition_id == Proposition.id)
+                & (PropositionState.corpus_id == Proposition.corpus_id)
+                & (func.upper(PropositionState.effective_range).is_(None)),
+            )
+
+        stmt = stmt.where(
+            Proposition.corpus_id == corpus_id,
+            Attestation.status == "accepted",
+            Attestation.system_invalidated.is_(None),
         )
 
         filters = []
@@ -127,7 +149,7 @@ class DirectLookupExecutor:
 
         seen: set[uuid.UUID] = set()
         hits: list[PropositionHit] = []
-        for prop, handle, att, spe, span, obj_h in rows:
+        for prop, handle, att, spe, span, obj_h, truth_status in rows:
             if prop.id in seen:
                 continue
             seen.add(prop.id)
@@ -140,7 +162,7 @@ class DirectLookupExecutor:
                 subject_kind=handle.kind,
                 object_name=obj_h.canonical_name if obj_h else None,
                 object_kind=obj_h.kind if obj_h else None,
-                truth_status=None,
+                truth_status=truth_status,
                 extraction_confidence=att.extraction_confidence,
                 authority_score=spe.authority_score if spe else None,
                 source_span_text=span.text if span else None,

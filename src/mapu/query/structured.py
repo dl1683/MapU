@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, load_only
 
@@ -15,6 +15,7 @@ from mapu.models.authority import SourcePolicyEval
 from mapu.models.entity import Handle
 from mapu.models.evidence import TextSpan
 from mapu.models.proposition import Proposition
+from mapu.models.truth import PropositionState
 from mapu.query.direct import _escape_like
 from mapu.query.types import PropositionHit, QueryIntent, QueryPlan, QueryRequest, Tier
 
@@ -45,7 +46,7 @@ class StructuredQueryExecutor:
     async def _execute_list(
         self, plan: QueryPlan, request: QueryRequest,
     ) -> list[PropositionHit]:
-        stmt = self._base_query(request.corpus_id)
+        stmt = self._base_query(request.corpus_id, request.situation_id)
         if plan.predicates_extracted:
             predicates = plan.predicates_extracted
             stmt = stmt.where(
@@ -61,7 +62,7 @@ class StructuredQueryExecutor:
     async def _execute_temporal(
         self, plan: QueryPlan, request: QueryRequest,
     ) -> list[PropositionHit]:
-        stmt = self._base_query(request.corpus_id)
+        stmt = self._base_query(request.corpus_id, request.situation_id)
         if plan.entities_extracted:
             stmt = stmt.where(
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
@@ -75,40 +76,14 @@ class StructuredQueryExecutor:
     ) -> list[PropositionHit]:
         from mapu.models.lineage import SupersessionEdge
 
-        obj_handle = aliased(Handle, name="object_handle")
-        stmt = (
-            select(
-                Proposition, Handle, Attestation,
-                SourcePolicyEval, TextSpan, obj_handle,
+        stmt = self._base_query(request.corpus_id, request.situation_id)
+        stmt = stmt.join(
+            SupersessionEdge,
+            (
+                (SupersessionEdge.old_proposition_id == Proposition.id)
+                | (SupersessionEdge.new_proposition_id == Proposition.id)
             )
-            .join(Handle, Proposition.subject_handle_id == Handle.id)
-            .join(
-                Attestation,
-                (Attestation.proposition_id == Proposition.id)
-                & (Attestation.corpus_id == Proposition.corpus_id),
-            )
-            .outerjoin(
-                SourcePolicyEval,
-                Attestation.source_policy_eval_id == SourcePolicyEval.id,
-            )
-            .outerjoin(TextSpan, Attestation.span_id == TextSpan.id)
-            .outerjoin(
-                obj_handle,
-                Proposition.object_handle_id == obj_handle.id,
-            )
-            .join(
-                SupersessionEdge,
-                (
-                    (SupersessionEdge.old_proposition_id == Proposition.id)
-                    | (SupersessionEdge.new_proposition_id == Proposition.id)
-                )
-                & (SupersessionEdge.corpus_id == Proposition.corpus_id),
-            )
-            .where(
-                Proposition.corpus_id == request.corpus_id,
-                Attestation.status == "accepted",
-                Attestation.system_invalidated.is_(None),
-            )
+            & (SupersessionEdge.corpus_id == Proposition.corpus_id),
         )
         if plan.entities_extracted:
             stmt = stmt.where(
@@ -126,7 +101,7 @@ class StructuredQueryExecutor:
     ) -> list[PropositionHit]:
         from mapu.types import FrameType
 
-        stmt = self._base_query(request.corpus_id).where(
+        stmt = self._base_query(request.corpus_id, request.situation_id).where(
             Proposition.frame_type.in_([
                 FrameType.MEASUREMENT.value,
                 FrameType.THRESHOLD.value,
@@ -154,7 +129,7 @@ class StructuredQueryExecutor:
     ) -> list[PropositionHit]:
         if not plan.entities_extracted and not plan.predicates_extracted:
             return []
-        stmt = self._base_query(request.corpus_id)
+        stmt = self._base_query(request.corpus_id, request.situation_id)
         if plan.entities_extracted:
             stmt = stmt.where(
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
@@ -166,12 +141,15 @@ class StructuredQueryExecutor:
         stmt = stmt.order_by(Attestation.extraction_confidence.desc()).limit(request.max_results)
         return await self._fetch(stmt)
 
-    def _base_query(self, corpus_id: uuid.UUID) -> Any:
+    def _base_query(
+        self, corpus_id: uuid.UUID, situation_id: uuid.UUID | None = None,
+    ) -> Any:
         obj_handle = aliased(Handle, name="object_handle")
-        return (
+        stmt = (
             select(
                 Proposition, Handle, Attestation,
                 SourcePolicyEval, TextSpan, obj_handle,
+                PropositionState.truth_status,
             )
             .options(
                 load_only(
@@ -207,11 +185,28 @@ class StructuredQueryExecutor:
                 obj_handle,
                 Proposition.object_handle_id == obj_handle.id,
             )
-            .where(
-                Proposition.corpus_id == corpus_id,
-                Attestation.status == "accepted",
-                Attestation.system_invalidated.is_(None),
+        )
+
+        if situation_id is not None:
+            stmt = stmt.outerjoin(
+                PropositionState,
+                (PropositionState.proposition_id == Proposition.id)
+                & (PropositionState.corpus_id == Proposition.corpus_id)
+                & (PropositionState.situation_id == situation_id)
+                & (func.upper(PropositionState.effective_range).is_(None)),
             )
+        else:
+            stmt = stmt.outerjoin(
+                PropositionState,
+                (PropositionState.proposition_id == Proposition.id)
+                & (PropositionState.corpus_id == Proposition.corpus_id)
+                & (func.upper(PropositionState.effective_range).is_(None)),
+            )
+
+        return stmt.where(
+            Proposition.corpus_id == corpus_id,
+            Attestation.status == "accepted",
+            Attestation.system_invalidated.is_(None),
         )
 
     async def _fetch(self, stmt: Any) -> list[PropositionHit]:
@@ -219,7 +214,7 @@ class StructuredQueryExecutor:
         rows = result.all()
         seen: set[uuid.UUID] = set()
         hits: list[PropositionHit] = []
-        for prop, handle, att, spe, span, obj_handle in rows:
+        for prop, handle, att, spe, span, obj_handle, truth_status in rows:
             if prop.id in seen:
                 continue
             seen.add(prop.id)
@@ -232,7 +227,7 @@ class StructuredQueryExecutor:
                 subject_kind=handle.kind,
                 object_name=obj_handle.canonical_name if obj_handle else None,
                 object_kind=obj_handle.kind if obj_handle else None,
-                truth_status=None,
+                truth_status=truth_status,
                 extraction_confidence=att.extraction_confidence,
                 authority_score=spe.authority_score if spe else None,
                 source_span_text=span.text if span else None,

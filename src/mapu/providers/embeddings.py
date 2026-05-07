@@ -33,6 +33,17 @@ class EmbeddingProviderFactory:
 
 def get_default_embedding_provider() -> EmbeddingProvider:
     """Return the configured embedding provider, falling back to HashEmbeddingProvider."""
-    from mapu.providers.embedding_local import HashEmbeddingProvider
+    from mapu.config import EmbeddingSettings
 
-    return HashEmbeddingProvider()
+    settings = EmbeddingSettings()
+
+    if settings.provider == "sentence-transformers":
+        from mapu.providers.embedding_st import SentenceTransformerEmbeddingProvider
+        return SentenceTransformerEmbeddingProvider(
+            model_name=settings.model,
+            dimensions=settings.dimensions,
+            device=settings.device,
+        )
+
+    from mapu.providers.embedding_local import HashEmbeddingProvider
+    return HashEmbeddingProvider(dimensions=settings.dimensions)

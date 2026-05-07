@@ -17,6 +17,7 @@ class EmbeddingSettings(BaseSettings):
     model: str = "hash-deterministic"
     dimensions: int = 384
     batch_size: int = 64
+    device: str = "cpu"
 
     model_config = {"env_prefix": "MAPU_EMBEDDING_"}
 
@@ -66,6 +67,15 @@ class ExtractionSettings(BaseSettings):
     model_config = {"env_prefix": "MAPU_EXTRACTION_"}
 
 
+class LLMSettings(BaseSettings):
+    provider: str = ""
+    model: str = ""
+    api_key: str = ""
+    base_url: str = ""
+
+    model_config = {"env_prefix": "MAPU_LLM_"}
+
+
 class QuerySettings(BaseSettings):
     llm_synthesis_provider: str = ""
     llm_synthesis_model: str = ""
@@ -90,6 +100,7 @@ class Settings(BaseSettings):
     parser: ParserSettings = ParserSettings()
     source_policy: SourcePolicySettings = SourcePolicySettings()
     extraction: ExtractionSettings = ExtractionSettings()
+    llm: LLMSettings = LLMSettings()
     query: QuerySettings = QuerySettings()
     server: ServerSettings = ServerSettings()
 

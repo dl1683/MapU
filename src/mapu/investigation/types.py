@@ -123,3 +123,4 @@ class InvestigationResult:
     findings: tuple[DerivedPropositionDraft, ...]
     metadata: dict[str, Any]
     termination_reason: TerminationReason
+    persisted_proposition_ids: tuple[uuid.UUID, ...] = ()

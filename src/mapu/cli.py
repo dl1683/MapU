@@ -64,8 +64,15 @@ async def _run_query(corpus_id_str: str, question: str) -> None:
     try:
         cid = uuid.UUID(corpus_id_str)
         async with session_factory() as session:
+            from mapu.providers.embeddings import get_default_embedding_provider
+            from mapu.providers.llms import get_default_llm_provider
+
             classifier = HeuristicIntentClassifier()
-            svc = QueryService(session, classifier)
+            svc = QueryService(
+                session, classifier,
+                llm_provider=get_default_llm_provider(),
+                embedding_provider=get_default_embedding_provider(),
+            )
             request = QueryRequest(corpus_id=cid, question=question)
             result = await svc.query(request)
 

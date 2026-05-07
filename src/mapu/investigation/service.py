@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.investigation.evaluator import InvestigationEvaluator
@@ -18,6 +22,9 @@ from mapu.investigation.types import (
     InvestigationState,
     TerminationReason,
 )
+from mapu.models.entity import Handle
+from mapu.models.lineage import DerivationEdge
+from mapu.models.proposition import Proposition, PropositionParticipant
 from mapu.providers.embeddings import EmbeddingProvider
 from mapu.providers.llms import LLMProvider, LLMRequest
 from mapu.query.types import PropositionHit
@@ -95,6 +102,8 @@ class InvestigationService:
         answer = await self._synthesize(question, evidence, gaps, state)
         findings = await self._derive_findings(question, evidence, state)
 
+        persisted_ids = await self._persist_findings(findings, corpus_id)
+
         return InvestigationResult(
             answer=answer,
             evidence=evidence,
@@ -102,6 +111,7 @@ class InvestigationService:
             findings=findings,
             metadata=self._build_metadata(state, termination),
             termination_reason=termination or TerminationReason.PLANNER_STOP,
+            persisted_proposition_ids=tuple(persisted_ids),
         )
 
     def _collect_evidence(
@@ -259,6 +269,148 @@ class InvestigationService:
             "steps": len(state.observations),
         }
 
+    async def _persist_findings(
+        self,
+        findings: tuple[DerivedPropositionDraft, ...],
+        corpus_id: uuid.UUID,
+    ) -> list[uuid.UUID]:
+        if not findings:
+            return []
+
+        persisted: list[uuid.UUID] = []
+        now = datetime.now(UTC)
+
+        for draft in findings:
+            subject_handle = await self._resolve_or_create_handle(
+                draft.subject_name, "entity", corpus_id,
+            )
+            object_handle: Handle | None = None
+            if draft.object_name:
+                object_handle = await self._resolve_or_create_handle(
+                    draft.object_name, "entity", corpus_id,
+                )
+
+            semantic_key = _compute_finding_key(
+                frame_type=draft.frame_type,
+                subject_handle_id=subject_handle.id,
+                predicate=draft.predicate,
+                object_handle_id=object_handle.id if object_handle else None,
+            )
+
+            existing = await self._session.execute(
+                select(Proposition).where(
+                    Proposition.corpus_id == corpus_id,
+                    Proposition.semantic_key == semantic_key,
+                ),
+            )
+            if existing.scalar_one_or_none() is not None:
+                continue
+
+            prop = Proposition(
+                id=uuid.uuid4(),
+                corpus_id=corpus_id,
+                frame_type=draft.frame_type,
+                subject_handle_id=subject_handle.id,
+                predicate=draft.predicate,
+                object_handle_id=object_handle.id if object_handle else None,
+                value=None,
+                polarity=True,
+                modality=None,
+                valid_range=None,
+                normalized_text=draft.normalized_text,
+                qualifiers={},
+                semantic_key=semantic_key,
+                system_created=now,
+            )
+            self._session.add(prop)
+            await self._session.flush()
+
+            self._session.add(PropositionParticipant(
+                id=uuid.uuid4(),
+                proposition_id=prop.id,
+                handle_id=subject_handle.id,
+                corpus_id=corpus_id,
+                role="subject",
+                ordinal=0,
+            ))
+            if object_handle is not None:
+                self._session.add(PropositionParticipant(
+                    id=uuid.uuid4(),
+                    proposition_id=prop.id,
+                    handle_id=object_handle.id,
+                    corpus_id=corpus_id,
+                    role="object",
+                    ordinal=1,
+                ))
+
+            for basis_id in draft.derivation_basis:
+                self._session.add(DerivationEdge(
+                    id=uuid.uuid4(),
+                    corpus_id=corpus_id,
+                    parent_proposition_id=basis_id,
+                    child_proposition_id=prop.id,
+                    derivation_type="cross_document",
+                    derivation_method="investigation",
+                    confidence=draft.confidence,
+                    created_at=now,
+                ))
+
+            persisted.append(prop.id)
+
+        if persisted:
+            await self._session.flush()
+
+        return persisted
+
+    async def _resolve_or_create_handle(
+        self,
+        name: str,
+        kind: str,
+        corpus_id: uuid.UUID,
+    ) -> Handle:
+        result = await self._session.execute(
+            select(Handle).where(
+                Handle.corpus_id == corpus_id,
+                Handle.canonical_name == name,
+                Handle.kind == kind,
+                Handle.status == "active",
+            ),
+        )
+        existing = result.scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+        handle = Handle(
+            id=uuid.uuid4(),
+            corpus_id=corpus_id,
+            canonical_name=name,
+            kind=kind,
+            aliases=[],
+            status="active",
+            created_at=datetime.now(UTC),
+        )
+        self._session.add(handle)
+        await self._session.flush()
+        return handle
+
+
+def _compute_finding_key(
+    *,
+    frame_type: str,
+    subject_handle_id: uuid.UUID,
+    predicate: str,
+    object_handle_id: uuid.UUID | None,
+) -> str:
+    parts = [
+        frame_type,
+        str(subject_handle_id),
+        predicate,
+        str(object_handle_id) if object_handle_id else "",
+    ]
+    content = "|".join(parts)
+    digest = hashlib.sha256(content.encode()).hexdigest()[:16]
+    return f"{frame_type}:{predicate}:{digest}"
+
 
 def _parse_findings(
     raw: dict[str, Any],
@@ -301,7 +453,7 @@ def _parse_findings(
 
         drafts.append(DerivedPropositionDraft(
             normalized_text=str(text),
-            frame_type="cross_document",
+            frame_type="finding",
             predicate=str(predicate),
             subject_name=str(subject),
             object_name=f.get("object_name"),

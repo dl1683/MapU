@@ -97,8 +97,15 @@ class QueryController(Controller):
         from mapu.query.types import QueryRequest
 
         await _require_corpus(db_session, corpus_id)
+        from mapu.providers.embeddings import get_default_embedding_provider
+        from mapu.providers.llms import get_default_llm_provider
+
         classifier = HeuristicIntentClassifier()
-        svc = QueryService(db_session, classifier)
+        svc = QueryService(
+            db_session, classifier,
+            llm_provider=get_default_llm_provider(),
+            embedding_provider=get_default_embedding_provider(),
+        )
         request = QueryRequest(
             corpus_id=corpus_id,
             question=data.question,

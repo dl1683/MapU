@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mapu.authority.source_policy import SourcePolicyEvaluatorV1, SourcePolicyInput
 from mapu.evidence.chunking import Chunker
 from mapu.evidence.parsers import ParserRegistry
 from mapu.evidence.types import DocumentBlob, EmbeddingModelRef
@@ -32,6 +33,8 @@ class IngestResult:
     span_count: int = 0
     chunk_count: int = 0
     embedding_count: int = 0
+    source_policy_eval_id: uuid.UUID | None = None
+    authority_score: float | None = None
     span_ids: list[uuid.UUID] = field(default_factory=list)
     chunk_ids: list[uuid.UUID] = field(default_factory=list)
 
@@ -82,6 +85,17 @@ class IngestionService:
         await self._session.flush()
 
         result = IngestResult(document_id=doc.id, expression_id=expr.id)
+
+        policy_input = SourcePolicyInput(
+            document_type=blob.metadata.get("document_type"),
+            publication_context=blob.metadata.get("publication_context"),
+            attestation_type=blob.metadata.get("attestation_type"),
+            independence_group=blob.metadata.get("independence_group"),
+        )
+        evaluator = SourcePolicyEvaluatorV1(self._session, self._corpus_id)
+        spe = await evaluator.evaluate_and_persist(doc.id, policy_input)
+        result.source_policy_eval_id = spe.id
+        result.authority_score = spe.authority_score
 
         for i, node in enumerate(parsed.nodes):
             if (

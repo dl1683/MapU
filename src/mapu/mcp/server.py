@@ -52,8 +52,15 @@ async def query(
     max_results = min(max(max_results, 1), 500)
     factory = _get_session_factory()
     async with factory() as session:
+        from mapu.providers.embeddings import get_default_embedding_provider
+        from mapu.providers.llms import get_default_llm_provider
+
         classifier = HeuristicIntentClassifier()
-        svc = QueryService(session, classifier)
+        svc = QueryService(
+            session, classifier,
+            llm_provider=get_default_llm_provider(),
+            embedding_provider=get_default_embedding_provider(),
+        )
         request = QueryRequest(
             corpus_id=cid, question=question,
             max_results=max_results, situation_id=sid,

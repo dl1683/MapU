@@ -332,7 +332,7 @@ class TestParseFindings:
         findings = _parse_findings(raw, evidence)
         assert len(findings) == 1
         assert findings[0].normalized_text == "A and B are connected"
-        assert findings[0].frame_type == "cross_document"
+        assert findings[0].frame_type == "finding"
         assert len(findings[0].derivation_basis) == 2
 
     def test_rejects_single_evidence_finding(self) -> None:

@@ -38,3 +38,18 @@ class TestFullParserRegistry:
         assert isinstance(PlaintextParser(), DocumentParser)
         assert isinstance(PdfParser(), DocumentParser)
         assert isinstance(DocxParser(), DocumentParser)
+
+    def test_create_default_registers_all_parsers(self) -> None:
+        registry = ParserRegistry.create_default()
+        supported = registry.supported_types()
+        assert "text/plain" in supported
+        assert "application/pdf" in supported
+        assert (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            in supported
+        )
+        assert isinstance(registry.get_parser("text/plain"), PlaintextParser)
+        assert isinstance(registry.get_parser("application/pdf"), PdfParser)
+        assert isinstance(registry.get_parser(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ), DocxParser)

@@ -317,6 +317,150 @@ async def list_corpora(limit: int = 100) -> dict[str, Any]:
         }
 
 
+@server.tool()
+async def contribute_proposition(
+    corpus_id: str,
+    subject_name: str,
+    predicate: str,
+    normalized_text: str,
+    subject_kind: str = "entity",
+    object_name: str | None = None,
+    object_kind: str | None = None,
+    frame_type: str = "finding",
+    confidence: float = 1.0,
+    stance: str = "asserts",
+    actor: str = "agent",
+) -> dict[str, Any]:
+    """Contribute a proposition to a corpus.
+
+    Creates or reuses entity handles, creates a proposition (deduplicated
+    by semantic key), and attaches a candidate attestation.
+    """
+    from datetime import UTC, datetime
+
+    from mapu.extraction.grounding import _compute_semantic_key
+    from mapu.models.attestation import Attestation
+    from mapu.models.entity import Handle
+    from mapu.models.proposition import Proposition, PropositionParticipant
+    from mapu.repos.entity import HandleRepo
+
+    cid = uuid.UUID(corpus_id)
+    factory = _get_session_factory()
+    async with factory() as session:
+        handle_repo = HandleRepo(session, cid)
+        subject = await handle_repo.get_by_name_kind(subject_name, subject_kind)
+        if subject is None:
+            subject = Handle(
+                id=uuid.uuid4(), corpus_id=cid,
+                canonical_name=subject_name, kind=subject_kind,
+                aliases=[], status="active", created_at=datetime.now(UTC),
+            )
+            session.add(subject)
+            await session.flush()
+
+        obj_handle: Handle | None = None
+        if object_name:
+            ok = object_kind or "entity"
+            obj_handle = await handle_repo.get_by_name_kind(object_name, ok)
+            if obj_handle is None:
+                obj_handle = Handle(
+                    id=uuid.uuid4(), corpus_id=cid,
+                    canonical_name=object_name, kind=ok,
+                    aliases=[], status="active", created_at=datetime.now(UTC),
+                )
+                session.add(obj_handle)
+                await session.flush()
+
+        semantic_key = _compute_semantic_key(
+            frame_type=frame_type,
+            subject_handle_id=subject.id,
+            predicate=predicate,
+            object_handle_id=obj_handle.id if obj_handle else None,
+            value=None, polarity=True, modality=None,
+        )
+
+        from mapu.repos.proposition import PropositionRepo
+
+        prop_repo = PropositionRepo(session, cid)
+        existing = await prop_repo.get_by_semantic_key(semantic_key)
+        if existing is not None:
+            prop = existing
+            prop_created = False
+        else:
+            prop = Proposition(
+                id=uuid.uuid4(), corpus_id=cid,
+                frame_type=frame_type, subject_handle_id=subject.id,
+                predicate=predicate,
+                object_handle_id=obj_handle.id if obj_handle else None,
+                normalized_text=normalized_text, semantic_key=semantic_key,
+                system_created=datetime.now(UTC),
+            )
+            session.add(prop)
+            prop_created = True
+            await session.flush()
+
+        if prop_created:
+            session.add(PropositionParticipant(
+                id=uuid.uuid4(), proposition_id=prop.id,
+                handle_id=subject.id, corpus_id=cid, role="subject", ordinal=0,
+            ))
+            if obj_handle is not None:
+                session.add(PropositionParticipant(
+                    id=uuid.uuid4(), proposition_id=prop.id,
+                    handle_id=obj_handle.id, corpus_id=cid, role="object", ordinal=1,
+                ))
+            await session.flush()
+
+        att = Attestation(
+            id=uuid.uuid4(), proposition_id=prop.id, corpus_id=cid,
+            stance=stance, extraction_method=f"{actor}_contribution",
+            extraction_confidence=confidence, status="candidate",
+            system_created=datetime.now(UTC),
+        )
+        session.add(att)
+        await session.flush()
+        await session.commit()
+        return {
+            "proposition_id": str(prop.id),
+            "attestation_id": str(att.id),
+        }
+
+
+@server.tool()
+async def review_attestation(
+    corpus_id: str,
+    attestation_id: str,
+    decision: str,
+    actor: str = "agent",
+    reason: str = "",
+) -> dict[str, Any]:
+    """Review an attestation: accept, reject, or quarantine it.
+
+    The decision must be one of: accepted, rejected, quarantined.
+    """
+    from mapu.repos.attestation import AttestationRepo
+
+    if decision not in ("accepted", "rejected", "quarantined"):
+        return {"error": f"Invalid decision '{decision}'. Must be accepted/rejected/quarantined."}
+
+    cid = uuid.UUID(corpus_id)
+    aid = uuid.UUID(attestation_id)
+    factory = _get_session_factory()
+    async with factory() as session:
+        repo = AttestationRepo(session, cid)
+        if decision == "accepted":
+            await repo.accept(aid)
+        elif decision == "rejected":
+            await repo.reject(aid)
+        elif decision == "quarantined":
+            await repo.quarantine(aid)
+        await session.commit()
+        return {
+            "attestation_id": str(aid),
+            "new_status": decision,
+        }
+
+
 def run_mcp() -> None:
     """Entry point for the MCP server."""
     server.run(transport="stdio")

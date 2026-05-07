@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.api.dtos import (
     ChunkHitResponse,
+    ContributePropositionRequest,
+    ContributePropositionResponse,
     CorpusCreate,
     CorpusResponse,
     HandleResponse,
@@ -24,6 +26,8 @@ from mapu.api.dtos import (
     RepairPreviewResponse,
     RepairProposeRequest,
     RepairProposeResponse,
+    ReviewAttestationRequest,
+    ReviewAttestationResponse,
 )
 from mapu.models.corpus import Corpus
 
@@ -315,6 +319,152 @@ class RepairController(Controller):
         )
 
 
+class ContributionController(Controller):
+    path = "/corpora/{corpus_id:uuid}/contributions"
+
+    @post()
+    async def contribute_proposition(
+        self,
+        corpus_id: uuid.UUID,
+        data: ContributePropositionRequest,
+        db_session: AsyncSession,
+    ) -> ContributePropositionResponse:
+        from datetime import UTC, datetime
+
+        from mapu.extraction.grounding import _compute_semantic_key
+        from mapu.models.attestation import Attestation
+        from mapu.models.entity import Handle
+        from mapu.models.proposition import Proposition, PropositionParticipant
+        from mapu.repos.entity import HandleRepo
+
+        await _require_corpus(db_session, corpus_id)
+
+        handle_repo = HandleRepo(db_session, corpus_id)
+        subject = await handle_repo.get_by_name_kind(data.subject_name, data.subject_kind)
+        if subject is None:
+            subject = Handle(
+                id=uuid.uuid4(),
+                corpus_id=corpus_id,
+                canonical_name=data.subject_name,
+                kind=data.subject_kind,
+                aliases=[],
+                status="active",
+                created_at=datetime.now(UTC),
+            )
+            db_session.add(subject)
+            await db_session.flush()
+
+        object_handle: Handle | None = None
+        if data.object_name:
+            obj_kind = data.object_kind or "entity"
+            object_handle = await handle_repo.get_by_name_kind(data.object_name, obj_kind)
+            if object_handle is None:
+                object_handle = Handle(
+                    id=uuid.uuid4(),
+                    corpus_id=corpus_id,
+                    canonical_name=data.object_name,
+                    kind=obj_kind,
+                    aliases=[],
+                    status="active",
+                    created_at=datetime.now(UTC),
+                )
+                db_session.add(object_handle)
+                await db_session.flush()
+
+        semantic_key = _compute_semantic_key(
+            frame_type=data.frame_type,
+            subject_handle_id=subject.id,
+            predicate=data.predicate,
+            object_handle_id=object_handle.id if object_handle else None,
+            value=None,
+            polarity=True,
+            modality=None,
+        )
+
+        from mapu.repos.proposition import PropositionRepo
+
+        prop_repo = PropositionRepo(db_session, corpus_id)
+        existing = await prop_repo.get_by_semantic_key(semantic_key)
+        if existing is not None:
+            prop = existing
+            prop_created = False
+        else:
+            prop = Proposition(
+                id=uuid.uuid4(),
+                corpus_id=corpus_id,
+                frame_type=data.frame_type,
+                subject_handle_id=subject.id,
+                predicate=data.predicate,
+                object_handle_id=object_handle.id if object_handle else None,
+                normalized_text=data.normalized_text,
+                semantic_key=semantic_key,
+                system_created=datetime.now(UTC),
+            )
+            db_session.add(prop)
+            prop_created = True
+            await db_session.flush()
+
+        if prop_created:
+            db_session.add(PropositionParticipant(
+                id=uuid.uuid4(),
+                proposition_id=prop.id,
+                handle_id=subject.id,
+                corpus_id=corpus_id,
+                role="subject",
+                ordinal=0,
+            ))
+            if object_handle is not None:
+                db_session.add(PropositionParticipant(
+                    id=uuid.uuid4(),
+                    proposition_id=prop.id,
+                    handle_id=object_handle.id,
+                    corpus_id=corpus_id,
+                    role="object",
+                    ordinal=1,
+                ))
+            await db_session.flush()
+
+        att = Attestation(
+            id=uuid.uuid4(),
+            proposition_id=prop.id,
+            corpus_id=corpus_id,
+            stance=data.stance,
+            extraction_method=f"{data.actor}_contribution",
+            extraction_confidence=data.confidence,
+            status="candidate",
+            system_created=datetime.now(UTC),
+        )
+        db_session.add(att)
+        await db_session.flush()
+
+        return ContributePropositionResponse(
+            proposition_id=prop.id,
+            attestation_id=att.id,
+        )
+
+    @post("/review")
+    async def review_attestation(
+        self,
+        corpus_id: uuid.UUID,
+        data: ReviewAttestationRequest,
+        db_session: AsyncSession,
+    ) -> ReviewAttestationResponse:
+        from mapu.repos.attestation import AttestationRepo
+
+        await _require_corpus(db_session, corpus_id)
+        repo = AttestationRepo(db_session, corpus_id)
+        if data.decision == "accepted":
+            await repo.accept(data.attestation_id)
+        elif data.decision == "rejected":
+            await repo.reject(data.attestation_id)
+        elif data.decision == "quarantined":
+            await repo.quarantine(data.attestation_id)
+        return ReviewAttestationResponse(
+            attestation_id=data.attestation_id,
+            new_status=data.decision,
+        )
+
+
 def all_controllers() -> list[type[Controller]]:
     return [
         HealthController,
@@ -323,4 +473,5 @@ def all_controllers() -> list[type[Controller]]:
         DocumentController,
         EntityController,
         RepairController,
+        ContributionController,
     ]

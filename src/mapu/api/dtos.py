@@ -120,6 +120,36 @@ class RepairApplyResponse(BaseModel):
     errors: list[str]
 
 
+class ContributePropositionRequest(BaseModel):
+    subject_name: str = Field(min_length=1)
+    subject_kind: str = "entity"
+    predicate: str = Field(min_length=1)
+    object_name: str | None = None
+    object_kind: str | None = None
+    normalized_text: str = Field(min_length=1)
+    frame_type: str = "finding"
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    stance: str = "asserts"
+    actor: str = "human"
+
+
+class ContributePropositionResponse(BaseModel):
+    proposition_id: uuid.UUID
+    attestation_id: uuid.UUID
+
+
+class ReviewAttestationRequest(BaseModel):
+    attestation_id: uuid.UUID
+    decision: str = Field(pattern="^(accepted|rejected|quarantined)$")
+    actor: str = "human"
+    reason: str = ""
+
+
+class ReviewAttestationResponse(BaseModel):
+    attestation_id: uuid.UUID
+    new_status: str
+
+
 class HealthResponse(BaseModel):
     status: str
     version: str

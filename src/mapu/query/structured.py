@@ -56,7 +56,10 @@ class StructuredQueryExecutor:
             stmt = stmt.where(
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
             )
-        stmt = stmt.order_by(Proposition.system_created.desc()).limit(request.max_results)
+        stmt = stmt.order_by(
+            SourcePolicyEval.authority_score.desc().nulls_last(),
+            Proposition.system_created.desc(),
+        ).limit(request.max_results)
         return await self._fetch(stmt)
 
     async def _execute_temporal(
@@ -142,7 +145,10 @@ class StructuredQueryExecutor:
             stmt = stmt.where(
                 Proposition.predicate.ilike(f"%{_escape_like(plan.predicates_extracted[0])}%")
             )
-        stmt = stmt.order_by(Attestation.extraction_confidence.desc()).limit(request.max_results)
+        stmt = stmt.order_by(
+            SourcePolicyEval.authority_score.desc().nulls_last(),
+            Attestation.extraction_confidence.desc(),
+        ).limit(request.max_results)
         return await self._fetch(stmt)
 
     def _base_query(

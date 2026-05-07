@@ -220,6 +220,51 @@ class TestListCorporaTool:
         assert result["corpora"] == []
 
 
+class TestIngestContentLimit:
+    @pytest.mark.asyncio
+    async def test_ingest_rejects_oversized_content(self) -> None:
+        from mapu.mcp.server import ingest_document
+
+        result = await ingest_document(
+            corpus_id=str(uuid.uuid4()),
+            content="x" * 10_000_001,
+        )
+        assert "error" in result
+
+
+class TestQueryMaxResultsClamp:
+    @pytest.mark.asyncio
+    async def test_query_clamps_max_results(self) -> None:
+        from mapu.query.types import QueryIntent, QueryRequest, QueryResult, Tier
+
+        cid = uuid.uuid4()
+        mock_result = QueryResult(
+            request=QueryRequest(corpus_id=cid, question="test"),
+            intent=QueryIntent.IDENTITY,
+            tier_used=Tier.DIRECT,
+            synthesis=None,
+            hits=(),
+            gaps=(),
+            metadata={},
+        )
+
+        mock_svc = AsyncMock()
+        mock_svc.query = AsyncMock(return_value=mock_result)
+        session = _mock_session()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.query.intent.HeuristicIntentClassifier"),
+            patch("mapu.query.service.QueryService", return_value=mock_svc),
+        ):
+            from mapu.mcp.server import query
+
+            await query(corpus_id=str(cid), question="test", max_results=9999)
+
+        call_args = mock_svc.query.call_args[0][0]
+        assert call_args.max_results == 500
+
+
 class TestRepairPreviewTool:
     @pytest.mark.asyncio
     async def test_repair_preview_returns_blast_radius(self) -> None:

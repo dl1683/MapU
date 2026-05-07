@@ -159,20 +159,6 @@ class IngestionService:
             result.span_count += 1
         await self._session.flush()
 
-        if self._extractors:
-            extraction_svc = ExtractionService(
-                session=self._session,
-                corpus_id=self._corpus_id,
-                extractors=self._extractors,
-                merge_engine=CandidateMergeEngine(),
-                abstention_gate=AbstentionGate(),
-                grounder=CandidateGrounder(self._session, self._corpus_id),
-            )
-            extraction_result = await extraction_svc.extract_expression(
-                expr.id, spe.id,
-            )
-            result.propositions_extracted = len(extraction_result.materialized)
-
         candidates = self._chunker.chunk(parsed)
 
         span_count = len(parsed.spans)
@@ -239,5 +225,22 @@ class IngestionService:
                     self._session.add(ce)
                     result.embedding_count += 1
                 await self._session.flush()
+
+        if self._extractors:
+            try:
+                extraction_svc = ExtractionService(
+                    session=self._session,
+                    corpus_id=self._corpus_id,
+                    extractors=self._extractors,
+                    merge_engine=CandidateMergeEngine(),
+                    abstention_gate=AbstentionGate(),
+                    grounder=CandidateGrounder(self._session, self._corpus_id),
+                )
+                extraction_result = await extraction_svc.extract_expression(
+                    expr.id, spe.id,
+                )
+                result.propositions_extracted = len(extraction_result.materialized)
+            except Exception:
+                pass
 
         return result

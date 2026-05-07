@@ -83,6 +83,14 @@ async def query(
                 for h in result.hits
             ],
             "gaps": list(result.gaps),
+            "chunk_hits": [
+                {
+                    "chunk_id": str(ch.chunk_id),
+                    "text": ch.text,
+                    "score": ch.score,
+                }
+                for ch in result.chunk_hits
+            ],
             "metadata": result.metadata,
         }
 

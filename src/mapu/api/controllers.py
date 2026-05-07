@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.api.dtos import (
+    ChunkHitResponse,
     CorpusCreate,
     CorpusResponse,
     HandleResponse,
@@ -130,6 +131,14 @@ class QueryController(Controller):
                 for h in result.hits
             ],
             gaps=list(result.gaps),
+            chunk_hits=[
+                ChunkHitResponse(
+                    chunk_id=ch.chunk_id,
+                    text=ch.text,
+                    score=ch.score,
+                )
+                for ch in result.chunk_hits
+            ],
         )
 
 

@@ -269,12 +269,20 @@ class TestEntityExtraction:
 
 
 class TestPredicateExtraction:
-    def test_common_predicates(self) -> None:
-        predicates = _extract_query_predicates("Who controls this entity?")
-        assert "control" in predicates or "controls" in predicates
+    def test_verb_inflected_forms(self) -> None:
+        predicates = _extract_query_predicates("Who controlled this entity?")
+        assert "controlled" in predicates
+
+    def test_verb_ing_form(self) -> None:
+        predicates = _extract_query_predicates("Who is managing the project?")
+        assert "managing" in predicates
 
     def test_no_predicates(self) -> None:
         predicates = _extract_query_predicates("Hello world")
+        assert len(predicates) == 0
+
+    def test_nouns_not_captured(self) -> None:
+        predicates = _extract_query_predicates("What are all the covenants?")
         assert len(predicates) == 0
 
 

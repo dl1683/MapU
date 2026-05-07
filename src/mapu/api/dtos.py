@@ -35,12 +35,19 @@ class HitResponse(BaseModel):
     authority_score: float | None = None
 
 
+class ChunkHitResponse(BaseModel):
+    chunk_id: uuid.UUID
+    text: str
+    score: float
+
+
 class QueryResponse(BaseModel):
     intent: str
     tier_used: str
     synthesis: str | None = None
     hits: list[HitResponse]
     gaps: list[str]
+    chunk_hits: list[ChunkHitResponse] = []
 
 
 class IngestRequestDTO(BaseModel):

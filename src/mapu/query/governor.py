@@ -89,8 +89,7 @@ _NOUN_PHRASE_RE = re.compile(
     re.IGNORECASE,
 )
 _PREDICATE_RE = re.compile(
-    r"\b([a-z]+(?:ed|es|ing|ize|ise|ate|ify|fy))\b"
-    r"|\b([a-z]+(?:s|tion|ment|ance|ence))\b",
+    r"\b([a-z]{3,}(?:ed|es|ing|ize|ise|ate|ify))\b",
     re.IGNORECASE,
 )
 
@@ -107,6 +106,7 @@ _PREDICATE_SKIP = frozenset({
     "where", "which", "while", "with", "would", "could",
     "should", "does", "will", "were", "being", "their",
     "yes", "once", "since", "before", "because", "hence",
+    "called", "named", "based", "described", "listed",
 })
 
 _ENTITY_SKIP = frozenset({
@@ -142,8 +142,7 @@ def _extract_query_entities(question: str) -> list[str]:
 
 def _extract_query_predicates(question: str) -> list[str]:
     """Extract likely predicate keywords from a query."""
-    matches = _PREDICATE_RE.findall(question)
-    words = [g1 or g2 for g1, g2 in matches]
+    words = _PREDICATE_RE.findall(question)
     return list(set(
-        w.lower() for w in words if w and w.lower() not in _PREDICATE_SKIP
+        w.lower() for w in words if w.lower() not in _PREDICATE_SKIP
     ))

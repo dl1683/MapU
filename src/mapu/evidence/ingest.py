@@ -184,19 +184,23 @@ class IngestionService:
         await self._session.flush()
 
         if self._embedder and chunk_texts:
-            vectors = await self._embedder.embed_texts(chunk_texts)
             model_ref: EmbeddingModelRef = self._embedder.model_ref
-            for chunk_model, vector in zip(chunk_models, vectors, strict=True):
-                ce = ChunkEmbedding(
-                    id=uuid.uuid4(),
-                    chunk_id=chunk_model.id,
-                    corpus_id=self._corpus_id,
-                    model_name=model_ref.tag,
-                    dimensions=model_ref.dimensions,
-                    embedding=list(vector),
-                )
-                self._session.add(ce)
-                result.embedding_count += 1
-            await self._session.flush()
+            batch_size = 64
+            for offset in range(0, len(chunk_texts), batch_size):
+                batch_texts = chunk_texts[offset:offset + batch_size]
+                batch_models = chunk_models[offset:offset + batch_size]
+                vectors = await self._embedder.embed_texts(batch_texts)
+                for chunk_model, vector in zip(batch_models, vectors, strict=True):
+                    ce = ChunkEmbedding(
+                        id=uuid.uuid4(),
+                        chunk_id=chunk_model.id,
+                        corpus_id=self._corpus_id,
+                        model_name=model_ref.tag,
+                        dimensions=model_ref.dimensions,
+                        embedding=list(vector),
+                    )
+                    self._session.add(ce)
+                    result.embedding_count += 1
+                await self._session.flush()
 
         return result

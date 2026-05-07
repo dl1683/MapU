@@ -325,18 +325,17 @@ async def split_handle(
     session.add(new_handle)
     await session.flush()
 
-    for pid in proposition_ids_to_move:
+    if proposition_ids_to_move:
         stmt = select(Proposition).where(
-            Proposition.id == pid, Proposition.corpus_id == corpus_id,
+            Proposition.id.in_(proposition_ids_to_move),
+            Proposition.corpus_id == corpus_id,
         )
         result = await session.execute(stmt)
-        prop = result.scalar_one_or_none()
-        if prop is None:
-            continue
-        if prop.subject_handle_id == handle_id:
-            prop.subject_handle_id = new_handle.id
-        if prop.object_handle_id == handle_id:
-            prop.object_handle_id = new_handle.id
+        for prop in result.scalars().all():
+            if prop.subject_handle_id == handle_id:
+                prop.subject_handle_id = new_handle.id
+            if prop.object_handle_id == handle_id:
+                prop.object_handle_id = new_handle.id
 
     await session.execute(
         update(PropositionParticipant)

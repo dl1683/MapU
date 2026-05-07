@@ -211,9 +211,13 @@ class InvestigationService:
         if not evidence:
             return ()
 
+        if self._budget.max_llm_calls - state.llm_calls_used < 1:
+            return ()
+
+        capped = evidence[:50]
         evidence_text = "\n".join(
             f"[{i}] {e.normalized_text}"
-            for i, e in enumerate(evidence)
+            for i, e in enumerate(capped)
             if e.normalized_text
         )
 
@@ -236,7 +240,7 @@ class InvestigationService:
         raw = await self._llm.complete_json(request)
         state.llm_calls_used += 1
 
-        return _parse_findings(raw, evidence)
+        return _parse_findings(raw, capped)
 
     def _build_metadata(
         self,

@@ -67,7 +67,6 @@ class ExtractionSettings(BaseSettings):
 
 
 class QuerySettings(BaseSettings):
-    synthesis_max_propositions: int = 20
     llm_synthesis_provider: str = ""
     llm_synthesis_model: str = ""
     llm_synthesis_max_tokens: int = 1024

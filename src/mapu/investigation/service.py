@@ -310,63 +310,59 @@ class InvestigationService:
             if existing.scalar_one_or_none() is not None:
                 continue
 
-            prop = Proposition(
-                id=uuid.uuid4(),
-                corpus_id=corpus_id,
-                frame_type=draft.frame_type,
-                subject_handle_id=subject_handle.id,
-                predicate=draft.predicate,
-                object_handle_id=object_handle.id if object_handle else None,
-                value=None,
-                polarity=True,
-                modality=None,
-                valid_range=None,
-                normalized_text=draft.normalized_text,
-                qualifiers={},
-                semantic_key=semantic_key,
-                system_created=now,
-            )
-            self._session.add(prop)
+            prop_id = uuid.uuid4()
             try:
                 async with self._session.begin_nested():
+                    prop = Proposition(
+                        id=prop_id,
+                        corpus_id=corpus_id,
+                        frame_type=draft.frame_type,
+                        subject_handle_id=subject_handle.id,
+                        predicate=draft.predicate,
+                        object_handle_id=object_handle.id if object_handle else None,
+                        value=None,
+                        polarity=True,
+                        modality=None,
+                        valid_range=None,
+                        normalized_text=draft.normalized_text,
+                        qualifiers={},
+                        semantic_key=semantic_key,
+                        system_created=now,
+                    )
+                    self._session.add(prop)
+                    self._session.add(PropositionParticipant(
+                        id=uuid.uuid4(),
+                        proposition_id=prop_id,
+                        handle_id=subject_handle.id,
+                        corpus_id=corpus_id,
+                        role="subject",
+                        ordinal=0,
+                    ))
+                    if object_handle is not None:
+                        self._session.add(PropositionParticipant(
+                            id=uuid.uuid4(),
+                            proposition_id=prop_id,
+                            handle_id=object_handle.id,
+                            corpus_id=corpus_id,
+                            role="object",
+                            ordinal=1,
+                        ))
+                    for basis_id in draft.derivation_basis:
+                        self._session.add(DerivationEdge(
+                            id=uuid.uuid4(),
+                            corpus_id=corpus_id,
+                            parent_proposition_id=basis_id,
+                            child_proposition_id=prop_id,
+                            derivation_type="cross_document",
+                            derivation_method="investigation",
+                            confidence=draft.confidence,
+                            created_at=now,
+                        ))
                     await self._session.flush()
             except IntegrityError:
                 continue
 
-            self._session.add(PropositionParticipant(
-                id=uuid.uuid4(),
-                proposition_id=prop.id,
-                handle_id=subject_handle.id,
-                corpus_id=corpus_id,
-                role="subject",
-                ordinal=0,
-            ))
-            if object_handle is not None:
-                self._session.add(PropositionParticipant(
-                    id=uuid.uuid4(),
-                    proposition_id=prop.id,
-                    handle_id=object_handle.id,
-                    corpus_id=corpus_id,
-                    role="object",
-                    ordinal=1,
-                ))
-
-            for basis_id in draft.derivation_basis:
-                self._session.add(DerivationEdge(
-                    id=uuid.uuid4(),
-                    corpus_id=corpus_id,
-                    parent_proposition_id=basis_id,
-                    child_proposition_id=prop.id,
-                    derivation_type="cross_document",
-                    derivation_method="investigation",
-                    confidence=draft.confidence,
-                    created_at=now,
-                ))
-
-            persisted.append(prop.id)
-
-        if persisted:
-            await self._session.flush()
+            persisted.append(prop_id)
 
         return persisted
 

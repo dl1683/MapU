@@ -75,24 +75,33 @@ def _format_user_prompt(
 
 def _parse_plan(raw: Mapping[str, Any]) -> InvestigationPlan:
     actions: list[InvestigationAction] = []
-    for action_data in raw.get("actions", []):
+    raw_actions = raw.get("actions") or []
+    for action_data in raw_actions:
+        if not isinstance(action_data, Mapping):
+            continue
+
         kind_str = action_data.get("kind", "structured_query")
         try:
             kind = ActionKind(kind_str)
         except ValueError:
             kind = ActionKind.STRUCTURED_QUERY
 
+        raw_entities = action_data.get("entities") or ()
+        raw_predicates = action_data.get("predicates") or ()
+        entities = tuple(e for e in raw_entities if isinstance(e, str))
+        predicates = tuple(p for p in raw_predicates if isinstance(p, str))
+
         actions.append(InvestigationAction(
             kind=kind,
-            query=action_data.get("query", ""),
-            entities=tuple(action_data.get("entities", ())),
-            predicates=tuple(action_data.get("predicates", ())),
-            reason=action_data.get("reason", ""),
+            query=str(action_data.get("query", "")),
+            entities=entities,
+            predicates=predicates,
+            reason=str(action_data.get("reason", "")),
         ))
 
     return InvestigationPlan(
         actions=tuple(actions),
-        reasoning=raw.get("reasoning", ""),
+        reasoning=str(raw.get("reasoning", "")),
     )
 
 

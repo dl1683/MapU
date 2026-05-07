@@ -52,6 +52,15 @@ class InvestigationPlan:
 
 
 @dataclass(frozen=True)
+class InvestigationEvidence:
+    proposition_id: uuid.UUID
+    normalized_text: str
+    source_span: str | None
+    authority_score: float | None
+    document_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
 class Observation:
     action: InvestigationAction
     proposition_ids_found: tuple[uuid.UUID, ...] = ()
@@ -59,15 +68,7 @@ class Observation:
     new_predicates_discovered: tuple[str, ...] = ()
     span_texts: tuple[str, ...] = ()
     document_ids: tuple[uuid.UUID, ...] = ()
-
-
-@dataclass(frozen=True)
-class InvestigationEvidence:
-    proposition_id: uuid.UUID
-    normalized_text: str
-    source_span: str | None
-    authority_score: float | None
-    document_id: uuid.UUID | None = None
+    evidence: tuple[InvestigationEvidence, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -90,14 +91,21 @@ class InvestigationState:
     observations: list[Observation] = field(default_factory=list)
     known_entity_coverage: float = 0.0
     known_predicate_coverage: float = 0.0
+    has_entity_targets: bool = False
+    has_predicate_targets: bool = False
     seen_proposition_ids: set[uuid.UUID] = field(default_factory=set)
     seen_document_ids: set[uuid.UUID] = field(default_factory=set)
 
     @property
     def coverage(self) -> float:
-        if self.known_entity_coverage == 0 and self.known_predicate_coverage == 0:
+        dims: list[float] = []
+        if self.has_entity_targets:
+            dims.append(self.known_entity_coverage)
+        if self.has_predicate_targets:
+            dims.append(self.known_predicate_coverage)
+        if not dims:
             return 0.0
-        return (self.known_entity_coverage + self.known_predicate_coverage) / 2
+        return sum(dims) / len(dims)
 
     def budget_exhausted(self) -> bool:
         return (

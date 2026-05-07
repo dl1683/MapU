@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mapu.investigation.types import (
     ActionKind,
     InvestigationAction,
+    InvestigationEvidence,
     InvestigationState,
     Observation,
 )
@@ -80,6 +81,18 @@ class InvestigationExecutor:
         )
         state.seen_proposition_ids.update(new_ids)
 
+        evidence = tuple(
+            InvestigationEvidence(
+                proposition_id=h.proposition_id,
+                normalized_text=h.normalized_text,
+                source_span=h.source_span_text,
+                authority_score=h.authority_score,
+            )
+            for h in hits
+            if h.proposition_id not in state.seen_proposition_ids
+            or h.proposition_id in set(new_ids)
+        )
+
         return Observation(
             action=action,
             proposition_ids_found=new_ids,
@@ -87,6 +100,7 @@ class InvestigationExecutor:
             span_texts=tuple(
                 h.source_span_text for h in hits if h.source_span_text
             ),
+            evidence=evidence,
         )
 
     async def _execute_embedding(

@@ -119,15 +119,10 @@ class InvestigationService:
                 ))
 
         for obs in state.observations:
-            for pid in obs.proposition_ids_found:
-                if pid not in seen:
-                    seen.add(pid)
-                    evidence.append(InvestigationEvidence(
-                        proposition_id=pid,
-                        normalized_text="",
-                        source_span=None,
-                        authority_score=None,
-                    ))
+            for ev in obs.evidence:
+                if ev.proposition_id not in seen:
+                    seen.add(ev.proposition_id)
+                    evidence.append(ev)
 
         return tuple(evidence)
 

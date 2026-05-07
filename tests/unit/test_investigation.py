@@ -111,6 +111,8 @@ class TestInvestigationEvaluator:
             budget=InvestigationBudget(target_coverage=0.9),
             known_entity_coverage=0.95,
             known_predicate_coverage=0.95,
+            has_entity_targets=True,
+            has_predicate_targets=True,
         )
         assert evaluator.should_terminate(state) == TerminationReason.COVERAGE_MET
 
@@ -188,8 +190,18 @@ class TestInvestigationState:
             budget=InvestigationBudget(),
             known_entity_coverage=0.8,
             known_predicate_coverage=0.6,
+            has_entity_targets=True,
+            has_predicate_targets=True,
         )
         assert state.coverage == pytest.approx(0.7)
+
+    def test_coverage_single_dimension(self) -> None:
+        state = InvestigationState(
+            budget=InvestigationBudget(),
+            known_entity_coverage=0.8,
+            has_entity_targets=True,
+        )
+        assert state.coverage == pytest.approx(0.8)
 
     def test_budget_exhausted_false(self) -> None:
         state = InvestigationState(budget=InvestigationBudget())

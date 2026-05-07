@@ -40,12 +40,14 @@ class InvestigationEvaluator:
             found_predicates.update(p.lower() for p in obs.action.predicates)
 
         if query_entities:
+            state.has_entity_targets = True
             matched = sum(
                 1 for e in query_entities if e.lower() in found_entities
             )
             state.known_entity_coverage = matched / len(query_entities)
 
         if query_predicates:
+            state.has_predicate_targets = True
             matched = sum(
                 1 for p in query_predicates if p.lower() in found_predicates
             )

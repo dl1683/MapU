@@ -91,6 +91,9 @@ class CandidateGrounder:
             semantic_key=semantic_key,
         )
 
+        if created:
+            await self._session.flush()
+
         await self._ensure_participant(
             prop.id, subject_handle.id, "subject", 0, proposition_is_new=created,
         )

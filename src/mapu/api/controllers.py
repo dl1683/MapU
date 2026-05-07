@@ -231,7 +231,6 @@ class RepairController(Controller):
         svc = RepairService(db_session, corpus_id)
         preview = await svc.preview_retraction(
             proposition_id=data.proposition_id,
-            retraction_proposition_id=data.proposition_id,
             reason=data.reason,
             actor=data.actor,
         )

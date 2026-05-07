@@ -27,7 +27,7 @@ class RepairService:
     async def preview_retraction(
         self,
         proposition_id: uuid.UUID,
-        retraction_proposition_id: uuid.UUID,
+        retraction_proposition_id: uuid.UUID | None = None,
         reason: str = "",
         actor: str = "system",
     ) -> RepairPreview:

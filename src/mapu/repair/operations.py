@@ -22,19 +22,20 @@ async def retract_proposition(
     session: AsyncSession,
     corpus_id: uuid.UUID,
     proposition_id: uuid.UUID,
-    retraction_proposition_id: uuid.UUID,
+    retraction_proposition_id: uuid.UUID | None,
     affected_ids: tuple[uuid.UUID, ...],
     reason: str,
     actor: str,
     recompute_only_ids: tuple[uuid.UUID, ...] = (),
 ) -> dict[str, Any]:
-    supersession_repo = SupersessionEdgeRepo(session, corpus_id)
-    await supersession_repo.add_supersession(
-        old_id=proposition_id,
-        new_id=retraction_proposition_id,
-        supersession_type="retraction",
-        effective_at=datetime.now(UTC),
-    )
+    if retraction_proposition_id is not None and retraction_proposition_id != proposition_id:
+        supersession_repo = SupersessionEdgeRepo(session, corpus_id)
+        await supersession_repo.add_supersession(
+            old_id=proposition_id,
+            new_id=retraction_proposition_id,
+            supersession_type="retraction",
+            effective_at=datetime.now(UTC),
+        )
 
     now = datetime.now(UTC)
     await session.execute(
@@ -73,7 +74,9 @@ async def retract_proposition(
         entity_id=proposition_id,
         details={
             "reason": reason,
-            "retraction_proposition_id": str(retraction_proposition_id),
+            "retraction_proposition_id": (
+                str(retraction_proposition_id) if retraction_proposition_id else None
+            ),
             "affected_count": len(affected_ids),
         },
     )

@@ -33,7 +33,12 @@ server = FastMCP(
 
 
 @server.tool()
-async def query(corpus_id: str, question: str, max_results: int = 20) -> dict[str, Any]:
+async def query(
+    corpus_id: str,
+    question: str,
+    max_results: int = 20,
+    situation_id: str | None = None,
+) -> dict[str, Any]:
     """Ask a question against a MapU knowledge corpus.
 
     Returns structured results with proposition hits, synthesis, and gaps.
@@ -43,12 +48,16 @@ async def query(corpus_id: str, question: str, max_results: int = 20) -> dict[st
     from mapu.query.types import QueryRequest
 
     cid = uuid.UUID(corpus_id)
+    sid = uuid.UUID(situation_id) if situation_id else None
     max_results = min(max(max_results, 1), 500)
     factory = _get_session_factory()
     async with factory() as session:
         classifier = HeuristicIntentClassifier()
         svc = QueryService(session, classifier)
-        request = QueryRequest(corpus_id=cid, question=question, max_results=max_results)
+        request = QueryRequest(
+            corpus_id=cid, question=question,
+            max_results=max_results, situation_id=sid,
+        )
         result = await svc.query(request)
         return {
             "intent": result.intent.value,
@@ -188,7 +197,6 @@ async def repair_propose(
         svc = RepairService(session, cid)
         preview = await svc.preview_retraction(
             proposition_id=pid,
-            retraction_proposition_id=pid,
             reason=reason,
             actor=actor,
         )

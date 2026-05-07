@@ -19,7 +19,7 @@ def upgrade() -> None:
     _DUPES_CTE = (
         "WITH survivors AS ("
         "  SELECT DISTINCT ON (corpus_id) id, corpus_id FROM situation "
-        "  WHERE kind = 'default' ORDER BY corpus_id, created_at ASC"
+        "  WHERE kind = 'default' ORDER BY corpus_id, created_at ASC, id ASC"
         "), dupes AS ("
         "  SELECT s.id, s.corpus_id, sv.id AS survivor_id "
         "  FROM situation s JOIN survivors sv USING (corpus_id) "
@@ -98,7 +98,7 @@ def upgrade() -> None:
     op.execute(
         "DELETE FROM situation WHERE id NOT IN ("
         "  SELECT DISTINCT ON (corpus_id) id FROM situation "
-        "  WHERE kind = 'default' ORDER BY corpus_id, created_at ASC"
+        "  WHERE kind = 'default' ORDER BY corpus_id, created_at ASC, id ASC"
         ") AND kind = 'default'"
     )
     with op.get_context().autocommit_block():

@@ -14,6 +14,7 @@ from mapu.models.attestation import Attestation
 from mapu.models.authority import SourcePolicyEval
 from mapu.models.entity import Handle
 from mapu.models.evidence import TextSpan
+from mapu.models.lineage import SupersessionEdge
 from mapu.models.proposition import Proposition
 from mapu.models.truth import PropositionState
 from mapu.query.direct import _escape_like
@@ -218,10 +219,16 @@ class StructuredQueryExecutor:
                 & (func.upper(PropositionState.effective_range).is_(None)),
             )
 
+        superseded = select(SupersessionEdge.id).where(
+            SupersessionEdge.old_proposition_id == Proposition.id,
+            SupersessionEdge.corpus_id == Proposition.corpus_id,
+        ).correlate(Proposition).exists()
+
         return stmt.where(
             Proposition.corpus_id == corpus_id,
             Attestation.status == "accepted",
             Attestation.system_invalidated.is_(None),
+            ~superseded,
         )
 
     async def _fetch(self, stmt: Any, max_results: int = 0) -> list[PropositionHit]:

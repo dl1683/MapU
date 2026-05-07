@@ -1,6 +1,5 @@
 """ML model extractors: GLiNER, REBEL, SetFit, and SRL shell.
 
-All ML extractors live in this single module per Design Gate directive.
 Models are lazily loaded on first use via LazyModelRuntime.
 """
 
@@ -248,7 +247,7 @@ class SetFitExtractor:
                 if len(labels) == len(prob_list):
                     best_idx = prob_list.index(max(prob_list))
                     return labels[best_idx], float(prob_list[best_idx])
-        except (AttributeError, TypeError, IndexError):
+        except Exception:
             pass
         try:
             predictions = await self._runtime.run_inference(model.predict, [text])
@@ -402,9 +401,9 @@ class REBELExtractor:
 class SRLExtractor:
     """Semantic role labeling shell — disabled by default.
 
-    SRL is not shipped in Phase 4 because maintained HuggingFace SRL models
-    that work with Python 3.12+ are not yet available. This adapter implements
-    the Extractor protocol as a no-op for testing and pipeline wiring.
+    Maintained HuggingFace SRL models compatible with Python 3.12+ are not
+    yet available. This adapter implements the Extractor protocol as a no-op
+    for testing and pipeline wiring.
     """
 
     def __init__(self, enabled: bool = False) -> None:

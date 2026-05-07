@@ -104,6 +104,7 @@ class QueryService:
             corpus_id=request.corpus_id,
             initial_entities=plan.entities_extracted,
             initial_predicates=plan.predicates_extracted,
+            situation_id=request.situation_id,
         )
 
         return QueryResult(

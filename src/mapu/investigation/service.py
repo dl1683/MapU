@@ -21,7 +21,7 @@ from mapu.investigation.types import (
     InvestigationState,
     TerminationReason,
 )
-from mapu.models.attestation import Attestation
+from mapu.models.attestation import Attestation, AttestationSituation
 from mapu.models.entity import Handle
 from mapu.models.lineage import DerivationEdge
 from mapu.models.proposition import Proposition, PropositionParticipant
@@ -63,6 +63,7 @@ class InvestigationService:
         initial_entities: tuple[str, ...] = (),
         initial_predicates: tuple[str, ...] = (),
         initial_hits: tuple[PropositionHit, ...] = (),
+        situation_id: uuid.UUID | None = None,
     ) -> InvestigationResult:
         state = InvestigationState(budget=self._budget)
 
@@ -102,7 +103,7 @@ class InvestigationService:
         answer = await self._synthesize(question, evidence, gaps, state)
         findings = await self._derive_findings(question, evidence, state)
 
-        persisted_ids = await self._persist_findings(findings, corpus_id)
+        persisted_ids = await self._persist_findings(findings, corpus_id, situation_id)
 
         return InvestigationResult(
             answer=answer,
@@ -274,6 +275,7 @@ class InvestigationService:
         self,
         findings: tuple[DerivedPropositionDraft, ...],
         corpus_id: uuid.UUID,
+        situation_id: uuid.UUID | None = None,
     ) -> list[uuid.UUID]:
         from sqlalchemy.exc import IntegrityError
 
@@ -360,8 +362,9 @@ class InvestigationService:
                             confidence=draft.confidence,
                             created_at=now,
                         ))
+                    att_id = uuid.uuid4()
                     self._session.add(Attestation(
-                        id=uuid.uuid4(),
+                        id=att_id,
                         span_id=None,
                         proposition_id=prop_id,
                         corpus_id=corpus_id,
@@ -373,6 +376,15 @@ class InvestigationService:
                         system_created=now,
                     ))
                     await self._session.flush()
+                    if situation_id is not None:
+                        self._session.add(AttestationSituation(
+                            attestation_id=att_id,
+                            situation_id=situation_id,
+                            corpus_id=corpus_id,
+                            assignment_confidence=1.0,
+                            assignment_basis="investigation_derived",
+                        ))
+                        await self._session.flush()
             except IntegrityError:
                 continue
 

@@ -29,26 +29,35 @@ def upgrade() -> None:
 
     op.execute(
         _DUPES_CTE
-        + "DELETE FROM attestation_situation AS ats_dup "
-        "USING dupes d, attestation_situation ats_surv "
-        "WHERE ats_dup.situation_id = d.id "
-        "AND ats_dup.corpus_id = d.corpus_id "
-        "AND ats_surv.attestation_id = ats_dup.attestation_id "
-        "AND ats_surv.situation_id = d.survivor_id "
-        "AND ats_surv.invalidated_at IS NULL "
-        "AND ats_dup.invalidated_at IS NULL"
+        + ", keepers AS ("
+        "  SELECT DISTINCT ON (ats.attestation_id, ats.corpus_id) ats.id "
+        "  FROM attestation_situation ats "
+        "  JOIN situation s ON ats.situation_id = s.id "
+        "  WHERE s.kind = 'default' AND ats.invalidated_at IS NULL "
+        "  ORDER BY ats.attestation_id, ats.corpus_id, ats.created_at ASC"
+        ") "
+        "DELETE FROM attestation_situation AS ats_del "
+        "USING dupes d "
+        "WHERE ats_del.situation_id = d.id "
+        "AND ats_del.corpus_id = d.corpus_id "
+        "AND ats_del.invalidated_at IS NULL "
+        "AND ats_del.id NOT IN (SELECT id FROM keepers)"
     )
 
     op.execute(
         _DUPES_CTE
-        + "DELETE FROM proposition_state AS ps_dup "
-        "USING dupes d, proposition_state ps_surv "
-        "WHERE ps_dup.situation_id = d.id "
-        "AND ps_dup.corpus_id = d.corpus_id "
-        "AND ps_surv.proposition_id = ps_dup.proposition_id "
-        "AND ps_surv.situation_id = d.survivor_id "
-        "AND ps_surv.corpus_id = ps_dup.corpus_id "
-        "AND ps_surv.effective_range && ps_dup.effective_range"
+        + ", keepers AS ("
+        "  SELECT DISTINCT ON (ps.proposition_id, ps.corpus_id) ps.id "
+        "  FROM proposition_state ps "
+        "  JOIN situation s ON ps.situation_id = s.id "
+        "  WHERE s.kind = 'default' "
+        "  ORDER BY ps.proposition_id, ps.corpus_id, ps.computed_at DESC"
+        ") "
+        "DELETE FROM proposition_state AS ps_del "
+        "USING dupes d "
+        "WHERE ps_del.situation_id = d.id "
+        "AND ps_del.corpus_id = d.corpus_id "
+        "AND ps_del.id NOT IN (SELECT id FROM keepers)"
     )
 
     op.execute(

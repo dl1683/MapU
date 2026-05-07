@@ -128,6 +128,7 @@ class CandidateGrounder:
         self._session.add(att)
 
         if default_situation_id is not None:
+            await self._session.flush()
             assn = AttestationSituation(
                 attestation_id=att.id,
                 situation_id=default_situation_id,
@@ -136,8 +137,6 @@ class CandidateGrounder:
                 assignment_basis="default_document_situation",
             )
             self._session.add(assn)
-
-        await self._session.flush()
 
         return MaterializedExtraction(
             proposition_id=prop.id,

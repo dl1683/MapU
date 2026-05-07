@@ -237,6 +237,18 @@ class TestAmendmentExtractor:
         assert result.signals[0].data["target_reference"] is None
         assert len(result.frames) == 0
 
+    async def test_amendment_targets_first_ref_not_nearest(
+        self, extractor: AmendmentExtractor
+    ) -> None:
+        ctx = _make_ctx(
+            "Section 2.1, as referenced in Section 9.1, is hereby amended."
+        )
+        result = await extractor.extract(ctx)
+        assert len(result.signals) == 1
+        assert result.signals[0].data["target_reference"] == "Section 2.1"
+        assert len(result.frames) == 1
+        assert result.frames[0].subject.text == "Section 2.1"
+
     async def test_section_number_at_sentence_end_not_attached(
         self, extractor: AmendmentExtractor
     ) -> None:
@@ -358,6 +370,22 @@ class TestCandidateMergeEngine:
         ])
         assert len(result.frames) == 2
         assert result.duplicates_removed == 0
+
+    def test_duplicate_keeps_highest_confidence(self) -> None:
+        engine = CandidateMergeEngine()
+        frame_low = _make_frame(
+            subject_text="Corp", predicate="pay", confidence=0.5,
+        )
+        frame_high = _make_frame(
+            subject_text="Corp", predicate="pay", confidence=0.95,
+        )
+        result = engine.merge([
+            ExtractorOutput(frames=(frame_low,)),
+            ExtractorOutput(frames=(frame_high,)),
+        ])
+        assert len(result.frames) == 1
+        assert result.duplicates_removed == 1
+        assert result.frames[0].extraction_confidence == 0.95
 
     def test_different_qualifiers_not_deduped(self) -> None:
         engine = CandidateMergeEngine()

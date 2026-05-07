@@ -26,22 +26,23 @@ class CandidateMergeEngine:
 
     def merge(self, outputs: list[ExtractorOutput]) -> MergeResult:
         all_signals: list[ExtractionSignal] = []
-        seen_frame_keys: set[str] = set()
-        unique_frames: list[PropositionFrameCandidate] = []
+        best_by_key: dict[str, PropositionFrameCandidate] = {}
         duplicates = 0
 
         for output in outputs:
             all_signals.extend(output.signals)
             for frame in output.frames:
                 key = _frame_dedup_key(frame)
-                if key in seen_frame_keys:
+                existing = best_by_key.get(key)
+                if existing is not None:
                     duplicates += 1
+                    if frame.extraction_confidence > existing.extraction_confidence:
+                        best_by_key[key] = frame
                     continue
-                seen_frame_keys.add(key)
-                unique_frames.append(frame)
+                best_by_key[key] = frame
 
         return MergeResult(
-            frames=tuple(unique_frames),
+            frames=tuple(best_by_key.values()),
             signals=tuple(all_signals),
             duplicates_removed=duplicates,
         )

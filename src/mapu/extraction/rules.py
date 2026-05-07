@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import bisect
 import contextlib
 import re
 from datetime import datetime
@@ -180,11 +179,10 @@ class AmendmentExtractor:
         deduped.sort(key=lambda m: m.start())
 
         all_refs = list(_CROSS_REF_PATTERN.finditer(ctx.text))
-        ref_starts = [r.start() for r in all_refs]
 
         for match in deduped:
             ref_match = _nearest_preceding_ref(
-                all_refs, ref_starts, match.start(), ctx.text,
+                all_refs, match.start(), ctx.text,
             )
             target_ref = ref_match.group() if ref_match else None
 
@@ -231,22 +229,30 @@ class AmendmentExtractor:
         return ExtractorOutput(frames=tuple(frames), signals=tuple(signals))
 
 
+_SUBORDINATE_PREFIX = re.compile(
+    r"(?:in|under|of|pursuant\s+to|referenced\s+in|per)\s+$",
+    re.IGNORECASE,
+)
+
+
 def _nearest_preceding_ref(
     refs: list[re.Match[str]],
-    ref_starts: list[int],
     position: int,
     text: str,
 ) -> re.Match[str] | None:
-    idx = bisect.bisect_right(ref_starts, position) - 1
-    if idx < 0:
-        return None
-    ref = refs[idx]
-    if ref.start() >= position:
-        return None
     sentence_start = _find_sentence_start(text, position)
-    if ref.start() < sentence_start:
-        return None
-    return ref
+    best: re.Match[str] | None = None
+    for ref in reversed(refs):
+        if ref.start() >= position:
+            continue
+        if ref.start() < sentence_start:
+            break
+        prefix = text[max(sentence_start, ref.start() - 30):ref.start()]
+        if _SUBORDINATE_PREFIX.search(prefix):
+            continue
+        best = ref
+        break
+    return best
 
 
 def _is_decimal_period(text: str, i: int) -> bool:

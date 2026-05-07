@@ -42,6 +42,9 @@ class RepairService:
                     "proposition_id": str(proposition_id),
                     "retraction_proposition_id": str(retraction_proposition_id),
                     "affected_ids": [str(x) for x in blast.affected_proposition_ids],
+                    "recompute_only_ids": [
+                        str(x) for x in blast.recompute_only_proposition_ids
+                    ],
                     "reason": reason,
                     "actor": actor,
                 },
@@ -76,6 +79,9 @@ class RepairService:
                     "old_proposition_id": str(old_proposition_id),
                     "new_proposition_id": str(new_proposition_id),
                     "affected_ids": [str(x) for x in blast.affected_proposition_ids],
+                    "recompute_only_ids": [
+                        str(x) for x in blast.recompute_only_proposition_ids
+                    ],
                     "actor": actor,
                 },
             ),

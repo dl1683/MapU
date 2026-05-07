@@ -336,3 +336,71 @@ class TestRepairApplyTool:
 
         assert result["success"] is True
         assert result["operations_executed"] == 2
+
+
+class TestContributePropositionValidation:
+    @pytest.mark.asyncio
+    async def test_rejects_out_of_range_confidence(self) -> None:
+        from mapu.mcp.server import contribute_proposition
+
+        result = await contribute_proposition(
+            corpus_id=str(uuid.uuid4()),
+            subject_name="X",
+            predicate="links",
+            normalized_text="X links Y",
+            confidence=1.5,
+        )
+        assert "error" in result
+        assert "confidence" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_rejects_negative_confidence(self) -> None:
+        from mapu.mcp.server import contribute_proposition
+
+        result = await contribute_proposition(
+            corpus_id=str(uuid.uuid4()),
+            subject_name="X",
+            predicate="links",
+            normalized_text="X links Y",
+            confidence=-0.1,
+        )
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_rejects_empty_subject(self) -> None:
+        from mapu.mcp.server import contribute_proposition
+
+        result = await contribute_proposition(
+            corpus_id=str(uuid.uuid4()),
+            subject_name="   ",
+            predicate="links",
+            normalized_text="X links Y",
+        )
+        assert "error" in result
+        assert "empty" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_rejects_empty_predicate(self) -> None:
+        from mapu.mcp.server import contribute_proposition
+
+        result = await contribute_proposition(
+            corpus_id=str(uuid.uuid4()),
+            subject_name="X",
+            predicate="   ",
+            normalized_text="X links Y",
+        )
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_stance(self) -> None:
+        from mapu.mcp.server import contribute_proposition
+
+        result = await contribute_proposition(
+            corpus_id=str(uuid.uuid4()),
+            subject_name="X",
+            predicate="links",
+            normalized_text="X links Y",
+            stance="invalid",
+        )
+        assert "error" in result
+        assert "stance" in result["error"]

@@ -430,3 +430,29 @@ class TestQueryService:
         svc = self._make_service(direct_hits=hits)
         result = await svc.query(_make_request('Who is "Acme Corp"?'))
         assert "Acme Corp" in result.metadata.get("entities", ())
+
+
+class TestQueryRequestAsOf:
+    def test_as_of_defaults_to_none(self) -> None:
+        req = QueryRequest(corpus_id=uuid.uuid4(), question="test")
+        assert req.as_of is None
+
+    def test_as_of_accepts_datetime(self) -> None:
+        from datetime import UTC, datetime
+
+        dt = datetime(2025, 1, 1, tzinfo=UTC)
+        req = QueryRequest(corpus_id=uuid.uuid4(), question="test", as_of=dt)
+        assert req.as_of == dt
+
+
+class TestProviderRegistry:
+    def test_register_and_lookup(self) -> None:
+        from mapu.providers.llms import (
+            OpenAICompatibleLLMProvider,
+            _PROVIDER_FACTORIES,
+            register_llm_provider,
+        )
+
+        register_llm_provider("custom", OpenAICompatibleLLMProvider, "custom-model-1")
+        assert "custom" in _PROVIDER_FACTORIES
+        del _PROVIDER_FACTORIES["custom"]

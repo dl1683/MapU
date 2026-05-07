@@ -11,6 +11,7 @@ from mapu.investigation.evaluator import InvestigationEvaluator
 from mapu.investigation.executor import InvestigationExecutor
 from mapu.investigation.planner import LLMInvestigationPlanner
 from mapu.investigation.types import (
+    DerivedPropositionDraft,
     InvestigationBudget,
     InvestigationEvidence,
     InvestigationResult,
@@ -92,12 +93,13 @@ class InvestigationService:
         )
 
         answer = await self._synthesize(question, evidence, gaps, state)
+        findings = await self._derive_findings(question, evidence, state)
 
         return InvestigationResult(
             answer=answer,
             evidence=evidence,
             gaps=gaps,
-            findings=(),
+            findings=findings,
             metadata=self._build_metadata(state, termination),
             termination_reason=termination or TerminationReason.PLANNER_STOP,
         )
@@ -192,6 +194,50 @@ class InvestigationService:
         state.llm_calls_used += 1
         return str(raw.get("answer", raw))
 
+    async def _derive_findings(
+        self,
+        question: str,
+        evidence: tuple[InvestigationEvidence, ...],
+        state: InvestigationState,
+    ) -> tuple[DerivedPropositionDraft, ...]:
+        doc_ids = {
+            e.document_id for e in evidence if e.document_id is not None
+        }
+        doc_ids.update(state.seen_document_ids)
+
+        if len(doc_ids) < 2:
+            return ()
+
+        if not evidence:
+            return ()
+
+        evidence_text = "\n".join(
+            f"[{i}] {e.normalized_text}"
+            for i, e in enumerate(evidence)
+            if e.normalized_text
+        )
+
+        request = LLMRequest(
+            system_prompt=(
+                "You are a cross-document reasoning engine. Given evidence "
+                "from multiple documents, identify connections that span "
+                "documents. Return JSON with a 'findings' array. Each finding "
+                "must have: normalized_text, predicate, subject_name, "
+                "object_name (nullable), confidence (0-1), and "
+                "evidence_indices (list of integers referencing the evidence)."
+            ),
+            user_prompt=(
+                f"Question: {question}\n\nEvidence:\n{evidence_text}\n\n"
+                "Identify cross-document connections."
+            ),
+            max_tokens=1024,
+            temperature=0.1,
+        )
+        raw = await self._llm.complete_json(request)
+        state.llm_calls_used += 1
+
+        return _parse_findings(raw, evidence)
+
     def _build_metadata(
         self,
         state: InvestigationState,
@@ -208,3 +254,54 @@ class InvestigationService:
             ),
             "steps": len(state.observations),
         }
+
+
+def _parse_findings(
+    raw: dict[str, Any],
+    evidence: tuple[InvestigationEvidence, ...],
+) -> tuple[DerivedPropositionDraft, ...]:
+    findings_raw = raw.get("findings", [])
+    if not isinstance(findings_raw, list):
+        return ()
+
+    drafts: list[DerivedPropositionDraft] = []
+    for f in findings_raw:
+        if not isinstance(f, dict):
+            continue
+
+        text = f.get("normalized_text", "")
+        predicate = f.get("predicate", "")
+        subject = f.get("subject_name", "")
+        if not text or not predicate or not subject:
+            continue
+
+        indices = f.get("evidence_indices", [])
+        if not isinstance(indices, list) or len(indices) < 2:
+            continue
+
+        valid_indices = [
+            i for i in indices
+            if isinstance(i, int) and 0 <= i < len(evidence)
+        ]
+        if len(valid_indices) < 2:
+            continue
+
+        basis = tuple(
+            evidence[i].proposition_id for i in valid_indices
+        )
+        confidence = f.get("confidence", 0.5)
+        if not isinstance(confidence, (int, float)):
+            confidence = 0.5
+        confidence = max(0.0, min(1.0, float(confidence)))
+
+        drafts.append(DerivedPropositionDraft(
+            normalized_text=str(text),
+            frame_type="cross_document",
+            predicate=str(predicate),
+            subject_name=str(subject),
+            object_name=f.get("object_name"),
+            derivation_basis=basis,
+            confidence=confidence,
+        ))
+
+    return tuple(drafts)

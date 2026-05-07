@@ -117,6 +117,17 @@ class QueryService:
                 "investigation": result.metadata,
                 "escalation_reason": plan.escalation_reason,
                 "evidence_count": len(result.evidence),
+                "findings_count": len(result.findings),
+                "findings": [
+                    {
+                        "normalized_text": f.normalized_text,
+                        "predicate": f.predicate,
+                        "subject_name": f.subject_name,
+                        "object_name": f.object_name,
+                        "confidence": f.confidence,
+                    }
+                    for f in result.findings
+                ],
             },
         )
 

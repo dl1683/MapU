@@ -26,11 +26,11 @@ _STRUCTURED_INTENTS: frozenset[QueryIntent] = frozenset({
 _SYNTHESIS_INTENTS: frozenset[QueryIntent] = frozenset({
     QueryIntent.RELATIONSHIP,
     QueryIntent.GAP,
-    QueryIntent.CROSS_DOC,
 })
 
 _INVESTIGATION_INTENTS: frozenset[QueryIntent] = frozenset({
     QueryIntent.INVESTIGATION,
+    QueryIntent.CROSS_DOC,
 })
 
 

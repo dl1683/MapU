@@ -294,6 +294,133 @@ class TestInvestigationExecutor:
         assert obs.evidence[0].normalized_text == "matching chunk"
 
 
+class TestParseFindings:
+    def test_valid_cross_doc_finding(self) -> None:
+        from mapu.investigation.service import _parse_findings
+        from mapu.investigation.types import InvestigationEvidence
+
+        evidence = (
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="Fact A from doc 1",
+                source_span=None,
+                authority_score=0.9,
+                document_id=uuid.uuid4(),
+            ),
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="Fact B from doc 2",
+                source_span=None,
+                authority_score=0.8,
+                document_id=uuid.uuid4(),
+            ),
+        )
+        raw = {
+            "findings": [
+                {
+                    "normalized_text": "A and B are connected",
+                    "predicate": "connects",
+                    "subject_name": "A",
+                    "object_name": "B",
+                    "confidence": 0.7,
+                    "evidence_indices": [0, 1],
+                },
+            ],
+        }
+        findings = _parse_findings(raw, evidence)
+        assert len(findings) == 1
+        assert findings[0].normalized_text == "A and B are connected"
+        assert findings[0].frame_type == "cross_document"
+        assert len(findings[0].derivation_basis) == 2
+
+    def test_rejects_single_evidence_finding(self) -> None:
+        from mapu.investigation.service import _parse_findings
+        from mapu.investigation.types import InvestigationEvidence
+
+        evidence = (
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="Fact A",
+                source_span=None,
+                authority_score=0.9,
+            ),
+        )
+        raw = {
+            "findings": [
+                {
+                    "normalized_text": "Some finding",
+                    "predicate": "states",
+                    "subject_name": "X",
+                    "evidence_indices": [0],
+                },
+            ],
+        }
+        findings = _parse_findings(raw, evidence)
+        assert len(findings) == 0
+
+    def test_rejects_malformed_finding(self) -> None:
+        from mapu.investigation.service import _parse_findings
+        from mapu.investigation.types import InvestigationEvidence
+
+        evidence = (
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="Fact",
+                source_span=None,
+                authority_score=0.9,
+            ),
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="Fact 2",
+                source_span=None,
+                authority_score=0.8,
+            ),
+        )
+        raw = {
+            "findings": [
+                {"normalized_text": "Missing predicate and subject"},
+            ],
+        }
+        findings = _parse_findings(raw, evidence)
+        assert len(findings) == 0
+
+    def test_handles_empty_findings(self) -> None:
+        from mapu.investigation.service import _parse_findings
+
+        findings = _parse_findings({}, ())
+        assert len(findings) == 0
+
+    def test_clamps_confidence(self) -> None:
+        from mapu.investigation.service import _parse_findings
+        from mapu.investigation.types import InvestigationEvidence
+
+        evidence = (
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="A",
+                source_span=None, authority_score=0.9,
+            ),
+            InvestigationEvidence(
+                proposition_id=uuid.uuid4(),
+                normalized_text="B",
+                source_span=None, authority_score=0.8,
+            ),
+        )
+        raw = {
+            "findings": [
+                {
+                    "normalized_text": "Finding",
+                    "predicate": "relates",
+                    "subject_name": "X",
+                    "confidence": 5.0,
+                    "evidence_indices": [0, 1],
+                },
+            ],
+        }
+        findings = _parse_findings(raw, evidence)
+        assert findings[0].confidence == 1.0
+
+
 class TestInvestigationState:
     def test_coverage_zero_when_empty(self) -> None:
         state = InvestigationState(budget=InvestigationBudget())

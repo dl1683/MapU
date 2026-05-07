@@ -207,6 +207,18 @@ class TestCascadeGovernor:
         assert plan.selected_tier == Tier.SYNTHESIS
 
     @pytest.mark.asyncio
+    async def test_cross_doc_routes_to_investigation(self) -> None:
+        classifier = HeuristicIntentClassifier()
+        governor = CascadeGovernor(classifier)
+        request = _make_request(
+            "Does the amendment affect the original agreement?"
+        )
+        plan = await governor.plan(request)
+        assert plan.intent == QueryIntent.CROSS_DOC
+        assert plan.selected_tier == Tier.INVESTIGATION
+        assert plan.escalation_reason is not None
+
+    @pytest.mark.asyncio
     async def test_measurement_routes_to_structured(self) -> None:
         classifier = HeuristicIntentClassifier()
         governor = CascadeGovernor(classifier)

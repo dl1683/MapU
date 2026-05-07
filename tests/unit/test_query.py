@@ -355,11 +355,11 @@ class TestQueryService:
         assert result.synthesis is None
 
     @pytest.mark.asyncio
-    async def test_investigation_returns_stub(self) -> None:
+    async def test_investigation_without_llm_returns_fallback(self) -> None:
         svc = self._make_service()
         result = await svc.query(_make_request("Why did the price drop?"))
         assert result.tier_used == Tier.INVESTIGATION
-        assert "not yet implemented" in result.synthesis
+        assert "LLM provider" in result.synthesis
         assert len(result.hits) == 0
 
     @pytest.mark.asyncio

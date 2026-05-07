@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mapu.investigation.service import InvestigationService
 from mapu.providers.llms import LLMProvider
 from mapu.query.direct import DirectLookupExecutor
 from mapu.query.governor import CascadeGovernor
@@ -40,22 +41,16 @@ class QueryService:
         self._llm_synth = (
             LLMSynthesizer(llm_provider) if llm_provider else None
         )
+        self._investigation = (
+            InvestigationService(session, llm_provider)
+            if llm_provider else None
+        )
 
     async def query(self, request: QueryRequest) -> QueryResult:
         plan = await self._governor.plan(request)
 
         if plan.selected_tier == Tier.INVESTIGATION:
-            return QueryResult(
-                request=request,
-                intent=plan.intent,
-                tier_used=Tier.INVESTIGATION,
-                hits=(),
-                synthesis=(
-                    "This query requires multi-document investigation "
-                    "(not yet implemented). Returning structured results only."
-                ),
-                metadata={"escalation_reason": plan.escalation_reason},
-            )
+            return await self._handle_investigation(request, plan)
 
         hits = await self._execute_tier(plan, request)
 
@@ -80,6 +75,43 @@ class QueryService:
             metadata={
                 "entities": plan.entities_extracted,
                 "predicates": plan.predicates_extracted,
+            },
+        )
+
+    async def _handle_investigation(
+        self, request: QueryRequest, plan: QueryPlan,
+    ) -> QueryResult:
+        if self._investigation is None:
+            return QueryResult(
+                request=request,
+                intent=plan.intent,
+                tier_used=Tier.INVESTIGATION,
+                hits=(),
+                synthesis=(
+                    "Investigation requires an LLM provider "
+                    "but none was configured."
+                ),
+                metadata={"escalation_reason": plan.escalation_reason},
+            )
+
+        result = await self._investigation.investigate(
+            question=request.question,
+            corpus_id=request.corpus_id,
+            initial_entities=plan.entities_extracted,
+            initial_predicates=plan.predicates_extracted,
+        )
+
+        return QueryResult(
+            request=request,
+            intent=plan.intent,
+            tier_used=Tier.INVESTIGATION,
+            hits=(),
+            synthesis=result.answer,
+            gaps=result.gaps,
+            metadata={
+                "investigation": result.metadata,
+                "escalation_reason": plan.escalation_reason,
+                "evidence_count": len(result.evidence),
             },
         )
 

@@ -28,8 +28,13 @@ class SituationRepo(CorpusScopedRepo[Situation]):
             kind="default",
             name="default",
         )
-        self.session.add(situation)
-        await self.session.flush()
+        try:
+            async with self.session.begin_nested():
+                self.session.add(situation)
+                await self.session.flush()
+        except Exception:
+            result = await self.session.execute(stmt)
+            return result.scalar_one()
         return situation
 
 

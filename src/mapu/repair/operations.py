@@ -219,7 +219,16 @@ async def _recompute_semantic_keys(
         if new_key != prop.semantic_key:
             pending.append((prop, new_key))
 
-    new_keys = {k for _, k in pending}
+    seen_keys: dict[str, uuid.UUID] = {}
+    for prop, new_key in pending:
+        if new_key in seen_keys:
+            raise ValueError(
+                f"Semantic key collision: propositions {seen_keys[new_key]} and {prop.id} "
+                f"would both have key {new_key[:40]}... after handle change"
+            )
+        seen_keys[new_key] = prop.id
+
+    new_keys = set(seen_keys.keys())
     if new_keys:
         collision_stmt = select(Proposition.semantic_key).where(
             Proposition.corpus_id == corpus_id,

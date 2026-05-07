@@ -183,7 +183,11 @@ async def _rollback_merge_handles(
     canonical_id = uuid.UUID(result["canonical_handle_id"])
     merged_id = uuid.UUID(result["merged_handle_id"])
 
-    snapshots = result.get("proposition_snapshots", [])
+    if "proposition_snapshots" not in result or "participant_snapshots" not in result:
+        raise ValueError(
+            "Cannot rollback merge: operation result missing proposition_snapshots or participant_snapshots"
+        )
+    snapshots = result["proposition_snapshots"]
     for snap in snapshots:
         prop_id = uuid.UUID(snap["id"])
         prior_subj = uuid.UUID(snap["prior_subject"])
@@ -197,7 +201,7 @@ async def _rollback_merge_handles(
 
     moved_ids = [uuid.UUID(snap["id"]) for snap in snapshots]
 
-    part_snapshots = result.get("participant_snapshots", [])
+    part_snapshots = result["participant_snapshots"]
     for ps in part_snapshots:
         part_id = uuid.UUID(ps["id"])
         prior_handle = uuid.UUID(ps["prior_handle"])
@@ -250,7 +254,11 @@ async def _rollback_split_handle(
     original_id = uuid.UUID(result["original_handle_id"])
     new_id = uuid.UUID(result["new_handle_id"])
 
-    moved_ids = [uuid.UUID(x) for x in result.get("moved_proposition_ids", [])]
+    if "moved_proposition_ids" not in result:
+        raise ValueError(
+            "Cannot rollback split: operation result missing moved_proposition_ids"
+        )
+    moved_ids = [uuid.UUID(x) for x in result["moved_proposition_ids"]]
 
     if moved_ids:
         await session.execute(

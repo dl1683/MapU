@@ -42,13 +42,13 @@ class HandleSearchService:
     ) -> list[HandleSearchResult]:
         stmt = text("""
             SELECT id, canonical_name, kind,
-                   1 - (embedding <=> :query_vec::vector) AS score
+                   1 - (embedding <=> CAST(:query_vec AS vector)) AS score
             FROM handle
             WHERE corpus_id = :corpus_id
               AND embedding_model = :model_name
               AND status = 'active'
               AND embedding IS NOT NULL
-            ORDER BY embedding <=> :query_vec::vector
+            ORDER BY embedding <=> CAST(:query_vec AS vector)
             LIMIT :top_k
         """)
 

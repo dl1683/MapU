@@ -238,26 +238,34 @@ class ExtractionService:
         if not amendment_signals:
             return
 
-        amendment_props = [
-            m for m in result.materialized
-            if m.proposition.predicate == "amended"
+        amendment_mat_ids = [
+            m.proposition_id for m in result.materialized
         ]
+        if not amendment_mat_ids or not amendment_signals:
+            return
+
+        props_stmt = select(Proposition).where(
+            Proposition.id.in_(amendment_mat_ids),
+            Proposition.corpus_id == self._corpus_id,
+            Proposition.predicate == "amended",
+        )
+        props_result = await self._session.execute(props_stmt)
+        amendment_props = list(props_result.scalars().all())
         if not amendment_props:
             return
 
-        for mat in amendment_props:
-            target_ref = mat.proposition.normalized_text
+        for prop in amendment_props:
+            target_ref = prop.normalized_text
             if not target_ref:
                 continue
 
-            subject_handle = mat.proposition.subject_handle_id
             stmt = (
                 select(Proposition)
                 .join(Handle, Proposition.subject_handle_id == Handle.id)
                 .where(
                     Proposition.corpus_id == self._corpus_id,
-                    Handle.id == subject_handle,
-                    Proposition.id != mat.proposition.id,
+                    Handle.id == prop.subject_handle_id,
+                    Proposition.id != prop.id,
                 )
                 .order_by(Proposition.system_created.desc())
                 .limit(1)
@@ -270,7 +278,7 @@ class ExtractionService:
             existing = await self._session.execute(
                 select(SupersessionEdge.id).where(
                     SupersessionEdge.old_proposition_id == old_prop.id,
-                    SupersessionEdge.new_proposition_id == mat.proposition.id,
+                    SupersessionEdge.new_proposition_id == prop.id,
                     SupersessionEdge.corpus_id == self._corpus_id,
                 ),
             )
@@ -281,7 +289,7 @@ class ExtractionService:
             self._session.add(SupersessionEdge(
                 corpus_id=self._corpus_id,
                 old_proposition_id=old_prop.id,
-                new_proposition_id=mat.proposition.id,
+                new_proposition_id=prop.id,
                 supersession_type="supersession",
                 effective_at=now,
             ))

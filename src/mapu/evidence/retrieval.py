@@ -40,16 +40,18 @@ class ChunkRetrievalService:
     ) -> list[RetrievalResult]:
         cfg = config or RetrievalConfig()
 
-        dims = self._model_ref.dimensions
+        d = self._model_ref.dimensions
+        qv = f"CAST(:query_vec AS vector({d}))"
+        ev = f"ce.embedding::vector({d})"
         stmt = text(f"""
             SELECT ce.chunk_id, c.text, c.expression_id,
-                   1 - (ce.embedding::vector({dims}) <=> :query_vec::vector({dims})) AS score
+                   1 - ({ev} <=> {qv}) AS score
             FROM chunk_embedding ce
             JOIN chunk c ON c.id = ce.chunk_id AND c.corpus_id = ce.corpus_id
             WHERE ce.corpus_id = :corpus_id
               AND ce.model_name = :model_name
-              AND ce.dimensions = {dims}
-            ORDER BY ce.embedding::vector({dims}) <=> :query_vec::vector({dims})
+              AND ce.dimensions = {d}
+            ORDER BY {ev} <=> {qv}
             LIMIT :top_k
         """)
 

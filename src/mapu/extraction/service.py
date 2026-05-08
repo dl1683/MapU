@@ -21,6 +21,7 @@ from mapu.extraction.types import (
     Extractor,
     ExtractorOutput,
     ExtractorStage,
+    PropositionFrameCandidate,
 )
 from mapu.models.authority import SourcePolicyEval
 from mapu.models.evidence import DocumentExpression, TextSpan
@@ -104,6 +105,10 @@ class ExtractionService:
             )
 
             outputs = await self._run_stages(ctx)
+
+            entity_frames = _entities_to_frames(outputs, ctx)
+            if entity_frames:
+                outputs = [*outputs, ExtractorOutput(frames=tuple(entity_frames))]
 
             merged = self._merge.merge(outputs)
             result.candidates_produced += len(merged.frames)
@@ -311,3 +316,43 @@ class ExtractionService:
         )
         r = await self._session.execute(stmt)
         return list(r.scalars().all())
+
+
+def _entities_to_frames(
+    outputs: list[ExtractorOutput],
+    ctx: ExtractionContext,
+) -> list[PropositionFrameCandidate]:
+    """Convert orphaned entity mentions to 'exists' proposition frames."""
+    from mapu.types import AttestationStrength, Stance
+
+    frame_subjects = {
+        f.subject.text.lower()
+        for o in outputs for f in o.frames
+    }
+
+    seen: set[str] = set()
+    frames: list[PropositionFrameCandidate] = []
+    for o in outputs:
+        for ent in o.entities:
+            key = ent.text.lower()
+            if key in frame_subjects or key in seen:
+                continue
+            seen.add(key)
+            frames.append(PropositionFrameCandidate(
+                span_id=ctx.span_id,
+                frame_type="entity_assertion",
+                subject=ent,
+                predicate="exists",
+                object=None,
+                value={"kind": ent.kind},
+                polarity=True,
+                modality=None,
+                valid_range=None,
+                normalized_text=f"{ent.text} [{ent.kind}]",
+                qualifiers={},
+                stance=Stance.ASSERTS,
+                attestation_strength=AttestationStrength.OBSERVATION,
+                extraction_method=ent.source,
+                extraction_confidence=ent.confidence,
+            ))
+    return frames

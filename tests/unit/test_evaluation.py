@@ -162,6 +162,32 @@ class TestAbstentionQuality:
         assert abstention_quality(0, 0, 0) == 1.0
 
 
+class TestFindFuzzyRank:
+    def test_exact_match_first(self) -> None:
+        from mapu.evaluation.runner import _find_fuzzy_rank
+        result = _find_fuzzy_rank(["hello world", "foo bar"], "hello world", 0.7)
+        assert result == 0
+
+    def test_exact_match_second(self) -> None:
+        from mapu.evaluation.runner import _find_fuzzy_rank
+        result = _find_fuzzy_rank(["foo bar", "hello world"], "hello world", 0.7)
+        assert result == 1
+
+    def test_no_match(self) -> None:
+        from mapu.evaluation.runner import _find_fuzzy_rank
+        result = _find_fuzzy_rank(["completely different"], "hello world", 0.7)
+        assert result is None
+
+    def test_fuzzy_match(self) -> None:
+        from mapu.evaluation.runner import _find_fuzzy_rank
+        result = _find_fuzzy_rank(
+            ["the seller shall deliver financial statements"],
+            "Seller shall deliver financial statements",
+            0.7,
+        )
+        assert result == 0
+
+
 class TestBenchmarkCases:
     def test_all_cases_exist(self) -> None:
         assert len(ALL_BENCHMARK_CASES) >= 8

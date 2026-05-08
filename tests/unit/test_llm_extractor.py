@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
-from mapu.extraction.llm import LLMExtractor, _find_exact_span, _parse_response
+from mapu.extraction.llm import LLMExtractor, _find_exact_span
 from mapu.extraction.types import EntityMention, ExtractionContext
 from mapu.providers.llms import LLMRequest
 
@@ -285,6 +284,59 @@ class TestErrorHandling:
         result = await ext.extract(ctx)
         assert len(result.frames) == 0
 
+    async def test_hallucinated_subject_rejected(self) -> None:
+        response = {
+            "propositions": [{
+                "subject_text": "NonExistentEntity",
+                "subject_kind": "entity",
+                "predicate": "does",
+                "normalized_text": "NonExistentEntity does something",
+                "frame_type": "relationship",
+                "confidence": 0.9,
+            }],
+        }
+        provider = _mock_provider(response)
+        ext = LLMExtractor(provider=provider)
+        ctx = _make_ctx("The actual text has nothing matching.")
+        result = await ext.extract(ctx)
+        assert len(result.frames) == 0
+
+    async def test_invalid_confidence_skipped(self) -> None:
+        response = {
+            "propositions": [{
+                "subject_text": "X",
+                "subject_kind": "entity",
+                "predicate": "does",
+                "normalized_text": "X does",
+                "frame_type": "relationship",
+                "confidence": "not_a_number",
+            }],
+        }
+        provider = _mock_provider(response)
+        ext = LLMExtractor(provider=provider)
+        ctx = _make_ctx("X does Y.")
+        result = await ext.extract(ctx)
+        assert len(result.frames) == 0
+
+    async def test_non_dict_qualifiers_handled(self) -> None:
+        response = {
+            "propositions": [{
+                "subject_text": "X",
+                "subject_kind": "entity",
+                "predicate": "does",
+                "normalized_text": "X does Y",
+                "frame_type": "relationship",
+                "confidence": 0.9,
+                "qualifiers": "invalid_string",
+            }],
+        }
+        provider = _mock_provider(response)
+        ext = LLMExtractor(provider=provider)
+        ctx = _make_ctx("X does Y.")
+        result = await ext.extract(ctx)
+        assert len(result.frames) == 1
+        assert result.frames[0].qualifiers == {}
+
     async def test_missing_subject_text(self) -> None:
         response = {
             "propositions": [{
@@ -442,10 +494,8 @@ class TestFindExactSpan:
     def test_case_insensitive_fallback(self) -> None:
         assert _find_exact_span("Hello World", "world") == (6, 11)
 
-    def test_not_found_returns_zero_based(self) -> None:
-        start, end = _find_exact_span("Hello World", "Missing")
-        assert start == 0
-        assert end == len("Missing")
+    def test_not_found_returns_none(self) -> None:
+        assert _find_exact_span("Hello World", "Missing") is None
 
 
 class TestSignalOutput:

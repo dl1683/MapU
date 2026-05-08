@@ -73,14 +73,14 @@ the Buyer within 90 days of the Closing Date". Keep under 80 characters when pos
 """
 
 
-def _find_exact_span(text: str, target: str) -> tuple[int, int]:
+def _find_exact_span(text: str, target: str) -> tuple[int, int] | None:
     idx = text.find(target)
     if idx >= 0:
         return (idx, idx + len(target))
     idx = text.lower().find(target.lower())
     if idx >= 0:
         return (idx, idx + len(target))
-    return (0, len(target))
+    return None
 
 
 def _build_user_prompt(ctx: ExtractionContext) -> str:
@@ -107,7 +107,10 @@ def _parse_response(
         if not isinstance(prop, dict):
             continue
 
-        confidence = float(prop.get("confidence", 0.0))
+        try:
+            confidence = float(prop.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            continue
         if confidence < min_confidence:
             continue
 
@@ -116,6 +119,8 @@ def _parse_response(
             continue
 
         subj_span = _find_exact_span(ctx.text, subject_text)
+        if subj_span is None:
+            continue
         subject = EntityMention(
             text=subject_text,
             kind=str(prop.get("subject_kind", "entity")),
@@ -130,14 +135,15 @@ def _parse_response(
         if object_text:
             object_text = str(object_text)
             obj_span = _find_exact_span(ctx.text, object_text)
-            obj = EntityMention(
-                text=object_text,
-                kind=str(prop.get("object_kind", "entity")),
-                start_char=ctx.start_char + obj_span[0],
-                end_char=ctx.start_char + obj_span[1],
-                confidence=confidence,
-                source="llm",
-            )
+            if obj_span is not None:
+                obj = EntityMention(
+                    text=object_text,
+                    kind=str(prop.get("object_kind", "entity")),
+                    start_char=ctx.start_char + obj_span[0],
+                    end_char=ctx.start_char + obj_span[1],
+                    confidence=confidence,
+                    source="llm",
+                )
 
         predicate = str(prop.get("predicate", "states"))
         normalized = str(prop.get("normalized_text", f"{subject_text} {predicate}"))
@@ -168,6 +174,9 @@ def _parse_response(
         if modality == "null" or modality is None:
             modality = None
 
+        raw_qualifiers = prop.get("qualifiers")
+        qualifiers = raw_qualifiers if isinstance(raw_qualifiers, dict) else {}
+
         frames.append(PropositionFrameCandidate(
             span_id=ctx.span_id,
             frame_type=frame_type,
@@ -179,7 +188,7 @@ def _parse_response(
             modality=modality,
             valid_range=None,
             normalized_text=normalized,
-            qualifiers=prop.get("qualifiers") or {},
+            qualifiers=qualifiers,
             stance=stance,
             attestation_strength=strength,
             extraction_method="llm",

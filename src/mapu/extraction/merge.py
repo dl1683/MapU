@@ -148,11 +148,14 @@ def _fuzzy_dedup(
     for frame in frames:
         fn = frame.normalized_text.lower()
         fqual = tuple(sorted(frame.qualifiers.items())) if frame.qualifiers else ()
-        fkey = (frame.subject.kind, frame.predicate.lower(), frame.stance, fqual)
+        fsubj = frame.subject.text.lower().strip()
+        fkey = (fsubj, frame.subject.kind, frame.predicate.lower(), frame.stance, fqual)
         is_dup = False
         for existing in kept:
             equal = tuple(sorted(existing.qualifiers.items())) if existing.qualifiers else ()
-            ekey = (existing.subject.kind, existing.predicate.lower(), existing.stance, equal)
+            esubj = existing.subject.text.lower().strip()
+            epred = existing.predicate.lower()
+            ekey = (esubj, existing.subject.kind, epred, existing.stance, equal)
             if fkey != ekey:
                 continue
             en = existing.normalized_text.lower()

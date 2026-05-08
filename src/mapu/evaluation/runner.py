@@ -172,7 +172,7 @@ class BenchmarkRunner:
             stmt = select(Proposition).where(Proposition.corpus_id == corpus_id)
             rows = await self._session.execute(stmt)
             for prop in rows.scalars().all():
-                if prop.predicate == "exists":
+                if prop.frame_type == "entity_assertion":
                     continue
                 extracted_propositions.append(prop.normalized_text or "")
 

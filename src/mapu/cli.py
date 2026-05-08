@@ -73,6 +73,12 @@ def main() -> None:
     activity_cmd.add_argument("--limit", type=int, default=50)
     activity_cmd.add_argument("--json", action="store_true", dest="json_output")
 
+    eval_cmd = sub.add_parser("eval", help="Run evaluation benchmarks")
+    eval_cmd.add_argument("--domain", type=str, default=None,
+                          help="Filter by domain: code, legal, finance, biomedical")
+    eval_cmd.add_argument("--output-dir", type=str, default=".benchmarks")
+    eval_cmd.add_argument("--json", action="store_true", dest="json_output")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -98,6 +104,8 @@ def main() -> None:
         asyncio.run(_run_gaps(args))
     elif args.command == "activity":
         asyncio.run(_run_activity(args))
+    elif args.command == "eval":
+        asyncio.run(_run_eval(args))
     else:
         parser.print_help()
         sys.exit(1)
@@ -460,6 +468,64 @@ async def _run_activity(args: argparse.Namespace) -> None:
                     print("No activity found.")
                 for a in activities:
                     print(f"  {a.created_at.isoformat()} [{a.event_type}] {a.actor}")
+    finally:
+        await engine.dispose()
+
+
+async def _run_eval(args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    from mapu.evaluation.cases import ALL_BENCHMARK_CASES, get_cases_by_domain
+    from mapu.evaluation.reporting import (
+        append_jsonl_entry,
+        format_summary,
+        write_json_scorecard,
+    )
+    from mapu.evaluation.runner import BenchmarkRunner
+    from mapu.evaluation.types import BenchmarkDomain
+
+    if args.domain:
+        try:
+            domain = BenchmarkDomain(args.domain.lower())
+        except ValueError:
+            print(f"Unknown domain: {args.domain}", file=sys.stderr)
+            print(f"Valid: {', '.join(d.value for d in BenchmarkDomain)}", file=sys.stderr)
+            sys.exit(1)
+        cases = get_cases_by_domain(domain)
+        suite_name = f"eval_{domain.value}"
+    else:
+        cases = ALL_BENCHMARK_CASES
+        suite_name = "eval_all"
+
+    if not cases:
+        print("No benchmark cases found.", file=sys.stderr)
+        sys.exit(1)
+
+    engine, session_factory = _build_engine()
+
+    try:
+        from mapu.extraction import get_default_extractors
+        from mapu.providers.embeddings import get_default_embedding_provider
+
+        async with session_factory() as session:
+            runner = BenchmarkRunner(
+                session=session,
+                embedding_provider=get_default_embedding_provider(),
+                extractors=get_default_extractors(),
+            )
+            result = await runner.run_suite(cases, suite_name=suite_name)
+            await session.commit()
+
+        output_dir = Path(args.output_dir)
+        scorecard_path = write_json_scorecard(result, output_dir)
+        append_jsonl_entry(result, output_dir)
+
+        if args.json_output:
+            from mapu.evaluation.reporting import suite_to_dict
+            print(json.dumps(suite_to_dict(result), indent=2))
+        else:
+            print(format_summary(result))
+            print(f"\nScorecard written to: {scorecard_path}")
     finally:
         await engine.dispose()
 

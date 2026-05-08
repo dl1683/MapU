@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from mapu.extraction.llm import LLMExtractor, _find_exact_span
+from mapu.extraction.llm import LLMExtractor, _find_exact_span, _parse_polarity
 from mapu.extraction.types import EntityMention, ExtractionContext
 from mapu.providers.llms import LLMRequest
 
@@ -485,6 +485,45 @@ class TestOffsetCalculation:
 
         assert result.frames[0].object is not None
         assert result.frames[0].object.start_char == 65  # 15 + 50
+
+
+class TestParsePolarity:
+    def test_bool_true(self) -> None:
+        assert _parse_polarity(True) is True
+
+    def test_bool_false(self) -> None:
+        assert _parse_polarity(False) is False
+
+    def test_string_false(self) -> None:
+        assert _parse_polarity("false") is False
+
+    def test_string_true(self) -> None:
+        assert _parse_polarity("true") is True
+
+    def test_string_zero(self) -> None:
+        assert _parse_polarity("0") is False
+
+    def test_int_zero(self) -> None:
+        assert _parse_polarity(0) is False
+
+    def test_none(self) -> None:
+        assert _parse_polarity(None) is False
+
+
+class TestWrappedAnswerTypeCheck:
+    async def test_wrapped_answer_list_returns_empty(self) -> None:
+        provider = _mock_provider({"answer": '["not", "a", "dict"]'})
+        ext = LLMExtractor(provider=provider)
+        ctx = _make_ctx("Some text here.")
+        result = await ext.extract(ctx)
+        assert len(result.frames) == 0
+
+    async def test_wrapped_answer_string_returns_empty(self) -> None:
+        provider = _mock_provider({"answer": '"just a string"'})
+        ext = LLMExtractor(provider=provider)
+        ctx = _make_ctx("Some text here.")
+        result = await ext.extract(ctx)
+        assert len(result.frames) == 0
 
 
 class TestFindExactSpan:

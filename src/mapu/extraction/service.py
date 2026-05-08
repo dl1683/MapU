@@ -73,6 +73,7 @@ class ExtractionService:
         self._grounder = grounder
         self._spacy = spacy_parser
         self._plan = plan or _make_sequential_plan(extractors)
+        self._max_concurrent = max_concurrent_extractions
         self._extraction_sem = asyncio.Semaphore(max_concurrent_extractions)
 
     async def extract_expression(
@@ -111,9 +112,13 @@ class ExtractionService:
                     outputs = [*outputs, ExtractorOutput(frames=tuple(entity_frames))]
                 return ctx, outputs
 
-        span_results = await asyncio.gather(
-            *(_extract_span(span) for span in spans),
-        )
+        chunk_size = self._max_concurrent
+        span_results: list[tuple[ExtractionContext, list[ExtractorOutput]]] = []
+        for i in range(0, len(spans), chunk_size):
+            chunk = spans[i : i + chunk_size]
+            span_results.extend(
+                await asyncio.gather(*(_extract_span(s) for s in chunk))
+            )
 
         for _ctx, outputs in span_results:
             merged = self._merge.merge(outputs)

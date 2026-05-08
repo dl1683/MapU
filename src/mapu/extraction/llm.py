@@ -91,6 +91,14 @@ def _build_user_prompt(ctx: ExtractionContext) -> str:
     return "\n\n".join(parts)
 
 
+def _parse_polarity(val: Any) -> bool:
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.lower() not in ("false", "0", "no", "n")
+    return bool(val)
+
+
 def _parse_response(
     raw: dict[str, Any],
     ctx: ExtractionContext,
@@ -184,7 +192,7 @@ def _parse_response(
             predicate=predicate,
             object=obj,
             value=value,
-            polarity=bool(prop.get("polarity", True)),
+            polarity=_parse_polarity(prop.get("polarity", True)),
             modality=modality,
             valid_range=None,
             normalized_text=normalized,
@@ -255,12 +263,14 @@ class LLMExtractor:
         if not isinstance(raw, dict):
             return ExtractorOutput()
 
-        # Handle case where response is wrapped in {"answer": "..."}
         if "answer" in raw and "propositions" not in raw:
             try:
-                raw = json.loads(str(raw["answer"]))
+                parsed = json.loads(str(raw["answer"]))
             except (json.JSONDecodeError, TypeError):
                 return ExtractorOutput()
+            if not isinstance(parsed, dict):
+                return ExtractorOutput()
+            raw = parsed
 
         frames, signals = _parse_response(raw, ctx, self._min_confidence)
         return ExtractorOutput(

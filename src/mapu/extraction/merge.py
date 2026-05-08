@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 from mapu.extraction.types import (
     ExtractionSignal,
@@ -21,6 +22,7 @@ _DEFAULT_METHOD_WEIGHTS: dict[str, float] = {
     "rule_date": 1.0,
     "rule_cross_reference": 1.0,
     "srl": 0.7,
+    "llm": 1.3,
 }
 
 _AGREEMENT_BONUS_PER_METHOD = 0.04
@@ -48,8 +50,10 @@ class CandidateMergeEngine:
     def __init__(
         self,
         method_weights: dict[str, float] | None = None,
+        fuzzy_threshold: float = 0.75,
     ) -> None:
         self._weights = method_weights or _DEFAULT_METHOD_WEIGHTS
+        self._fuzzy_threshold = fuzzy_threshold
 
     def merge(self, outputs: list[ExtractorOutput]) -> MergeResult:
         all_signals: list[ExtractionSignal] = []
@@ -74,12 +78,15 @@ class CandidateMergeEngine:
                     supports=[(frame.extraction_method, frame.extraction_confidence)],
                 )
 
-        final_frames: list[PropositionFrameCandidate] = []
+        resolved: list[PropositionFrameCandidate] = []
         for acc in accumulators.values():
             if len(acc.supports) > 1:
-                final_frames.append(self._apply_agreement(acc))
+                resolved.append(self._apply_agreement(acc))
             else:
-                final_frames.append(acc.best)
+                resolved.append(acc.best)
+
+        final_frames, fuzzy_dupes = _fuzzy_dedup(resolved, self._fuzzy_threshold)
+        duplicates += fuzzy_dupes
 
         return MergeResult(
             frames=tuple(final_frames),
@@ -123,6 +130,44 @@ class CandidateMergeEngine:
             extraction_confidence=final,
             corroborating_methods=tuple(acc.supports),
         )
+
+
+def _fuzzy_dedup(
+    frames: list[PropositionFrameCandidate],
+    threshold: float,
+) -> tuple[list[PropositionFrameCandidate], int]:
+    """Remove near-duplicate frames based on normalized_text similarity.
+
+    Only compares frames that share the same subject kind, predicate, and stance.
+    """
+    if threshold <= 0 or len(frames) <= 1:
+        return frames, 0
+
+    kept: list[PropositionFrameCandidate] = []
+    removed = 0
+    for frame in frames:
+        fn = frame.normalized_text.lower()
+        fqual = tuple(sorted(frame.qualifiers.items())) if frame.qualifiers else ()
+        fkey = (frame.subject.kind, frame.predicate.lower(), frame.stance, fqual)
+        is_dup = False
+        for existing in kept:
+            equal = tuple(sorted(existing.qualifiers.items())) if existing.qualifiers else ()
+            ekey = (existing.subject.kind, existing.predicate.lower(), existing.stance, equal)
+            if fkey != ekey:
+                continue
+            en = existing.normalized_text.lower()
+            if abs(len(fn) - len(en)) > max(len(fn), len(en)) * 0.5:
+                continue
+            if SequenceMatcher(None, fn, en).ratio() >= threshold:
+                is_dup = True
+                if frame.extraction_confidence > existing.extraction_confidence:
+                    kept[kept.index(existing)] = frame
+                break
+        if is_dup:
+            removed += 1
+        else:
+            kept.append(frame)
+    return kept, removed
 
 
 def _frame_dedup_key(frame: PropositionFrameCandidate) -> str:

@@ -172,6 +172,8 @@ class BenchmarkRunner:
             stmt = select(Proposition).where(Proposition.corpus_id == corpus_id)
             rows = await self._session.execute(stmt)
             for prop in rows.scalars().all():
+                if prop.predicate == "exists":
+                    continue
                 extracted_propositions.append(prop.normalized_text or "")
 
         phase = PhaseResult(phase=EvalPhase.EXTRACTION, success=True)

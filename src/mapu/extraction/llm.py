@@ -51,7 +51,10 @@ Output JSON with this exact schema:
 }}
 
 Rules:
-- Extract ALL assertable propositions, not just the most obvious one.
+- Focus on the PRIMARY propositions — the main claims, obligations, findings, \
+and relationships. Do NOT extract trivial, redundant, or overly granular sub-claims.
+- Aim for 1-5 propositions per text span. Fewer is better if the text is simple.
+- If two propositions say essentially the same thing, keep only the more complete one.
 - subject_text and object_text MUST be exact substrings of the input text.
 - predicate should be a short verb or relation phrase in snake_case.
 - normalized_text is a concise human-readable summary of the proposition.

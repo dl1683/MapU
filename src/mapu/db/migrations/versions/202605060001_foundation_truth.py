@@ -15,8 +15,24 @@ branch_labels: str | None = None
 depends_on: str | None = None
 
 
+def _exec_statements(sql: str) -> None:
+    """Split multi-statement SQL for asyncpg which rejects multiple commands per prepare."""
+    buf: list[str] = []
+    in_dollar = False
+    for line in sql.split("\n"):
+        stripped = line.strip()
+        if stripped.count("$$") % 2 == 1:
+            in_dollar = not in_dollar
+        buf.append(line)
+        if not in_dollar and stripped.endswith(";"):
+            stmt = "\n".join(buf).strip()
+            if stmt and stmt != ";":
+                op.execute(stmt)
+            buf = []
+
+
 def upgrade() -> None:
-    op.execute("""
+    _exec_statements("""
     -- Extensions
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
     CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -615,7 +631,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("""
+    _exec_statements("""
     DROP TRIGGER IF EXISTS trg_gap_target_fk ON gap_target;
     DROP TRIGGER IF EXISTS trg_derivation_acyclicity ON derivation_edge;
     DROP FUNCTION IF EXISTS check_gap_target_exists() CASCADE;

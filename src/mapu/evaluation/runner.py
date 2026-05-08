@@ -64,7 +64,6 @@ class BenchmarkRunner:
             from mapu.models.corpus import Corpus
             corpus = Corpus(id=corpus_id, name=f"bench_{case.id}", description=case.description)
             self._session.add(corpus)
-            await self._session.flush()
 
             from mapu.models.context import Situation
             situation = Situation(
@@ -155,8 +154,10 @@ class BenchmarkRunner:
                 "embeddings": ingest_result.embedding_count,
                 "propositions_extracted": ingest_result.propositions_extracted,
                 "extraction_errors": ingest_result.extraction_errors,
-                "extracted_entities": extracted_entities,
-                "extracted_propositions": extracted_propositions,
+                "entity_count": len(extracted_entities),
+                "entity_sample": extracted_entities[:10],
+                "proposition_count": len(extracted_propositions),
+                "proposition_sample": extracted_propositions[:10],
             }
 
             if case.expected_propositions:
@@ -205,15 +206,19 @@ class BenchmarkRunner:
             )
         )
         rows = await self._session.execute(stmt)
-        for (att_id,) in rows.all():
-            self._session.add(AttestationSituation(
-                attestation_id=att_id,
-                situation_id=situation_id,
-                corpus_id=corpus_id,
-                assignment_confidence=1.0,
-                assignment_basis="benchmark_default",
-            ))
-        await self._session.flush()
+        att_ids = [att_id for (att_id,) in rows.all()]
+        if att_ids:
+            self._session.add_all([
+                AttestationSituation(
+                    attestation_id=att_id,
+                    situation_id=situation_id,
+                    corpus_id=corpus_id,
+                    assignment_confidence=1.0,
+                    assignment_basis="benchmark_default",
+                )
+                for att_id in att_ids
+            ])
+            await self._session.flush()
 
     async def _load_extracted_entities(self, corpus_id: uuid.UUID) -> list[str]:
         from sqlalchemy import select
@@ -384,20 +389,27 @@ def _compute_case_metrics(phases: list[PhaseResult]) -> dict[str, float]:
 
 
 def _aggregate_metrics(results: list[CaseResult]) -> dict[str, float]:
-    all_keys: set[str] = set()
+    accum: dict[str, tuple[float, float, float, int]] = {}  # sum, min, max, count
+    error_count = 0
     for r in results:
-        all_keys.update(r.metrics.keys())
+        if r.errors:
+            error_count += 1
+        for key, val in r.metrics.items():
+            if key in accum:
+                s, mn, mx, n = accum[key]
+                accum[key] = (s + val, min(mn, val), max(mx, val), n + 1)
+            else:
+                accum[key] = (val, val, val, 1)
 
     aggregated: dict[str, float] = {}
-    for key in sorted(all_keys):
-        values = [r.metrics[key] for r in results if key in r.metrics]
-        if values:
-            aggregated[f"mean_{key}"] = sum(values) / len(values)
-            aggregated[f"min_{key}"] = min(values)
-            aggregated[f"max_{key}"] = max(values)
+    for key in sorted(accum):
+        s, mn, mx, n = accum[key]
+        aggregated[f"mean_{key}"] = s / n
+        aggregated[f"min_{key}"] = mn
+        aggregated[f"max_{key}"] = mx
 
     aggregated["total_cases"] = float(len(results))
-    aggregated["cases_with_errors"] = float(sum(1 for r in results if r.errors))
+    aggregated["cases_with_errors"] = float(error_count)
     return aggregated
 
 

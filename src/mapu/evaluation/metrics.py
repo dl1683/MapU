@@ -33,7 +33,15 @@ def precision_recall_f1(
 
 
 def fuzzy_match_score(predicted: str, expected: str) -> float:
-    return SequenceMatcher(None, predicted.lower(), expected.lower()).ratio()
+    p, e = predicted.lower(), expected.lower()
+    if p == e:
+        return 1.0
+    lp, le = len(p), len(e)
+    if lp == 0 or le == 0:
+        return 0.0
+    if max(lp, le) > 3 * min(lp, le):
+        return 0.0
+    return SequenceMatcher(None, p, e).ratio()
 
 
 def fuzzy_precision_recall_f1(

@@ -192,10 +192,10 @@ class BenchmarkRunner:
 
             from mapu.models.attestation import Proposition
             from mapu.truth.policy import TruthPolicyV1
-            from mapu.truth.provider import SqlTruthEvidenceProvider
+            from mapu.truth.provider import DbTruthEvidenceProvider
 
             policy = TruthPolicyV1()
-            provider = SqlTruthEvidenceProvider(self._session, corpus_id)
+            provider = DbTruthEvidenceProvider(self._session, corpus_id)
 
             stmt = select(Proposition).where(Proposition.corpus_id == corpus_id)
             rows = await self._session.execute(stmt)

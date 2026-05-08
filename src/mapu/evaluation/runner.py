@@ -338,17 +338,19 @@ class BenchmarkRunner:
                 phase.details["hits_returned"] = len(hit_texts)
                 phase.details["expected_hits"] = len(expected_texts)
 
-                rank_violations = 0
-                for expected_hit in case.expected_query_hits:
-                    if expected_hit.min_rank is not None:
+                ranked_hits = [
+                    h for h in case.expected_query_hits if h.min_rank is not None
+                ]
+                if ranked_hits:
+                    rank_violations = 0
+                    for expected_hit in ranked_hits:
                         found_rank = _find_fuzzy_rank(
                             hit_texts, expected_hit.proposition_text, threshold=0.5,
                         )
-                        if found_rank is not None and found_rank > expected_hit.min_rank:
+                        if found_rank is None or found_rank > expected_hit.min_rank:
                             rank_violations += 1
-                if case.expected_query_hits:
                     phase.details["rank_violation_rate"] = (
-                        rank_violations / len(case.expected_query_hits)
+                        rank_violations / len(ranked_hits)
                     )
 
             phase.details["synthesis"] = query_result.synthesis or ""

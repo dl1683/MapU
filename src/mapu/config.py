@@ -78,6 +78,7 @@ class LLMSettings(BaseSettings):
     model: str = ""
     api_key: str = ""
     base_url: str = ""
+    timeout: float = 120.0
 
     model_config = {"env_prefix": "MAPU_LLM_"}
 

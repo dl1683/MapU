@@ -54,13 +54,14 @@ class OpenAICompatibleLLMProvider:
         api_key: str,
         model: str = "gpt-4o-mini",
         base_url: str | None = None,
+        timeout: float = 120.0,
     ) -> None:
         import httpx
 
         self._model = model
         self._url = (base_url or "https://api.openai.com/v1") + "/chat/completions"
         self._client = httpx.AsyncClient(
-            timeout=60.0,
+            timeout=timeout,
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -100,13 +101,14 @@ class AnthropicLLMProvider:
         api_key: str,
         model: str = "claude-sonnet-4-6",
         base_url: str | None = None,
+        timeout: float = 120.0,
     ) -> None:
         import httpx
 
         self._model = model
         self._url = (base_url or "https://api.anthropic.com") + "/v1/messages"
         self._client = httpx.AsyncClient(
-            timeout=60.0,
+            timeout=timeout,
             headers={
                 "x-api-key": api_key,
                 "anthropic-version": "2023-06-01",
@@ -187,6 +189,7 @@ def get_default_llm_provider() -> LLMProvider | None:
         api_key=settings.api_key,
         model=settings.model or default_model,
         base_url=settings.base_url or None,
+        timeout=settings.timeout,
     )
     _llm_checked = True
     return _cached_llm_provider

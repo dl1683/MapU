@@ -64,6 +64,7 @@ class ExtractionService:
         grounder: CandidateGrounder,
         spacy_parser: SpacyBaseParser | None = None,
         plan: ExtractionPlan | None = None,
+        max_concurrent_extractions: int = 4,
     ) -> None:
         self._session = session
         self._corpus_id = corpus_id
@@ -72,6 +73,7 @@ class ExtractionService:
         self._grounder = grounder
         self._spacy = spacy_parser
         self._plan = plan or _make_sequential_plan(extractors)
+        self._extraction_sem = asyncio.Semaphore(max_concurrent_extractions)
 
     async def extract_expression(
         self,
@@ -85,31 +87,35 @@ class ExtractionService:
 
         result = ExtractionResult(expression_id=expression_id)
 
-        for span in spans:
-            base_parse = None
-            if self._spacy is not None:
-                base_parse = await asyncio.to_thread(
-                    self._spacy.parse, span.text
+        async def _extract_span(span: TextSpan) -> tuple[ExtractionContext, list[ExtractorOutput]]:
+            async with self._extraction_sem:
+                base_parse = None
+                if self._spacy is not None:
+                    base_parse = await asyncio.to_thread(
+                        self._spacy.parse, span.text
+                    )
+                ctx = ExtractionContext(
+                    corpus_id=self._corpus_id,
+                    document_id=document_id,
+                    expression_id=expression_id,
+                    span_id=span.id,
+                    node_id=span.node_id,
+                    text=span.text,
+                    start_char=span.start_char,
+                    end_char=span.end_char,
+                    base_parse=base_parse,
                 )
+                outputs = await self._run_stages(ctx)
+                entity_frames = _entities_to_frames(outputs, ctx)
+                if entity_frames:
+                    outputs = [*outputs, ExtractorOutput(frames=tuple(entity_frames))]
+                return ctx, outputs
 
-            ctx = ExtractionContext(
-                corpus_id=self._corpus_id,
-                document_id=document_id,
-                expression_id=expression_id,
-                span_id=span.id,
-                node_id=span.node_id,
-                text=span.text,
-                start_char=span.start_char,
-                end_char=span.end_char,
-                base_parse=base_parse,
-            )
+        span_results = await asyncio.gather(
+            *(_extract_span(span) for span in spans),
+        )
 
-            outputs = await self._run_stages(ctx)
-
-            entity_frames = _entities_to_frames(outputs, ctx)
-            if entity_frames:
-                outputs = [*outputs, ExtractorOutput(frames=tuple(entity_frames))]
-
+        for _ctx, outputs in span_results:
             merged = self._merge.merge(outputs)
             result.candidates_produced += len(merged.frames)
             result.duplicates_removed += merged.duplicates_removed

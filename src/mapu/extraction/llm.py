@@ -57,7 +57,10 @@ and relationships. Do NOT extract trivial, redundant, or overly granular sub-cla
 - If two propositions say essentially the same thing, keep only the more complete one.
 - subject_text and object_text MUST be exact substrings of the input text.
 - predicate should be a short verb or relation phrase in snake_case.
-- normalized_text is a concise human-readable summary of the proposition.
+- normalized_text MUST be concise and subject-first. Format: "Subject predicate \
+object/details". Example: "Seller shall deliver financial statements within 90 \
+days", NOT "The Seller is obligated to deliver audited financial statements to \
+the Buyer within 90 days of the Closing Date". Keep under 80 characters when possible.
 - confidence: 0.0-1.0. Only include propositions with confidence >= 0.5.
 - Do NOT hallucinate information not present in the text.
 - If the text contains no extractable propositions, return {{"propositions": []}}.

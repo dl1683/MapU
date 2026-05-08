@@ -26,24 +26,23 @@ def get_default_extractors() -> list[Extractor]:
     if settings.gliner_enabled:
         from mapu.extraction.ml import GLiNERExtractor
         extractors.append(GLiNERExtractor(
-            model_name=settings.gliner_model,
+            model_id=settings.gliner_model,
             threshold=settings.gliner_threshold,
-            calibration_weight=settings.gliner_calibration,
+            calibration_factor=settings.gliner_calibration,
             device=settings.ml_device,
         ))
     if settings.rebel_enabled:
         from mapu.extraction.ml import REBELExtractor
         extractors.append(REBELExtractor(
-            model_name=settings.rebel_model,
-            calibration_weight=settings.rebel_calibration,
-            device=settings.ml_device,
+            model_id=settings.rebel_model,
+            calibration_factor=settings.rebel_calibration,
         ))
     if settings.setfit_enabled:
         from mapu.extraction.ml import SetFitExtractor
         extractors.append(SetFitExtractor(
-            model_name=settings.setfit_model,
-            trained_path=settings.setfit_trained_path or None,
-            threshold=settings.setfit_threshold,
+            model_id=settings.setfit_model,
+            trained_model_path=settings.setfit_trained_path or None,
+            confidence_threshold=settings.setfit_threshold,
             device=settings.ml_device,
         ))
 

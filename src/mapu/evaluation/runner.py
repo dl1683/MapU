@@ -71,12 +71,13 @@ class BenchmarkRunner:
                 corpus_id=corpus_id,
                 kind="benchmark",
                 name=f"bench_{case.id}_default",
-                is_default=True,
             )
             self._session.add(situation)
             await self._session.flush()
 
-            extraction_result = await self._run_extraction(case, corpus_id)
+            extraction_result = await self._run_extraction(
+                case, corpus_id, situation.id,
+            )
             case_result.phases.append(extraction_result)
 
             if case.expected_truth:
@@ -97,7 +98,10 @@ class BenchmarkRunner:
         return case_result
 
     async def _run_extraction(
-        self, case: BenchmarkCase, corpus_id: uuid.UUID,
+        self,
+        case: BenchmarkCase,
+        corpus_id: uuid.UUID,
+        situation_id: uuid.UUID,
     ) -> PhaseResult:
         start = time.monotonic()
         phase = PhaseResult(phase=EvalPhase.EXTRACTION, success=False)
@@ -131,12 +135,14 @@ class BenchmarkRunner:
             )
             ingest_result = await svc.ingest(blob)
 
-            extracted_entities: list[str] = []
+            await self._link_attestations_to_situation(corpus_id, situation_id)
+
+            extracted_entities = await self._load_extracted_entities(corpus_id)
             extracted_propositions: list[str] = []
             if ingest_result.propositions_extracted > 0:
                 from sqlalchemy import select
 
-                from mapu.models.attestation import Proposition
+                from mapu.models.proposition import Proposition
                 stmt = select(Proposition).where(Proposition.corpus_id == corpus_id)
                 rows = await self._session.execute(stmt)
                 for prop in rows.scalars().all():
@@ -179,6 +185,48 @@ class BenchmarkRunner:
         phase.duration_ms = (time.monotonic() - start) * 1000
         return phase
 
+    async def _link_attestations_to_situation(
+        self, corpus_id: uuid.UUID, situation_id: uuid.UUID,
+    ) -> None:
+        from sqlalchemy import select
+
+        from mapu.models.attestation import Attestation, AttestationSituation
+
+        stmt = (
+            select(Attestation.id)
+            .where(Attestation.corpus_id == corpus_id)
+            .where(
+                ~Attestation.id.in_(
+                    select(AttestationSituation.attestation_id).where(
+                        AttestationSituation.corpus_id == corpus_id,
+                        AttestationSituation.situation_id == situation_id,
+                    )
+                )
+            )
+        )
+        rows = await self._session.execute(stmt)
+        for (att_id,) in rows.all():
+            self._session.add(AttestationSituation(
+                attestation_id=att_id,
+                situation_id=situation_id,
+                corpus_id=corpus_id,
+                assignment_confidence=1.0,
+                assignment_basis="benchmark_default",
+            ))
+        await self._session.flush()
+
+    async def _load_extracted_entities(self, corpus_id: uuid.UUID) -> list[str]:
+        from sqlalchemy import select
+
+        from mapu.models.entity import Handle
+
+        stmt = select(Handle.canonical_name).where(
+            Handle.corpus_id == corpus_id,
+            Handle.status == "active",
+        )
+        rows = await self._session.execute(stmt)
+        return [name for (name,) in rows.all()]
+
     async def _run_truth(
         self,
         case: BenchmarkCase,
@@ -190,7 +238,7 @@ class BenchmarkRunner:
         try:
             from sqlalchemy import select
 
-            from mapu.models.attestation import Proposition
+            from mapu.models.proposition import Proposition
             from mapu.truth.policy import TruthPolicyV1
             from mapu.truth.provider import DbTruthEvidenceProvider
 
@@ -279,16 +327,29 @@ class BenchmarkRunner:
             query_result = await svc.query(request)
 
             hit_texts = [h.normalized_text for h in query_result.hits]
+            phase.details = {}
+
             if case.expected_query_hits:
                 expected_texts = [h.proposition_text for h in case.expected_query_hits]
                 prf1 = fuzzy_precision_recall_f1(hit_texts, expected_texts, threshold=0.5)
-                phase.details = {
-                    "query_precision": prf1.precision,
-                    "query_recall": prf1.recall,
-                    "query_f1": prf1.f1,
-                    "hits_returned": len(hit_texts),
-                    "expected_hits": len(expected_texts),
-                }
+                phase.details["query_precision"] = prf1.precision
+                phase.details["query_recall"] = prf1.recall
+                phase.details["query_f1"] = prf1.f1
+                phase.details["hits_returned"] = len(hit_texts)
+                phase.details["expected_hits"] = len(expected_texts)
+
+                rank_violations = 0
+                for expected_hit in case.expected_query_hits:
+                    if expected_hit.min_rank is not None:
+                        found_rank = _find_fuzzy_rank(
+                            hit_texts, expected_hit.proposition_text, threshold=0.5,
+                        )
+                        if found_rank is not None and found_rank > expected_hit.min_rank:
+                            rank_violations += 1
+                if case.expected_query_hits:
+                    phase.details["rank_violation_rate"] = (
+                        rank_violations / len(case.expected_query_hits)
+                    )
 
             phase.details["synthesis"] = query_result.synthesis or ""
             phase.details["epistemic_status"] = query_result.epistemic_status.value
@@ -299,6 +360,15 @@ class BenchmarkRunner:
 
         phase.duration_ms = (time.monotonic() - start) * 1000
         return phase
+
+
+def _find_fuzzy_rank(
+    hit_texts: list[str], target: str, threshold: float,
+) -> int | None:
+    for i, text in enumerate(hit_texts):
+        if fuzzy_match_score(text, target) >= threshold:
+            return i
+    return None
 
 
 def _compute_case_metrics(phases: list[PhaseResult]) -> dict[str, float]:

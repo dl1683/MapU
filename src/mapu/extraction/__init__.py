@@ -31,6 +31,17 @@ def get_default_extractors() -> list[Extractor]:
             calibration_factor=settings.gliner_calibration,
             device=settings.ml_device,
         ))
+    if settings.llm_enabled:
+        from mapu.providers.llms import get_default_llm_provider
+        llm_provider = get_default_llm_provider()
+        if llm_provider is not None:
+            from mapu.extraction.llm import LLMExtractor
+            extractors.append(LLMExtractor(
+                provider=llm_provider,
+                max_tokens=settings.llm_max_tokens,
+                temperature=settings.llm_temperature,
+                min_confidence=settings.llm_min_confidence,
+            ))
     if settings.rebel_enabled:
         from mapu.extraction.ml import REBELExtractor
         extractors.append(REBELExtractor(

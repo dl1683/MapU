@@ -63,6 +63,11 @@ class ExtractionSettings(BaseSettings):
 
     srl_enabled: bool = False
 
+    llm_enabled: bool = False
+    llm_max_tokens: int = 2048
+    llm_temperature: float = 0.0
+    llm_min_confidence: float = 0.5
+
     ml_device: str = "cpu"
 
     model_config = {"env_prefix": "MAPU_EXTRACTION_"}

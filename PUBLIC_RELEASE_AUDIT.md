@@ -10,14 +10,8 @@ Prepare this repository for open-source release with claim-backed documentation,
 
 1. Performance claims are backed by fresh, reproducible artifacts
 - Evidence:
-  - `results/locomo/locomo_results_20260513_033944.json`
-  - `results/longmemeval/longmemeval_results_20260513_033949.json`
-  - `results/beam/beam_results_20260513_033951.json`
-  - `results/beam/beam_results_20260513_033954.json`
-  - `results/beam/beam_results_20260513_033957.json`
-  - `results/beam/beam_results_20260513_034000.json`
   - `tools/report_full_sweep_leaderboard.py` output
-  - `GLOBAL_MEMORY_BENCHMARK_STATUS.md` historical post-hardening section
+  - `GLOBAL_MEMORY_BENCHMARK_STATUS.md` quarantine note for historical runs
 - Status: PARTIAL
 - Required fix:
   - Run `tools/prepublish_benchmark_gate.ps1` on the exact release code and update this item with that gate directory.
@@ -79,6 +73,7 @@ Prepare this repository for open-source release with claim-backed documentation,
 10. Prepublish benchmark claims are gated to current code
 - Evidence:
   - `tools/prepublish_benchmark_gate.ps1`
+  - `tools/run_full_leaderboard_sweeps_parallel.ps1`
   - `INTEGRATIONS.md` section "Prepublish benchmark gate"
 - Status: PARTIAL
 - Required fix:
@@ -101,7 +96,7 @@ Prepare this repository for open-source release with claim-backed documentation,
 13. Unit suite is warning-free
 - Evidence:
   - Executed `pytest`
-- Result: `552 passed, 55 deselected`
+- Result: `554 passed, 55 deselected`
 - Status: PASS
 
 14. Generated and heavyweight artifacts are excluded from public release

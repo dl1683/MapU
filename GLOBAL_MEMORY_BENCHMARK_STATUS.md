@@ -14,71 +14,25 @@ Implication:
 - Final public release claims must be based on `tools/prepublish_benchmark_gate.ps1`,
   which runs with a unique project suffix and no `MAPU_BENCH_SKIP_INGEST`.
 
-## Historical post-hardening full sweeps (not final release gate)
+## Quarantined historical sweeps (not public evidence)
 
-Run timestamp set: `20260513_033944` .. `20260513_034000`
+Earlier 2026-05-13 runs produced high leaderboard-looking numbers, but those
+runs predate later adapter hardening, release-gate fixes, and exact-code
+identity checks. The raw local files remain useful for debugging regressions,
+but this document intentionally does not repeat their scores because they are
+not public evidence.
 
-Artifacts:
-- `results/locomo/locomo_results_20260513_033944.json`
-- `results/longmemeval/longmemeval_results_20260513_033949.json`
-- `results/beam/beam_results_20260513_033951.json` (100K)
-- `results/beam/beam_results_20260513_033954.json` (500K)
-- `results/beam/beam_results_20260513_033957.json` (1M)
-- `results/beam/beam_results_20260513_034000.json` (10M)
+To make a performance claim, use only a successful
+`tools/prepublish_benchmark_gate.ps1` run whose `code_identity.txt` points at
+the exact released commit and whose `leaderboard.txt` was generated in the same
+gate directory.
 
-These runs are useful engineering evidence but must not be the final public
-benchmark claim unless superseded by a fresh prepublish gate run on the exact
-release code.
+## Historical retrieval-proxy lane (diagnostic only)
 
-Leaderboard summary vs recorded baselines (`tools/report_full_sweep_leaderboard.py`):
-- LoCoMo:
-  - `top_200: 100.000` vs `91.558` (delta `+8.442`)
-  - `top_50: 100.000` vs `82.662` (delta `+17.338`)
-- LongMemEval:
-  - `top_200: 100.000` vs `93.400` (delta `+6.600`)
-  - `top_50: 100.000` vs `90.400` (delta `+9.600`)
-- BEAM 100K:
-  - `top_200: 100.000` vs `70.143` (delta `+29.857`)
-  - `top_50: 100.000` vs `67.143` (delta `+32.857`)
-- BEAM 500K:
-  - `top_200: 99.857` vs `70.143` (delta `+29.714`)
-  - `top_50: 99.857` vs `67.143` (delta `+32.714`)
-- BEAM 1M:
-  - `top_200: 100.000` vs `70.143` (delta `+29.857`)
-  - `top_50: 100.000` vs `67.143` (delta `+32.857`)
-- BEAM 10M:
-  - `top_200: 100.000` vs `50.500` (delta `+49.500`)
-  - `top_50: 100.000` vs `45.500` (delta `+54.500`)
-
-## Historical best (pre-hardening, retrieval-proxy mode)
-
-Run artifacts:
-- `results/matrix/proxy_mapu_memory_matrix_holdout_v8.json`
-- `results/matrix/mapu_memory_matrix_holdout_v8_runs.json`
-- `results/matrix/global_memory_benchmark_coverage.md`
-
-Current proxy scores:
-- LoCoMo: `support_hit_rate=1.00`, `nugget_hit_rate=1.00`
-- LongMemEval: `support_hit_rate=1.00`, `nugget_hit_rate=1.00`
-- BEAM: `support_hit_rate=1.00`, `nugget_hit_rate=1.00`
-
-Delta vs previous baseline:
-- LoCoMo holdout support: `0.55 -> 1.00`
-- LongMemEval holdout support: `0.5833 -> 1.00`
-- BEAM holdout nugget: `0.7949 -> 1.00`
-- BEAM holdout support remains `1.00`
-
-## Holdout generalization (larger unseen slices)
-
-Holdout artifacts:
-- `results/matrix/proxy_mapu_memory_matrix_holdout_v1.json`
-- `results/matrix/proxy_mapu_memory_matrix_holdout_v8.json`
-
-Proxy score deltas (`v1 -> v8`):
-- LoCoMo: `0.55 -> 1.00` (`+0.45`)
-- LongMemEval: `0.5833 -> 1.00` (`+0.4167`)
-- BEAM support: `1.00 -> 1.00` (no regression)
-- BEAM nugget: `0.7949 -> 1.00` (`+0.2051`)
+The matrix/proxy scripts are retained for local debugging and broad benchmark
+coverage experiments. Their outputs are slice-level retrieval diagnostics, not
+official leaderboard metrics, and must not be used as public performance
+claims.
 
 Operational note:
 - In this environment, BEAM/LoCoMo/LongMemEval `--predict-only` runs still require an OpenAI key check during client initialization. We run with `OPENAI_API_KEY=dummy` to execute offline retrieval-only evaluation.
@@ -98,9 +52,13 @@ Summary:
 
 ## What this means right now
 
-- On the current holdout-v8 proxy setup, we are at `1.00/1.00` across all three runnable Mem0 benchmarks (`LoCoMo`, `LongMemEval`, `BEAM`).
-- Global coverage still mirrors public startup benchmark surfaces (Mem0 docs + AMB catalog + Zep paper signals), but only `3/8` are executable in the current MapU harness.
-- Remaining risk is measurement scope: this is retrieval-proxy scoring on bounded slices, not full official benchmark leaderboard protocol.
+- Do not publish any performance number until a fresh prepublish gate completes
+  on the exact release commit.
+- Global coverage still mirrors public startup benchmark surfaces (Mem0 docs +
+  AMB catalog + Zep paper signals), but only `3/8` are executable in the
+  current MapU harness.
+- Retrieval-proxy outputs remain useful diagnostics, but full leaderboard-style
+  sweeps are the required public evidence path.
 
 ## Next execution order
 

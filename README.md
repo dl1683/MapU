@@ -40,7 +40,7 @@ Prerequisites:
 - Docker (recommended for local infra)
 
 ```bash
-git clone https://github.com/deal1683/MapU.git
+git clone https://github.com/dl1683/MapU.git
 cd MapU
 pip install -e ".[dev]"
 docker compose up -d

@@ -9,7 +9,7 @@ from mapu.evidence.pdf import PdfParser
 from mapu.evidence.plaintext import PlaintextParser
 from mapu.extraction.ml import (
     GLiNERExtractor,
-    REBELExtractor,
+    GLiNERRelexExtractor,
     SetFitExtractor,
     SRLExtractor,
 )
@@ -66,8 +66,8 @@ class TestExtractorProtocol:
     def test_gliner_is_extractor(self) -> None:
         assert isinstance(GLiNERExtractor(), Extractor)
 
-    def test_rebel_is_extractor(self) -> None:
-        assert isinstance(REBELExtractor(), Extractor)
+    def test_gliner_relex_is_extractor(self) -> None:
+        assert isinstance(GLiNERRelexExtractor(), Extractor)
 
     def test_setfit_is_extractor(self) -> None:
         assert isinstance(SetFitExtractor(), Extractor)

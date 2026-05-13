@@ -1,4 +1,4 @@
-"""ML model extractors: GLiNER, REBEL, SetFit, and SRL shell.
+"""ML model extractors: GLiNER, GLiNER-Relex, SetFit, and SRL shell.
 
 Models are lazily loaded on first use via LazyModelRuntime.
 """
@@ -6,7 +6,10 @@ Models are lazily loaded on first use via LazyModelRuntime.
 from __future__ import annotations
 
 import asyncio
-import re
+import importlib
+import os
+import sys
+import types
 from typing import Any
 
 from mapu.extraction.types import (
@@ -32,10 +35,6 @@ _DEFAULT_ENTITY_TYPES: tuple[str, ...] = (
     "duration",
 )
 
-_REBEL_TRIPLET_RE = re.compile(
-    r"<triplet>\s*(.*?)\s*<subj>\s*(.*?)\s*<obj>\s*(.*?)\s*(?=<triplet>|$)"
-)
-
 _RELATION_TO_FRAME_TYPE: dict[str, FrameType] = {
     "instance of": FrameType.CLASSIFICATION,
     "subclass of": FrameType.CLASSIFICATION,
@@ -53,7 +52,53 @@ _RELATION_TO_FRAME_TYPE: dict[str, FrameType] = {
     "manufacturer": FrameType.RELATIONSHIP,
     "applies to jurisdiction": FrameType.CONSTRAINT,
     "replaces": FrameType.STATUS,
+    "amends": FrameType.STATUS,
+    "supersedes": FrameType.STATUS,
+    "requires": FrameType.OBLIGATION,
+    "shall deliver": FrameType.OBLIGATION,
+    "must provide": FrameType.OBLIGATION,
+    "prohibits": FrameType.CONSTRAINT,
+    "depends on": FrameType.DEPENDENCY,
+    "uses": FrameType.DEPENDENCY,
+    "reports": FrameType.MEASUREMENT,
+    "increases": FrameType.MEASUREMENT,
+    "decreases": FrameType.MEASUREMENT,
+    "causes": FrameType.RELATIONSHIP,
+    "inhibits": FrameType.RELATIONSHIP,
+    "treats": FrameType.RELATIONSHIP,
 }
+
+_DEFAULT_RELATION_LABELS: tuple[str, ...] = (
+    "affiliated with",
+    "agrees to",
+    "amends",
+    "applies to",
+    "causes",
+    "contains",
+    "depends on",
+    "decreases",
+    "founded by",
+    "increases",
+    "inhibits",
+    "located in",
+    "member of",
+    "must provide",
+    "owned by",
+    "parent organization",
+    "part of",
+    "prohibits",
+    "reports",
+    "replaces",
+    "requires",
+    "shall deliver",
+    "subsidiary",
+    "supersedes",
+    "treats",
+    "uses",
+    "works for",
+)
+
+_OBLIGATION_MODAL_RE = ("shall ", "must ", "may ")
 
 
 class LazyModelRuntime:
@@ -79,7 +124,14 @@ class LazyModelRuntime:
         async with self._locks[key]:
             if key in self._cache:
                 return self._cache[key]
-            model = await asyncio.to_thread(loader)
+            # GLiNER imports pull in transformers/datasets/pyarrow. On Windows
+            # with Python 3.13, importing this stack from a worker thread can
+            # trigger native access-violation crashes, so keep that import on
+            # the main thread.
+            if os.name == "nt" and backend in {"gliner", "gliner_relex"}:
+                model = loader()
+            else:
+                model = await asyncio.to_thread(loader)
             self._cache[key] = model
             return model
 
@@ -90,6 +142,44 @@ class LazyModelRuntime:
 
 
 _GLOBAL_RUNTIME = LazyModelRuntime()
+
+
+def _install_gliner_training_stub() -> None:
+    """Avoid importing GLiNER training stack during inference-only usage.
+
+    GLiNER's top-level model module imports `gliner.training` eagerly. On our
+    Windows + Python 3.13 setup this cascades into `transformers.trainer ->
+    datasets -> pyarrow` and can crash the process natively. In MapU we only
+    need inference, so a tiny stub is sufficient.
+    """
+    if "gliner.training" in sys.modules:
+        return
+
+    class _StubTrainer:  # pragma: no cover - simple import shim
+        pass
+
+    class _StubTrainingArguments:  # pragma: no cover - simple import shim
+        pass
+
+    training_mod = types.ModuleType("gliner.training")
+    training_mod.Trainer = _StubTrainer
+    training_mod.TrainingArguments = _StubTrainingArguments
+    trainer_mod = types.ModuleType("gliner.training.trainer")
+    trainer_mod.Trainer = _StubTrainer
+    trainer_mod.TrainingArguments = _StubTrainingArguments
+
+    sys.modules["gliner.training"] = training_mod
+    sys.modules["gliner.training.trainer"] = trainer_mod
+
+    # Transformers may import sklearn helpers opportunistically. Force-disable
+    # that probe so we avoid importing heavy sklearn/pandas/pyarrow stacks
+    # during GLiNER inference startup on Windows.
+    try:
+        import_utils = importlib.import_module("transformers.utils.import_utils")
+        if hasattr(import_utils, "_sklearn_available"):
+            import_utils._sklearn_available = False  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
 
 class GLiNERExtractor:
@@ -117,6 +207,7 @@ class GLiNERExtractor:
 
     async def _get_model(self) -> Any:
         def _load() -> Any:
+            _install_gliner_training_stub()
             from gliner import GLiNER  # type: ignore[import-untyped]
             return GLiNER.from_pretrained(self._model_id, map_location=self._device)
         return await self._runtime.get_or_load(
@@ -254,93 +345,112 @@ class SetFitExtractor:
         return None, 0.0
 
 
-def parse_rebel_output(generated_text: str) -> list[dict[str, str]]:
-    """Parse REBEL seq2seq output into triplet dicts.
-
-    REBEL format: <triplet> SUBJECT <subj> OBJECT <obj> RELATION
-    """
-    triplets: list[dict[str, str]] = []
-    for match in _REBEL_TRIPLET_RE.finditer(generated_text):
-        head = match.group(1).strip()
-        tail = match.group(2).strip()
-        relation = match.group(3).strip()
-        if head and relation and tail:
-            triplets.append({"head": head, "relation": relation, "tail": tail})
-    return triplets
-
-
-class REBELExtractor:
-    """Relation extraction using REBEL (seq2seq triplet generation).
-
-    Note: Babelscape/rebel-large is CC-BY-NC-SA-4.0. This extractor is
-    optional and should not be a hard default for commercial deployments.
-    """
+class GLiNERRelexExtractor:
+    """Joint zero-shot entity and relation extraction using GLiNER-Relex."""
 
     def __init__(
         self,
-        model_id: str = "Babelscape/rebel-large",
-        calibration_factor: float = 0.65,
-        max_length: int = 256,
-        device: int = -1,
+        model_id: str = "knowledgator/gliner-relex-base-v1.0",
+        entity_types: tuple[str, ...] = (*_DEFAULT_ENTITY_TYPES, "other"),
+        relation_labels: tuple[str, ...] = _DEFAULT_RELATION_LABELS,
+        entity_threshold: float = 0.4,
+        relation_threshold: float = 0.7,
+        calibration_factor: float = 0.75,
+        device: str = "cpu",
         runtime: LazyModelRuntime | None = None,
     ) -> None:
         self._model_id = model_id
+        self._entity_types = list(entity_types)
+        self._relation_labels = list(relation_labels)
+        self._entity_threshold = entity_threshold
+        self._relation_threshold = relation_threshold
         self._calibration_factor = calibration_factor
-        self._max_length = max_length
         self._device = device
         self._runtime = runtime or _GLOBAL_RUNTIME
 
     @property
     def name(self) -> str:
-        return "rebel"
+        return "gliner_relex"
 
-    async def _get_pipeline(self) -> Any:
-        dev = self._device
+    async def _get_model(self) -> Any:
         def _load() -> Any:
-            from transformers import pipeline
-            return pipeline(
-                "text2text-generation",
-                model=self._model_id,
-                device=dev,
-                max_length=self._max_length,
-            )
-        device_key = str(self._device)
+            _install_gliner_training_stub()
+            from gliner import GLiNER  # type: ignore[import-untyped]
+            return GLiNER.from_pretrained(self._model_id, map_location=self._device)
         return await self._runtime.get_or_load(
-            "rebel", self._model_id, device_key, _load,
+            "gliner_relex", self._model_id, self._device, _load,
         )
 
     async def extract(self, ctx: ExtractionContext) -> ExtractorOutput:
         if not ctx.text.strip():
             return ExtractorOutput()
 
-        pipe = await self._get_pipeline()
-        outputs: list[dict[str, Any]] = await self._runtime.run_inference(
-            pipe, ctx.text, return_text=True, return_tensors=False,
+        model = await self._get_model()
+        raw = await self._runtime.run_inference(
+            model.inference,
+            texts=[ctx.text],
+            labels=self._entity_types,
+            relations=self._relation_labels,
+            threshold=self._entity_threshold,
+            relation_threshold=self._relation_threshold,
+            return_relations=True,
+            flat_ner=False,
         )
-        generated = outputs[0].get("generated_text", "") if outputs else ""
-        raw_triplets = parse_rebel_output(generated)
+        raw_entities, raw_relations = _unpack_relex_output(raw)
 
         entity_index = _build_entity_index(ctx)
+        for ent in raw_entities:
+            text = str(ent.get("text", ""))
+            label = str(ent.get("label") or ent.get("type") or "entity").lower()
+            if text:
+                entity_index[text] = label
+
+        entities: list[EntityMention] = []
+        for ent in raw_entities:
+            text = str(ent.get("text", ""))
+            if not text:
+                continue
+            start, end = _entity_span(ctx.text, ent, text)
+            if start == end:
+                continue
+            score = float(ent.get("score", 0.0)) * self._calibration_factor
+            entities.append(EntityMention(
+                text=text,
+                kind=str(ent.get("label") or ent.get("type") or "entity").lower(),
+                start_char=ctx.start_char + start,
+                end_char=ctx.start_char + end,
+                confidence=score,
+                source=self.name,
+            ))
+
         frames: list[PropositionFrameCandidate] = []
         signals: list[ExtractionSignal] = []
 
-        for triplet in raw_triplets:
-            head = triplet["head"]
-            relation = triplet["relation"]
-            tail = triplet["tail"]
-
-            subject_span = _find_span(ctx.text, head)
-            object_span = _find_span(ctx.text, tail)
-
-            if subject_span == (0, 0) or object_span == (0, 0):
+        for relation_obj in raw_relations:
+            head_obj = relation_obj.get("head", {})
+            tail_obj = relation_obj.get("tail", {})
+            if not isinstance(head_obj, dict) or not isinstance(tail_obj, dict):
                 continue
 
-            raw_confidence = 0.8 if (head in entity_index or tail in entity_index) else 0.7
+            head = str(head_obj.get("text", ""))
+            tail = str(tail_obj.get("text", ""))
+            relation = str(relation_obj.get("relation", ""))
+            if not head or not tail or not relation:
+                continue
+            relation_norm = _normalize_relation_label(relation, head, tail, ctx.text)
+
+            subject_span = _entity_span(ctx.text, head_obj, head)
+            object_span = _entity_span(ctx.text, tail_obj, tail)
+
+            if subject_span[0] == subject_span[1] or object_span[0] == object_span[1]:
+                continue
+
+            raw_confidence = float(relation_obj.get("score", 0.0))
             calibrated = raw_confidence * self._calibration_factor
 
             subject = EntityMention(
                 text=head,
-                kind=entity_index.get(head, "entity"),
+                kind=str(head_obj.get("type") or entity_index.get(head, "entity")).lower(),
                 start_char=ctx.start_char + subject_span[0],
                 end_char=ctx.start_char + subject_span[1],
                 confidence=calibrated,
@@ -348,7 +458,7 @@ class REBELExtractor:
             )
             obj = EntityMention(
                 text=tail,
-                kind=entity_index.get(tail, "entity"),
+                kind=str(tail_obj.get("type") or entity_index.get(tail, "entity")).lower(),
                 start_char=ctx.start_char + object_span[0],
                 end_char=ctx.start_char + object_span[1],
                 confidence=calibrated,
@@ -356,19 +466,21 @@ class REBELExtractor:
             )
 
             frame_type = _RELATION_TO_FRAME_TYPE.get(
-                relation.lower(), FrameType.RELATIONSHIP,
+                relation_norm, FrameType.RELATIONSHIP,
             )
+            if _reject_malformed_obligation_object(relation_norm, obj):
+                continue
             frames.append(PropositionFrameCandidate(
                 span_id=ctx.span_id,
                 frame_type=frame_type,
                 subject=subject,
-                predicate=relation.lower().replace(" ", "_"),
+                predicate=relation_norm.replace(" ", "_"),
                 object=obj,
                 value=None,
                 polarity=True,
-                modality=None,
+                modality=_infer_modality(relation_norm),
                 valid_range=None,
-                normalized_text=f"{head} {relation} {tail}",
+                normalized_text=f"{head} {relation_norm} {tail}",
                 qualifiers={},
                 stance=Stance.ASSERTS,
                 attestation_strength=AttestationStrength.INFERENCE,
@@ -381,17 +493,46 @@ class REBELExtractor:
                 signal_type="relation",
                 data={
                     "head": head,
-                    "relation": relation,
+                    "relation": relation_norm,
                     "tail": tail,
                     "raw_confidence": raw_confidence,
                     "calibrated_confidence": calibrated,
+                    "model_id": self._model_id,
                 },
                 start_char=ctx.start_char + sig_start,
                 end_char=ctx.start_char + sig_end,
                 source=self.name,
             ))
 
-        return ExtractorOutput(frames=tuple(frames), signals=tuple(signals))
+        return ExtractorOutput(
+            entities=tuple(entities),
+            frames=tuple(frames),
+            signals=tuple(signals),
+        )
+
+
+def _unpack_relex_output(raw: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Normalize GLiNER-Relex return shapes to first-text entities and relations."""
+    if not isinstance(raw, tuple) or len(raw) != 2:
+        return [], []
+    entities, relations = raw
+    if not isinstance(entities, list) or not isinstance(relations, list):
+        return [], []
+    first_entities = entities[0] if entities and isinstance(entities[0], list) else entities
+    first_relations = relations[0] if relations and isinstance(relations[0], list) else relations
+    return (
+        [e for e in first_entities if isinstance(e, dict)],
+        [r for r in first_relations if isinstance(r, dict)],
+    )
+
+
+def _entity_span(text: str, entity: dict[str, Any], fallback_text: str) -> tuple[int, int]:
+    start = entity.get("start")
+    end = entity.get("end")
+    if isinstance(start, int) and not isinstance(start, bool) and isinstance(end, int):
+        if 0 <= start < end <= len(text):
+            return start, end
+    return _find_span(text, fallback_text)
 
 
 class SRLExtractor:
@@ -438,3 +579,46 @@ def _find_span(text: str, target: str) -> tuple[int, int]:
     if idx >= 0:
         return (idx, idx + len(target))
     return (0, 0)
+
+
+def _normalize_relation_label(relation: str, head: str, tail: str, full_text: str) -> str:
+    r = " ".join(relation.lower().split())
+    text = full_text.lower()
+    # Force modality-aware normalization when the source sentence expresses it.
+    if f"{head.lower()} shall " in text and tail.lower() in text:
+        return "shall deliver"
+    if f"{head.lower()} must " in text and tail.lower() in text:
+        return "must provide"
+    if f"{head.lower()} may " in text and tail.lower() in text:
+        return "may request"
+    if any(r.startswith(m.strip()) for m in _OBLIGATION_MODAL_RE):
+        return r
+    if r == "reports":
+        # Avoid misclassifying contractual delivery statements as measurement reports.
+        if "shall" in text or "must" in text or "obligation" in text:
+            return "shall deliver"
+    return r
+
+
+def _infer_modality(relation_norm: str) -> str | None:
+    if relation_norm.startswith("shall ") or relation_norm.startswith("must "):
+        return "obligation"
+    if relation_norm.startswith("may "):
+        return "permission"
+    return None
+
+
+def _reject_malformed_obligation_object(relation_norm: str, obj: EntityMention) -> bool:
+    if not relation_norm.startswith(("shall ", "must ", "requires")):
+        return False
+    obj_text = obj.text.lower()
+    obj_kind = (obj.kind or "").lower()
+    # Contractual obligations usually target deliverables/artifacts/events, not counterparty entities.
+    # Keep organization objects only when there is explicit recipient phrasing in the object itself.
+    if obj_kind in {"organization", "person"}:
+        if any(tok in obj_text for tok in ("report", "statement", "notice", "document", "payment", "deliverable")):
+            return False
+        if any(tok in obj_text for tok in (" to ", "for ", "within ", "by ")):
+            return False
+        return True
+    return False

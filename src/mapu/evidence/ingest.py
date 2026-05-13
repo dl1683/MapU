@@ -66,6 +66,11 @@ class IngestionService:
         self._embedder = embedding_provider
         self._extractors = extractors
         self._embedding_batch_size = embedding_batch_size
+        from mapu.config import ExtractionSettings
+
+        extraction_settings = ExtractionSettings()
+        self._auto_accept_min = extraction_settings.auto_accept_min
+        self._candidate_min = extraction_settings.candidate_min
 
     async def ingest(self, blob: DocumentBlob) -> IngestResult:
         parser = self._parsers.get_parser(blob.mime_type)
@@ -237,7 +242,10 @@ class IngestionService:
                         corpus_id=self._corpus_id,
                         extractors=self._extractors,
                         merge_engine=CandidateMergeEngine(),
-                        abstention_gate=AbstentionGate(),
+                        abstention_gate=AbstentionGate(
+                            auto_accept_min=self._auto_accept_min,
+                            candidate_min=self._candidate_min,
+                        ),
                         grounder=CandidateGrounder(self._session, self._corpus_id),
                     )
                     extraction_result = await extraction_svc.extract_expression(

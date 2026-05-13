@@ -14,7 +14,7 @@ from mapu.extraction.types import (
 
 _DEFAULT_METHOD_WEIGHTS: dict[str, float] = {
     "gliner": 1.0,
-    "rebel": 0.8,
+    "gliner_relex": 1.1,
     "setfit": 1.2,
     "spacy": 0.9,
     "rule_defined_term": 1.5,

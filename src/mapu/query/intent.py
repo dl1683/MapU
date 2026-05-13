@@ -29,6 +29,7 @@ _TEMPORAL_PATTERNS = (
 
 _TEMPORAL_DIFF_PATTERNS = (
     re.compile(r"\bchange[ds]?\b.*\bbetween\b", re.IGNORECASE),
+    re.compile(r"\bchange[ds]?\b.*\bover time\b", re.IGNORECASE),
     re.compile(r"\bdiffer|compare|before and after\b", re.IGNORECASE),
     re.compile(r"how (did|does|has).*change", re.IGNORECASE),
 )

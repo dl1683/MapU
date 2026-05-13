@@ -42,11 +42,14 @@ def get_default_extractors() -> list[Extractor]:
                 temperature=settings.llm_temperature,
                 min_confidence=settings.llm_min_confidence,
             ))
-    if settings.rebel_enabled:
-        from mapu.extraction.ml import REBELExtractor
-        extractors.append(REBELExtractor(
-            model_id=settings.rebel_model,
-            calibration_factor=settings.rebel_calibration,
+    if settings.gliner_relex_enabled:
+        from mapu.extraction.ml import GLiNERRelexExtractor
+        extractors.append(GLiNERRelexExtractor(
+            model_id=settings.gliner_relex_model,
+            entity_threshold=settings.gliner_relex_entity_threshold,
+            relation_threshold=settings.gliner_relex_relation_threshold,
+            calibration_factor=settings.gliner_relex_calibration,
+            device=settings.ml_device,
         ))
     if settings.setfit_enabled:
         from mapu.extraction.ml import SetFitExtractor

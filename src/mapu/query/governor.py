@@ -45,10 +45,15 @@ class CascadeGovernor:
 
     async def plan(self, request: QueryRequest) -> QueryPlan:
         intent, confidence = await self._classifier.classify(request.question)
-        tier = self._select_tier(intent, confidence)
-
         entities = _extract_query_entities(request.question)
         predicates = _extract_query_predicates(request.question)
+        tier = self._select_tier(intent, confidence)
+
+        # Identity questions with explicit entities should not be downgraded to
+        # synthesis on classifier uncertainty; direct lookup is still the
+        # cheapest/highest-yield first step.
+        if intent == QueryIntent.IDENTITY and entities:
+            tier = Tier.DIRECT
 
         escalation_reason: str | None = None
         if tier == Tier.INVESTIGATION:

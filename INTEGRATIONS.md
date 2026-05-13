@@ -1,0 +1,97 @@
+# MapU Integrations
+
+## Goal
+
+Use MapU from external coding agents and IDE assistants through MCP, not only through the local CLI.
+
+## 1) Start MapU backend
+
+```bash
+docker compose up -d
+alembic upgrade head
+```
+
+## 2) MCP surface (primary integration path)
+
+MapU exposes MCP over stdio via:
+
+```bash
+mapu mcp
+```
+
+Core tools exposed include:
+- `create_corpus`
+- `list_corpora`
+- `query`
+- `ingest_document`
+- `investigate`
+- `lookup_entity`
+- `list_gaps`
+- `list_activity`
+- `delete_corpus`
+- `reset_all_corpora`
+
+## 3) Clean start / reset flows
+
+CLI:
+
+```bash
+mapu corpus reset --yes
+mapu corpus delete <corpus_id> --yes
+```
+
+MCP:
+- `reset_all_corpora(confirm=true)`
+- `delete_corpus(corpus_id=<uuid>, confirm=true)`
+
+Both are destructive by design and require explicit confirmation flags.
+
+## 4) Minimal smoke workflow for any MCP client
+
+1. `create_corpus(name="smoke", description="integration smoke")`
+2. `ingest_document(corpus_id=..., content="Alice joined Acme in 2022.", mime_type="text/plain")`
+3. `query(corpus_id=..., question="When did Alice join Acme?")`
+4. `list_activity(corpus_id=...)`
+5. `delete_corpus(corpus_id=..., confirm=true)` or `reset_all_corpora(confirm=true)`
+
+Expected behavior:
+- ingest returns non-zero spans/chunks/embeddings
+- query returns synthesis or hits aligned with ingested fact
+- activity includes ingestion/query events
+
+## 5) Notes for agent-first usage
+
+- Keep one long-lived corpus per project/repo, not per chat.
+- Use `situation_id` when branching hypotheses in one corpus.
+- Use reset only for test sandboxes; for production corpora prefer targeted repair flows.
+
+## 6) Continuous hardened benchmark validation
+
+Start background continuous loop:
+
+```bash
+powershell -ExecutionPolicy Bypass -File tools/start_continuous_hardened_benchmarks.ps1
+```
+
+Behavior:
+- runs full hardened leaderboard sweeps in a loop
+- writes per-cycle logs under `logs/benchmarks/`
+- writes leaderboard snapshots per cycle
+- appends pass/fail cycle state to `logs/benchmarks/continuous_hardened_status.log`
+
+Default interval is 30 minutes. Override with:
+- `MAPU_CONTINUOUS_BENCH_INTERVAL_MINUTES=<n>`
+
+## 7) Prepublish benchmark gate (required for public claims)
+
+Run immediately before public release or benchmark claim updates:
+
+```bash
+powershell -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1
+```
+
+Gate guarantees:
+- benchmarks are run on the current code state
+- code identity is recorded (`git sha`, dirty/clean state)
+- leaderboard snapshot is generated in the same run
+- pass/fail metadata is written to a timestamped gate folder under `logs/benchmarks/`

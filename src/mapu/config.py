@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _settings_config(prefix: str) -> SettingsConfigDict:
+    return SettingsConfigDict(env_prefix=prefix, env_file=".env", extra="ignore")
 
 
 class DatabaseSettings(BaseSettings):
     url: str = "postgresql+asyncpg://mapu:mapu@localhost:5432/mapu"
     echo: bool = False
 
-    model_config = {"env_prefix": "MAPU_DB_"}
+    model_config = _settings_config("MAPU_DB_")
 
 
 class EmbeddingSettings(BaseSettings):
@@ -20,26 +24,26 @@ class EmbeddingSettings(BaseSettings):
     batch_size: int = Field(default=64, gt=0)
     device: str = "cpu"
 
-    model_config = {"env_prefix": "MAPU_EMBEDDING_"}
+    model_config = _settings_config("MAPU_EMBEDDING_")
 
 
 class ChunkingSettings(BaseSettings):
     max_tokens: int = 512
     overlap_tokens: int = 64
 
-    model_config = {"env_prefix": "MAPU_CHUNKING_"}
+    model_config = _settings_config("MAPU_CHUNKING_")
 
 
 class ParserSettings(BaseSettings):
     enabled_types: str = "text/plain"
 
-    model_config = {"env_prefix": "MAPU_PARSER_"}
+    model_config = _settings_config("MAPU_PARSER_")
 
 
 class SourcePolicySettings(BaseSettings):
     default_document_type: str = "other"
 
-    model_config = {"env_prefix": "MAPU_SOURCE_POLICY_"}
+    model_config = _settings_config("MAPU_SOURCE_POLICY_")
 
 
 class ExtractionSettings(BaseSettings):
@@ -52,9 +56,11 @@ class ExtractionSettings(BaseSettings):
     gliner_threshold: float = 0.5
     gliner_calibration: float = 0.75
 
-    rebel_enabled: bool = False
-    rebel_model: str = "Babelscape/rebel-large"
-    rebel_calibration: float = 0.65
+    gliner_relex_enabled: bool = False
+    gliner_relex_model: str = "knowledgator/gliner-relex-base-v1.0"
+    gliner_relex_entity_threshold: float = 0.4
+    gliner_relex_relation_threshold: float = 0.7
+    gliner_relex_calibration: float = 0.75
 
     setfit_enabled: bool = False
     setfit_model: str = "sentence-transformers/paraphrase-MiniLM-L3-v2"
@@ -70,7 +76,7 @@ class ExtractionSettings(BaseSettings):
 
     ml_device: str = "cpu"
 
-    model_config = {"env_prefix": "MAPU_EXTRACTION_"}
+    model_config = _settings_config("MAPU_EXTRACTION_")
 
 
 class LLMSettings(BaseSettings):
@@ -80,7 +86,7 @@ class LLMSettings(BaseSettings):
     base_url: str = ""
     timeout: float = 120.0
 
-    model_config = {"env_prefix": "MAPU_LLM_"}
+    model_config = _settings_config("MAPU_LLM_")
 
 
 class QuerySettings(BaseSettings):
@@ -88,7 +94,7 @@ class QuerySettings(BaseSettings):
     llm_synthesis_model: str = ""
     llm_synthesis_max_tokens: int = 1024
 
-    model_config = {"env_prefix": "MAPU_QUERY_"}
+    model_config = _settings_config("MAPU_QUERY_")
 
 
 class ServerSettings(BaseSettings):
@@ -97,7 +103,7 @@ class ServerSettings(BaseSettings):
     api_key: str = ""
     cors_origins: str = ""
 
-    model_config = {"env_prefix": "MAPU_SERVER_"}
+    model_config = _settings_config("MAPU_SERVER_")
 
 
 class Settings(BaseSettings):
@@ -111,4 +117,9 @@ class Settings(BaseSettings):
     query: QuerySettings = QuerySettings()
     server: ServerSettings = ServerSettings()
 
-    model_config = {"env_prefix": "MAPU_", "env_nested_delimiter": "__"}
+    model_config = SettingsConfigDict(
+        env_prefix="MAPU_",
+        env_nested_delimiter="__",
+        env_file=".env",
+        extra="ignore",
+    )

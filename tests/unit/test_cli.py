@@ -11,6 +11,12 @@ import pytest
 from mapu.cli import main
 
 
+def _close_coro(coro: object) -> None:
+    close = getattr(coro, "close", None)
+    if close is not None:
+        close()
+
+
 def _make_query_args(
     corpus_id: str = "00000000-0000-0000-0000-000000000001",
     question: str = "What is X?",
@@ -67,71 +73,71 @@ class TestCLIParsing:
         cid = "00000000-0000-0000-0000-000000000001"
         with (
             patch.object(sys, "argv", ["mapu", "query", cid, "What is X?"]),
-            patch("mapu.cli.asyncio") as mock_asyncio,
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
         ):
             main()
-            mock_asyncio.run.assert_called_once()
+            mock_run.assert_called_once()
 
     def test_ingest_dispatches(self) -> None:
         cid = "00000000-0000-0000-0000-000000000001"
         with (
             patch.object(sys, "argv", ["mapu", "ingest", cid, "test.txt"]),
-            patch("mapu.cli.asyncio") as mock_asyncio,
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
         ):
             main()
-            mock_asyncio.run.assert_called_once()
+            mock_run.assert_called_once()
 
     def test_investigate_dispatches(self) -> None:
         cid = "00000000-0000-0000-0000-000000000001"
         with (
             patch.object(sys, "argv", ["mapu", "investigate", cid, "Why?"]),
-            patch("mapu.cli.asyncio") as mock_asyncio,
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
         ):
             main()
-            mock_asyncio.run.assert_called_once()
+            mock_run.assert_called_once()
 
     def test_corpus_create_dispatches(self) -> None:
         with (
             patch.object(sys, "argv", ["mapu", "corpus", "create", "TestCorpus"]),
-            patch("mapu.cli.asyncio") as mock_asyncio,
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
         ):
             main()
-            mock_asyncio.run.assert_called_once()
+            mock_run.assert_called_once()
 
     def test_corpus_list_dispatches(self) -> None:
         with (
             patch.object(sys, "argv", ["mapu", "corpus", "list"]),
-            patch("mapu.cli.asyncio") as mock_asyncio,
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
         ):
             main()
-            mock_asyncio.run.assert_called_once()
+            mock_run.assert_called_once()
 
     def test_entities_dispatches(self) -> None:
         cid = "00000000-0000-0000-0000-000000000001"
         with (
             patch.object(sys, "argv", ["mapu", "entities", cid, "Acme"]),
-            patch("mapu.cli.asyncio") as mock_asyncio,
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
         ):
             main()
-            mock_asyncio.run.assert_called_once()
+            mock_run.assert_called_once()
 
     def test_gaps_dispatches(self) -> None:
         cid = "00000000-0000-0000-0000-000000000001"
         with (
             patch.object(sys, "argv", ["mapu", "gaps", cid]),
-            patch("mapu.cli.asyncio") as mock_asyncio,
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
         ):
             main()
-            mock_asyncio.run.assert_called_once()
+            mock_run.assert_called_once()
 
     def test_activity_dispatches(self) -> None:
         cid = "00000000-0000-0000-0000-000000000001"
         with (
             patch.object(sys, "argv", ["mapu", "activity", cid]),
-            patch("mapu.cli.asyncio") as mock_asyncio,
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
         ):
             main()
-            mock_asyncio.run.assert_called_once()
+            mock_run.assert_called_once()
 
 
 class TestRunServe:

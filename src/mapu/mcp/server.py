@@ -791,3 +791,47 @@ async def list_activity(
 def run_mcp() -> None:
     """Entry point for the MCP server."""
     server.run(transport="stdio")
+
+
+@server.tool()
+async def delete_corpus(corpus_id: str, confirm: bool = False) -> dict[str, Any]:
+    """Delete one corpus and all related data.
+
+    Set confirm=true to execute.
+    """
+    from mapu.models.corpus import Corpus
+
+    if not confirm:
+        return {"error": "Refusing delete without confirm=true"}
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+    except _UUIDError as e:
+        return e.error_dict
+    factory = _get_session_factory()
+    async with factory() as session:
+        corpus = await session.get(Corpus, cid)
+        if corpus is None:
+            return {"error": f"Corpus {corpus_id} not found"}
+        await session.delete(corpus)
+        await session.commit()
+        return {"deleted_corpus_id": str(cid)}
+
+
+@server.tool()
+async def reset_all_corpora(confirm: bool = False) -> dict[str, Any]:
+    """Delete all corpora and all related data.
+
+    Set confirm=true to execute.
+    """
+    from sqlalchemy import delete, select
+
+    from mapu.models.corpus import Corpus
+
+    if not confirm:
+        return {"error": "Refusing reset without confirm=true"}
+    factory = _get_session_factory()
+    async with factory() as session:
+        ids = [str(row[0]) for row in (await session.execute(select(Corpus.id))).all()]
+        await session.execute(delete(Corpus))
+        await session.commit()
+        return {"deleted_count": len(ids), "deleted_corpus_ids": ids}

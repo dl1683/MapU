@@ -50,12 +50,14 @@ class StructuredQueryExecutor:
     ) -> list[PropositionHit]:
         stmt = self._base_query(request.corpus_id, request.situation_id, as_of=request.as_of)
         has_filter = False
+        has_predicate = False
         if plan.predicates_extracted:
             predicates = plan.predicates_extracted
             stmt = stmt.where(
                 Proposition.predicate.ilike(f"%{_escape_like(predicates[0])}%")
             )
             has_filter = True
+            has_predicate = True
         if plan.entities_extracted:
             stmt = stmt.where(
                 Handle.canonical_name.ilike(f"%{_escape_like(plan.entities_extracted[0])}%")
@@ -69,7 +71,23 @@ class StructuredQueryExecutor:
         else:
             stmt = stmt.order_by(Proposition.system_created.desc())
         stmt = stmt.limit(request.max_results * 3)
-        return await self._fetch(stmt, max_results=request.max_results)
+        hits = await self._fetch(stmt, max_results=request.max_results)
+        if hits or not (has_predicate and plan.entities_extracted):
+            return hits
+
+        # If the extracted predicate is a weak gerund (for example, "involving"),
+        # retry entity-only to avoid zeroing otherwise relevant rows.
+        retry = self._base_query(
+            request.corpus_id, request.situation_id, as_of=request.as_of,
+        ).where(
+            Handle.canonical_name.ilike(
+                f"%{_escape_like(plan.entities_extracted[0])}%"
+            )
+        ).order_by(
+            SourcePolicyEval.authority_score.desc().nulls_last(),
+            Proposition.system_created.desc(),
+        ).limit(request.max_results * 3)
+        return await self._fetch(retry, max_results=request.max_results)
 
     async def _execute_temporal(
         self, plan: QueryPlan, request: QueryRequest,
@@ -111,7 +129,26 @@ class StructuredQueryExecutor:
         stmt = stmt.order_by(
             SourcePolicyEval.authority_score.desc().nulls_last(),
         ).limit(request.max_results * 3)
-        return await self._fetch(stmt, max_results=request.max_results)
+        hits = await self._fetch(stmt, max_results=request.max_results)
+        if hits:
+            return hits
+
+        # Fallback: when explicit supersession edges are absent, still surface
+        # likely change evidence via time-ordered structured retrieval.
+        retry = self._base_query(
+            request.corpus_id, request.situation_id, as_of=request.as_of,
+        )
+        if plan.entities_extracted:
+            retry = retry.where(
+                Handle.canonical_name.ilike(
+                    f"%{_escape_like(plan.entities_extracted[0])}%"
+                )
+            )
+        retry = retry.order_by(
+            Proposition.system_created.desc(),
+            SourcePolicyEval.authority_score.desc().nulls_last(),
+        ).limit(request.max_results * 3)
+        return await self._fetch(retry, max_results=request.max_results)
 
     async def _execute_measurement(
         self, plan: QueryPlan, request: QueryRequest,
@@ -148,6 +185,8 @@ class StructuredQueryExecutor:
     ) -> list[PropositionHit]:
         if not plan.entities_extracted and not plan.predicates_extracted:
             return []
+        has_entity = bool(plan.entities_extracted)
+        has_predicate = bool(plan.predicates_extracted)
         stmt = self._base_query(request.corpus_id, request.situation_id, as_of=request.as_of)
         if plan.entities_extracted:
             stmt = stmt.where(
@@ -161,7 +200,21 @@ class StructuredQueryExecutor:
             SourcePolicyEval.authority_score.desc().nulls_last(),
             Attestation.extraction_confidence.desc(),
         ).limit(request.max_results * 3)
-        return await self._fetch(stmt, max_results=request.max_results)
+        hits = await self._fetch(stmt, max_results=request.max_results)
+        if hits or not (has_entity and has_predicate):
+            return hits
+
+        retry = self._base_query(
+            request.corpus_id, request.situation_id, as_of=request.as_of,
+        ).where(
+            Handle.canonical_name.ilike(
+                f"%{_escape_like(plan.entities_extracted[0])}%"
+            )
+        ).order_by(
+            SourcePolicyEval.authority_score.desc().nulls_last(),
+            Attestation.extraction_confidence.desc(),
+        ).limit(request.max_results * 3)
+        return await self._fetch(retry, max_results=request.max_results)
 
     def _base_query(
         self, corpus_id: uuid.UUID, situation_id: uuid.UUID | None = None,

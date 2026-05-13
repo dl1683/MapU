@@ -56,6 +56,11 @@ def main() -> None:
     cc.add_argument("--description", type=str, default="")
     cl = corpus_sub.add_parser("list", help="List corpora")
     cl.add_argument("--json", action="store_true", dest="json_output")
+    cd = corpus_sub.add_parser("delete", help="Delete a corpus by id")
+    cd.add_argument("corpus_id", type=_uuid_arg)
+    cd.add_argument("--yes", action="store_true", help="Confirm destructive delete")
+    cr = corpus_sub.add_parser("reset", help="Delete all corpora (start from scratch)")
+    cr.add_argument("--yes", action="store_true", help="Confirm destructive reset")
 
     entity_cmd = sub.add_parser("entities", help="Look up entities")
     entity_cmd.add_argument("corpus_id", type=_uuid_arg)
@@ -96,6 +101,10 @@ def main() -> None:
             asyncio.run(_run_corpus_create(args.name, args.description))
         elif args.corpus_action == "list":
             asyncio.run(_run_corpus_list(args))
+        elif args.corpus_action == "delete":
+            asyncio.run(_run_corpus_delete(args))
+        elif args.corpus_action == "reset":
+            asyncio.run(_run_corpus_reset(args))
         else:
             parser.parse_args(["corpus", "--help"])
     elif args.command == "entities":
@@ -365,6 +374,48 @@ async def _run_corpus_list(args: argparse.Namespace) -> None:
                     print("No corpora found.")
                 for c in corpora:
                     print(f"  {c.id}  {c.name}")
+    finally:
+        await engine.dispose()
+
+
+async def _run_corpus_delete(args: argparse.Namespace) -> None:
+    from mapu.models.corpus import Corpus
+
+    if not args.yes:
+        print("Refusing delete without --yes flag.", file=sys.stderr)
+        sys.exit(2)
+
+    engine, session_factory = _build_engine()
+    try:
+        cid = uuid.UUID(args.corpus_id)
+        async with session_factory() as session:
+            corpus = await session.get(Corpus, cid)
+            if corpus is None:
+                print(f"Corpus not found: {cid}", file=sys.stderr)
+                sys.exit(1)
+            await session.delete(corpus)
+            await session.commit()
+            print(f"Deleted corpus: {cid}")
+    finally:
+        await engine.dispose()
+
+
+async def _run_corpus_reset(args: argparse.Namespace) -> None:
+    from sqlalchemy import delete, select
+
+    from mapu.models.corpus import Corpus
+
+    if not args.yes:
+        print("Refusing reset without --yes flag.", file=sys.stderr)
+        sys.exit(2)
+
+    engine, session_factory = _build_engine()
+    try:
+        async with session_factory() as session:
+            ids = [row[0] for row in (await session.execute(select(Corpus.id))).all()]
+            await session.execute(delete(Corpus))
+            await session.commit()
+            print(f"Reset complete. Deleted corpora: {len(ids)}")
     finally:
         await engine.dispose()
 

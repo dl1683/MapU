@@ -16,6 +16,7 @@ CLAUDE.md
 **/*_review.md
 **/*_review.txt
 **/*_audit.md
+!PUBLIC_RELEASE_AUDIT.md
 **/*_comparative_analysis.md
 **/DECISIONS_INTERNAL.md
 **/ASSUMPTIONS_INTERNAL.md
@@ -86,6 +87,13 @@ secrets.yaml
 # ----------------------------------------------------------
 
 .benchmarks/
+results/
+datasets/
+logs/
+dist/
+.tmp/
+.uv-cache/
+.codex_tmp/
 
 # ----------------------------------------------------------
 # TEST & COVERAGE

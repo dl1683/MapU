@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import re
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -73,6 +74,9 @@ class QueryService:
                 escalation_reason="No results at direct tier",
             )
             hits = await self._execute_tier(plan, request)
+
+        hits = _sanitize_hits_for_question(request.question, hits)
+        hits = _rerank_hits_for_question(request.question, hits)
 
         chunk_hits = await self._chunk_fallback(request, hits)
         synthesis = await self._synthesize(request, plan, hits)
@@ -273,7 +277,93 @@ def _assess_epistemic_status(
         return EpistemicStatus.CONFLICTING
 
     avg_confidence = sum(h.extraction_confidence for h in hits) / len(hits)
+    obligation_hits = [
+        h for h in hits
+        if (h.predicate or "").lower().startswith(("shall_", "must_", "requires"))
+    ]
+    if obligation_hits:
+        avg_auth = sum(float(h.authority_score or 0.0) for h in obligation_hits) / len(obligation_hits)
+        if len(obligation_hits) >= 2 and avg_auth >= 0.6:
+            return EpistemicStatus.SUFFICIENT
     if avg_confidence < 0.5 or len(hits) < 2:
         return EpistemicStatus.INSUFFICIENT
 
     return EpistemicStatus.SUFFICIENT
+
+
+_OBLIGATION_QUERY_RE = re.compile(r"\b(obligation|required|must|shall|duty|duties|required to)\b", re.I)
+
+
+def _rerank_hits_for_question(
+    question: str, hits: Sequence[PropositionHit],
+) -> tuple[PropositionHit, ...]:
+    if not hits:
+        return ()
+    q = question.lower()
+    if _OBLIGATION_QUERY_RE.search(q) is None:
+        return tuple(hits)
+    if not hits:
+        return ()
+
+    wants_reports = "report" in q or "reporting" in q
+
+    def _score(h: PropositionHit) -> tuple[float, float, float, float]:
+        p = (h.predicate or "").lower()
+        txt = (h.normalized_text or "").lower()
+        obj = (h.object_name or "").lower()
+        obligation = 0.0
+        if p.startswith("shall_") or p.startswith("must_") or "shall " in txt or "must " in txt:
+            obligation = 2.0
+        elif p.startswith("requires") or "required" in txt:
+            obligation = 1.5
+        elif p.startswith("may_") or " may " in txt:
+            obligation = 0.3
+        object_quality = 0.0
+        if wants_reports:
+            if "report" in obj:
+                object_quality += 0.6
+            if any(tok in obj for tok in ("bank", "corp", "llc", "inc", "ltd")):
+                object_quality -= 0.4
+        return (
+            obligation,
+            object_quality,
+            float(h.authority_score) if h.authority_score is not None else 0.0,
+            float(h.extraction_confidence),
+        )
+
+    return tuple(sorted(hits, key=_score, reverse=True))
+
+
+def _filter_malformed_obligation_hits(
+    question_lower: str, hits: Sequence[PropositionHit],
+) -> list[PropositionHit]:
+    wants_deliverable = any(tok in question_lower for tok in ("report", "statement", "document", "deliverable"))
+    if not wants_deliverable:
+        return list(hits)
+
+    filtered: list[PropositionHit] = []
+    for h in hits:
+        p = (h.predicate or "").lower()
+        if not p.startswith(("shall_", "must_", "requires")):
+            filtered.append(h)
+            continue
+        obj = (h.object_name or "").lower()
+        if not obj:
+            filtered.append(h)
+            continue
+        if "report" in obj or "statement" in obj or "document" in obj or "deliverable" in obj:
+            filtered.append(h)
+            continue
+        if any(tok in obj for tok in ("bank", "corp", "llc", "inc", "ltd", "company", "organization")):
+            continue
+        filtered.append(h)
+    return filtered
+
+
+def _sanitize_hits_for_question(
+    question: str, hits: Sequence[PropositionHit],
+) -> tuple[PropositionHit, ...]:
+    if not hits:
+        return ()
+    q = question.lower()
+    return tuple(_filter_malformed_obligation_hits(q, hits))

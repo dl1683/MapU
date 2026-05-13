@@ -1,4 +1,4 @@
-"""Unit tests for ML model extractors: GLiNER, REBEL, SetFit, SRL."""
+"""Unit tests for ML model extractors: GLiNER, GLiNER-Relex, SetFit, SRL."""
 
 from __future__ import annotations
 
@@ -9,11 +9,10 @@ import pytest
 
 from mapu.extraction.ml import (
     GLiNERExtractor,
+    GLiNERRelexExtractor,
     LazyModelRuntime,
-    REBELExtractor,
     SetFitExtractor,
     SRLExtractor,
-    parse_rebel_output,
 )
 from mapu.extraction.types import ExtractionContext, ExtractionSignal
 
@@ -100,69 +99,68 @@ class TestGLiNERExtractor:
         assert result.entities[0].end_char == 105
 
 
-class TestREBELOutputParsing:
-    def test_parse_single_triplet(self) -> None:
-        text = "<triplet> Barack Obama <subj> United States <obj> president of"
-        triplets = parse_rebel_output(text)
-        assert len(triplets) == 1
-        assert triplets[0]["head"] == "Barack Obama"
-        assert triplets[0]["relation"] == "president of"
-        assert triplets[0]["tail"] == "United States"
-
-    def test_parse_multiple_triplets(self) -> None:
-        text = (
-            "<triplet> Paris <subj> France <obj> capital of "
-            "<triplet> France <subj> Europe <obj> located in"
-        )
-        triplets = parse_rebel_output(text)
-        assert len(triplets) == 2
-
-    def test_parse_empty(self) -> None:
-        assert parse_rebel_output("") == []
-
-    def test_parse_no_triplets(self) -> None:
-        assert parse_rebel_output("just some text") == []
-
-
-class TestREBELExtractor:
+class TestGLiNERRelexExtractor:
     def test_name(self) -> None:
-        ext = REBELExtractor()
-        assert ext.name == "rebel"
+        ext = GLiNERRelexExtractor()
+        assert ext.name == "gliner_relex"
 
     async def test_empty_text(self) -> None:
-        ext = REBELExtractor()
+        ext = GLiNERRelexExtractor()
         ctx = _make_ctx("")
         result = await ext.extract(ctx)
         assert len(result.frames) == 0
 
     async def test_extract_produces_frames(self) -> None:
         runtime = LazyModelRuntime()
-        mock_pipe = MagicMock()
-        mock_pipe.return_value = [
-            {"generated_text": "<triplet> Acme Corp <subj> New York <obj> headquartered in"},
-        ]
-        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+        mock_model = MagicMock()
+        mock_model.inference.return_value = (
+            [[
+                {"text": "Acme Corp", "label": "organization", "start": 0, "end": 9, "score": 0.92},
+                {"text": "New York", "label": "location", "start": 29, "end": 37, "score": 0.88},
+            ]],
+            [[
+                {
+                    "head": {"text": "Acme Corp", "type": "organization", "start": 0, "end": 9},
+                    "tail": {"text": "New York", "type": "location", "start": 29, "end": 37},
+                    "relation": "located in",
+                    "score": 0.84,
+                },
+            ]],
+        )
+        runtime._cache[("gliner_relex", "knowledgator/gliner-relex-base-v1.0", "cpu")] = mock_model
 
-        ext = REBELExtractor(calibration_factor=0.65, runtime=runtime)
+        ext = GLiNERRelexExtractor(calibration_factor=0.75, runtime=runtime)
         ctx = _make_ctx("Acme Corp is headquartered in New York.")
         result = await ext.extract(ctx)
 
+        assert len(result.entities) == 2
         assert len(result.frames) == 1
         assert result.frames[0].subject.text == "Acme Corp"
         assert result.frames[0].object is not None
         assert result.frames[0].object.text == "New York"
-        assert result.frames[0].predicate == "headquartered_in"
-        assert result.frames[0].extraction_method == "rebel"
+        assert result.frames[0].predicate == "located_in"
+        assert result.frames[0].extraction_method == "gliner_relex"
 
     async def test_relation_signal_emitted(self) -> None:
         runtime = LazyModelRuntime()
-        mock_pipe = MagicMock()
-        mock_pipe.return_value = [
-            {"generated_text": "<triplet> X <subj> Y <obj> works for"},
-        ]
-        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+        mock_model = MagicMock()
+        mock_model.inference.return_value = (
+            [[
+                {"text": "X", "label": "person", "start": 0, "end": 1, "score": 0.9},
+                {"text": "Y", "label": "organization", "start": 12, "end": 13, "score": 0.9},
+            ]],
+            [[
+                {
+                    "head": {"text": "X", "type": "person", "start": 0, "end": 1},
+                    "tail": {"text": "Y", "type": "organization", "start": 12, "end": 13},
+                    "relation": "works for",
+                    "score": 0.8,
+                },
+            ]],
+        )
+        runtime._cache[("gliner_relex", "knowledgator/gliner-relex-base-v1.0", "cpu")] = mock_model
 
-        ext = REBELExtractor(runtime=runtime)
+        ext = GLiNERRelexExtractor(runtime=runtime)
         ctx = _make_ctx("X works for Y.")
         result = await ext.extract(ctx)
 
@@ -174,13 +172,21 @@ class TestREBELExtractor:
         from mapu.extraction.types import EntityMention
 
         runtime = LazyModelRuntime()
-        mock_pipe = MagicMock()
-        mock_pipe.return_value = [
-            {"generated_text": "<triplet> Alice <subj> Acme <obj> works for"},
-        ]
-        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+        mock_model = MagicMock()
+        mock_model.inference.return_value = (
+            [[]],
+            [[
+                {
+                    "head": {"text": "Alice", "start": 0, "end": 5},
+                    "tail": {"text": "Acme", "start": 16, "end": 20},
+                    "relation": "works for",
+                    "score": 0.8,
+                },
+            ]],
+        )
+        runtime._cache[("gliner_relex", "knowledgator/gliner-relex-base-v1.0", "cpu")] = mock_model
 
-        ext = REBELExtractor(runtime=runtime)
+        ext = GLiNERRelexExtractor(runtime=runtime)
         ctx = ExtractionContext(
             corpus_id=uuid.uuid4(),
             document_id=uuid.uuid4(),
@@ -202,13 +208,21 @@ class TestREBELExtractor:
 
     async def test_entity_index_from_prior_signals(self) -> None:
         runtime = LazyModelRuntime()
-        mock_pipe = MagicMock()
-        mock_pipe.return_value = [
-            {"generated_text": "<triplet> Bob <subj> Paris <obj> lives in"},
-        ]
-        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+        mock_model = MagicMock()
+        mock_model.inference.return_value = (
+            [[]],
+            [[
+                {
+                    "head": {"text": "Bob", "start": 0, "end": 3},
+                    "tail": {"text": "Paris", "start": 13, "end": 18},
+                    "relation": "located in",
+                    "score": 0.8,
+                },
+            ]],
+        )
+        runtime._cache[("gliner_relex", "knowledgator/gliner-relex-base-v1.0", "cpu")] = mock_model
 
-        ext = REBELExtractor(runtime=runtime)
+        ext = GLiNERRelexExtractor(runtime=runtime)
         ctx = ExtractionContext(
             corpus_id=uuid.uuid4(),
             document_id=uuid.uuid4(),
@@ -231,12 +245,21 @@ class TestREBELExtractor:
 
     async def test_ungrounded_entities_skipped(self) -> None:
         runtime = LazyModelRuntime()
-        mock_pipe = MagicMock()
-        gen = "<triplet> FooBarNotInText <subj> BazQuxNotInText <obj> some relation"
-        mock_pipe.return_value = [{"generated_text": gen}]
-        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+        mock_model = MagicMock()
+        mock_model.inference.return_value = (
+            [[]],
+            [[
+                {
+                    "head": {"text": "FooBarNotInText"},
+                    "tail": {"text": "BazQuxNotInText"},
+                    "relation": "some relation",
+                    "score": 0.8,
+                },
+            ]],
+        )
+        runtime._cache[("gliner_relex", "knowledgator/gliner-relex-base-v1.0", "cpu")] = mock_model
 
-        ext = REBELExtractor(runtime=runtime)
+        ext = GLiNERRelexExtractor(runtime=runtime)
         ctx = _make_ctx("Something completely different here.")
         result = await ext.extract(ctx)
         assert len(result.frames) == 0
@@ -244,12 +267,21 @@ class TestREBELExtractor:
 
     async def test_partially_ungrounded_skipped(self) -> None:
         runtime = LazyModelRuntime()
-        mock_pipe = MagicMock()
-        gen = "<triplet> Alice <subj> NonexistentEntity <obj> works for"
-        mock_pipe.return_value = [{"generated_text": gen}]
-        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+        mock_model = MagicMock()
+        mock_model.inference.return_value = (
+            [[]],
+            [[
+                {
+                    "head": {"text": "Alice"},
+                    "tail": {"text": "NonexistentEntity"},
+                    "relation": "works for",
+                    "score": 0.8,
+                },
+            ]],
+        )
+        runtime._cache[("gliner_relex", "knowledgator/gliner-relex-base-v1.0", "cpu")] = mock_model
 
-        ext = REBELExtractor(runtime=runtime)
+        ext = GLiNERRelexExtractor(runtime=runtime)
         ctx = _make_ctx("Alice works at a company.")
         result = await ext.extract(ctx)
         assert len(result.frames) == 0
@@ -257,13 +289,21 @@ class TestREBELExtractor:
 
     async def test_signal_offsets_ordered(self) -> None:
         runtime = LazyModelRuntime()
-        mock_pipe = MagicMock()
-        mock_pipe.return_value = [
-            {"generated_text": "<triplet> York <subj> New <obj> located in"},
-        ]
-        runtime._cache[("rebel", "Babelscape/rebel-large", "-1")] = mock_pipe
+        mock_model = MagicMock()
+        mock_model.inference.return_value = (
+            [[]],
+            [[
+                {
+                    "head": {"text": "York", "start": 4, "end": 8},
+                    "tail": {"text": "New", "start": 0, "end": 3},
+                    "relation": "located in",
+                    "score": 0.8,
+                },
+            ]],
+        )
+        runtime._cache[("gliner_relex", "knowledgator/gliner-relex-base-v1.0", "cpu")] = mock_model
 
-        ext = REBELExtractor(runtime=runtime)
+        ext = GLiNERRelexExtractor(runtime=runtime)
         ctx = _make_ctx("New York is a city.")
         result = await ext.extract(ctx)
         if result.signals:

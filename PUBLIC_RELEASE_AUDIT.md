@@ -44,6 +44,7 @@ Prepare this repository for open-source release with claim-backed documentation,
   - `INTEGRATIONS.md` documents startup, MCP workflow, and reset flows
   - CLI reset/delete added: `mapu corpus reset --yes`, `mapu corpus delete <id> --yes`
   - MCP reset/delete added: `reset_all_corpora(confirm=true)`, `delete_corpus(..., confirm=true)`
+  - 2026-05-13 lightweight verification: `python -m mapu.cli corpus reset --help`, `python -m mapu.cli corpus delete --help`
 - Status: PASS
 
 7. MCP integration works end-to-end in real run
@@ -100,6 +101,7 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Evidence:
   - Executed `pytest`
 - Result: `554 passed, 55 deselected`
+- Follow-up 2026-05-13 focused surface check: `python -m pytest tests/unit/test_cli.py tests/unit/test_mcp_server.py tests/unit/test_api.py -q` -> pass
 - Status: PASS
 
 14. Generated and heavyweight artifacts are excluded from public release
@@ -113,8 +115,10 @@ Prepare this repository for open-source release with claim-backed documentation,
 Do not call this repository fully public ready until all PARTIAL items are closed by a successful prepublish benchmark gate run on the exact release code.
 
 Current pause point:
-- Latest pushed commit checked before pause: `5f6f150`
+- Latest pushed commit checked before pause: `567a79905dc8a614197256b6744cd0f58a1e194b`
 - Worktree state before pause: clean and synced with `origin/main`
+- Repository visibility checked before pause: public at `https://github.com/dl1683/MapU`
 - Benchmark gate state: paused to free compute; no benchmark process should be left running
+- Local limitation at pause: Docker was not available in the active shell, so `docker compose config` and full documented infra startup were not reverified from this host.
 - Conservative next benchmark command: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3`
 - If the machine is otherwise free, `-MaxParallel 6` is reasonable to try while monitoring responsiveness.

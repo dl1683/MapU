@@ -1,16 +1,18 @@
 # MapU
 
-Persistent knowledge substrate for document-heavy reasoning.
+Persistent knowledge substrate for document-heavy reasoning, agent memory, and evidence-backed synthesis.
 
 ## What It Is
 
-MapU ingests documents, extracts structured knowledge with provenance, and stores it in a persistent graph-backed system for retrieval and synthesis.
+MapU ingests documents, extracts structured knowledge with provenance, and stores it in a persistent graph-backed system for retrieval and synthesis. It is meant to be used as durable memory for coding agents, research assistants, and document-heavy workflows where answers need to point back to source material instead of only relying on chat context.
 
 Core properties:
 - Source-attributed assertions
 - Authority-aware evidence handling
 - Temporal validity and repair semantics
 - Query + investigation workflows over persistent state
+- Reset/delete flows for clean test corpora and repeatable benchmark runs
+- MCP, REST, CLI, and Python package surfaces
 
 ## Architecture
 
@@ -22,6 +24,16 @@ Main pipeline:
 5. Synthesize answers with epistemic metadata
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full system detail.
+
+## Why It Exists
+
+Long-running agents need a memory layer that survives outside one chat window and stays inspectable. MapU treats memory as a source-backed knowledge base:
+
+- documents are parsed into spans/chunks
+- claims and relations are extracted into structured records
+- every assertion carries provenance and confidence metadata
+- query answers can use retrieval, direct lookup, or investigation workflows
+- repair/reset paths make it possible to clean up bad state instead of starting from an opaque transcript
 
 ## Surfaces In This Repository
 
@@ -64,6 +76,63 @@ mapu ingest <corpus_uuid> ./example.txt
 mapu query <corpus_uuid> "What changed in the contract?"
 ```
 
+Reset a test corpus or clean the local knowledge base:
+
+```bash
+mapu corpus delete <corpus_uuid> --yes
+mapu corpus reset --yes
+```
+
+## MCP Usage
+
+MapU is designed to be used by coding agents and IDE assistants through MCP.
+
+Start the server:
+
+```bash
+mapu mcp
+```
+
+Core MCP tools include:
+- `create_corpus`
+- `list_corpora`
+- `ingest_document`
+- `query`
+- `investigate`
+- `lookup_entity`
+- `list_gaps`
+- `list_activity`
+- `delete_corpus`
+- `reset_all_corpora`
+
+Minimal smoke workflow:
+1. Create a corpus.
+2. Ingest a small text document.
+3. Query for a fact from that document.
+4. Inspect activity/gaps.
+5. Delete the test corpus or reset all corpora.
+
+See [INTEGRATIONS.md](INTEGRATIONS.md) for the agent integration and reset workflow.
+
+## Current Release Status
+
+This repository is public and usable for exploration, integration work, and development. It is not currently making a public SOTA or leaderboard performance claim.
+
+Verified before the current pause:
+- package wheel build completed successfully
+- editable dev install metadata resolved
+- CLI help and corpus reset/delete help load
+- REST API app import works
+- MCP server module imports and exposes the server/run entrypoints
+- focused CLI/API/MCP unit surface passes
+- full unit suite previously passed with `554 passed, 55 deselected`
+- tracked generated artifacts and heavyweight benchmark outputs are excluded from the public repo
+
+Known limitations before making stronger public claims:
+- the full exact-code prepublish benchmark gate has not completed successfully
+- Docker was not available in the last active shell, so the documented `docker compose` path needs to be reverified on a host with Docker installed
+- only `LoCoMo`, `LongMemEval`, and `BEAM` are currently integrated in the MapU benchmark harness; additional memory benchmarks remain planned
+
 ## Benchmarks And Claims
 
 Benchmark artifacts and status are tracked in:
@@ -73,15 +142,36 @@ Benchmark artifacts and status are tracked in:
 - `tools/report_full_sweep_leaderboard.py`
 
 Claim discipline:
+- This README intentionally does not publish earlier local benchmark scores. Some earlier runs were useful engineering diagnostics, but they predated hardening changes or used proxy/scaffolded paths and are not acceptable public evidence.
 - Distinguish `proxy retrieval` metrics from `full benchmark leaderboard` runs.
 - Public claims should cite exact artifact files and timestamps.
 - Release artifacts are generated locally by the prepublish gate; large `results/` and `datasets/` directories are not intended to be committed.
 - Do not generalize benchmark wins to unrelated domain tasks without direct evidence.
 - Benchmark adapters must not inject query-specific gold hints into retrieval outputs.
 
+Before publishing any benchmark number, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3
+```
+
+On an otherwise free machine, a higher setting such as `-MaxParallel 6` may be reasonable while monitoring host responsiveness.
+
 ## Domain Modeling Reference
 
 See [DOMAINS.md](DOMAINS.md) for domain-oriented modeling references.
+
+## Development Notes
+
+Useful local checks:
+
+```bash
+python -m mapu.cli --help
+python -m pytest tests/unit/test_cli.py tests/unit/test_mcp_server.py tests/unit/test_api.py -q
+python -m build --wheel
+```
+
+For the full release audit state, see [PUBLIC_RELEASE_AUDIT.md](PUBLIC_RELEASE_AUDIT.md).
 
 ## License
 

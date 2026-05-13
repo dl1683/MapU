@@ -90,8 +90,17 @@ Run immediately before public release or benchmark claim updates:
 powershell -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1
 ```
 
+For a conservative bounded parallel run:
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3
+```
+
 Gate guarantees:
 - benchmarks are run on the current code state
 - code identity is recorded (`git sha`, dirty/clean state)
 - leaderboard snapshot is generated in the same run
 - pass/fail metadata is written to a timestamped gate folder under `logs/benchmarks/`
+
+Operational note:
+- `-MaxParallel 6` can be useful on a free machine, but on 2026-05-13 it made the host difficult to control while other heavy processes were running. Match `MaxParallel` to current host load and monitor responsiveness.

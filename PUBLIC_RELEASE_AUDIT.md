@@ -78,6 +78,9 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Status: PARTIAL
 - Required fix:
   - Execute the gate successfully before any public release or benchmark claim update.
+  - Conservative resume command after the 2026-05-13 pause:
+    `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3`
+  - Higher settings such as `-MaxParallel 6` are valid when the host is otherwise free; avoid combining them with other heavy local processes.
 
 11. Clean package build works
 - Evidence:
@@ -108,3 +111,10 @@ Prepare this repository for open-source release with claim-backed documentation,
 ## Release Gate
 
 Do not call this repository fully public ready until all PARTIAL items are closed by a successful prepublish benchmark gate run on the exact release code.
+
+Current pause point:
+- Latest pushed commit checked before pause: `5f6f150`
+- Worktree state before pause: clean and synced with `origin/main`
+- Benchmark gate state: paused to free compute; no benchmark process should be left running
+- Conservative next benchmark command: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3`
+- If the machine is otherwise free, `-MaxParallel 6` is reasonable to try while monitoring responsiveness.

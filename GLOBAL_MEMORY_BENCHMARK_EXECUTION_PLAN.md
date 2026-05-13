@@ -41,14 +41,16 @@ Not yet runnable in current harness:
 
 ## Immediate next runs
 
-1. Holdout rerun for existing three:
-   - `LoCoMo`: `--conversations 0 --max-questions 40` (or more)
-   - `LongMemEval`: `--per-type 2..5`
-   - `BEAM`: `--chat-sizes 100K,500K`
-2. Target metric:
-   - Keep support-hit >= `0.95` on holdout slices
-   - Raise BEAM nugget hit from `0.7949` to `>=0.80` without query-specific hint rules
-3. Add next adapter:
+1. Run the exact-code prepublish gate before any public performance claim:
+   - Conservative: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3`
+   - Faster on an otherwise free machine: use a higher setting such as `-MaxParallel 6` while monitoring host responsiveness.
+2. After a full gate completes, classify misses:
+   - retrieval miss
+   - extraction miss
+   - temporal miss
+   - synthesis miss
+   - benchmark mismatch
+3. Only after the three runnable benchmarks have complete exact-code results, add the next adapter:
    - `LifeBench` first (LLM-judged and structurally closest to current harness)
 
 ## Failure classification rubric

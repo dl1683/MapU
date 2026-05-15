@@ -1,6 +1,6 @@
 # Public Release Audit (MapU)
 
-Last updated: 2026-05-13
+Last updated: 2026-05-15
 
 ## Objective
 
@@ -115,7 +115,7 @@ Prepare this repository for open-source release with claim-backed documentation,
 Do not call this repository fully public ready until all PARTIAL items are closed by a successful prepublish benchmark gate run on the exact release code.
 
 Current pause point:
-- Latest pushed commit checked before pause: `567a79905dc8a614197256b6744cd0f58a1e194b`
+- Latest pushed commit checked before pause: `dfa66a6bde2da6aabdcb07613d39cfafa5f883b0`
 - Worktree state before pause: clean and synced with `origin/main`
 - Repository visibility checked before pause: public at `https://github.com/dl1683/MapU`
 - Benchmark gate state: paused to free compute; no benchmark process should be left running

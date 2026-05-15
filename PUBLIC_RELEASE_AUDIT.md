@@ -122,6 +122,7 @@ Current pause point:
 - Later metadata-only commits may update this audit file without changing the benchmark or release-surface state.
 - Worktree state before pause: clean and synced with `origin/main`
 - Repository visibility checked before pause: public at `https://github.com/dl1683/MapU`
+- Branch note: local branch is `master` tracking remote default branch `origin/main`; use `git push origin HEAD:main` unless the local branch is renamed.
 - Benchmark gate state: paused to free compute; no benchmark process should be left running
 - Local limitation at pause: Docker was not available in the active shell, so `docker compose config` and full documented infra startup were not reverified from this host.
 - Conservative next benchmark command: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3`

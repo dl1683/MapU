@@ -83,6 +83,8 @@ Prepare this repository for open-source release with claim-backed documentation,
   - 2026-05-15 hardening: parallel gate now has per-lane wall-clock and
     idle-progress timeouts, treats null exit codes as failure, and stops sibling
     lanes after first failure.
+  - Follow-up fix: idle-progress detection includes child worker CPU so active
+    benchmark workers are not mistaken for stalled parent wrappers.
 - Status: PARTIAL
 - Required fix:
   - Execute the gate successfully before any public release or benchmark claim update.
@@ -130,7 +132,7 @@ Current pause point:
 - Worktree state before the `20260515_180011` gate attempt: clean
 - Repository visibility checked before pause: public at `https://github.com/dl1683/MapU`
 - Branch note: local branch is `master` tracking remote default branch `origin/main`; use `git push origin HEAD:main` unless the local branch is renamed.
-- Benchmark gate state: `logs/benchmarks/prepublish_gate_20260515_180011` failed/aborted after BEAM 100K stopped making progress; it is not public benchmark evidence.
+- Benchmark gate state: `logs/benchmarks/prepublish_gate_20260515_184056` failed due an over-strict first idle detector; `logs/benchmarks/prepublish_gate_20260515_180011` failed/aborted after BEAM 100K stopped making progress. Neither is public benchmark evidence.
 - Local limitation at pause: Docker was not available in the active shell, so `docker compose config` and full documented infra startup were not reverified from this host.
 - Conservative next benchmark command: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
 - If the machine is otherwise free, `-MaxParallel 6` is reasonable to try while monitoring responsiveness.

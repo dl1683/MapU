@@ -29,11 +29,19 @@ gate directory.
 
 ## Current prepublish gate status
 
-Latest gate attempt:
+Latest gate attempts:
+- Directory: `logs/benchmarks/prepublish_gate_20260515_184056`
+  - Code identity: `0c79ed0a95d56168f36d0f6c6c3a24c51eb33825`, clean worktree
+  - Command: `tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
+  - Outcome: failed, not public evidence
+  - Diagnosis: the first idle-timeout implementation watched the tracked parent
+    process but not its child worker process, so it falsely timed out LoCoMo
+    even though LoCoMo result files were still being written shortly before the
+    timeout.
 - Directory: `logs/benchmarks/prepublish_gate_20260515_180011`
-- Code identity: `238cadecb4d45df2542f0c3d9eb86a7337d0db11`, clean worktree
-- Command: `tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 6`
-- Outcome: failed/aborted, not public evidence
+  - Code identity: `238cadecb4d45df2542f0c3d9eb86a7337d0db11`, clean worktree
+  - Command: `tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 6`
+  - Outcome: failed/aborted, not public evidence
 
 What changed:
 - Restoring `.tmp/memory-benchmarks` cured the earlier immediate harness
@@ -50,6 +58,9 @@ Follow-up hardening:
   and idle-progress timeouts, normalizes null exit codes as failures, and stops
   sibling lanes on first failure to avoid burning compute after the gate is
   already invalid.
+- The idle-progress detector now includes direct child worker CPU to avoid
+  classifying an idle parent wrapper as a stalled benchmark while the worker is
+  still active.
 - `tools/prepublish_benchmark_gate.ps1` passes those timeout settings through
   and records them in `code_identity.txt` and `gate_meta.json`.
 

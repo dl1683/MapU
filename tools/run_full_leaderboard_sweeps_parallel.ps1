@@ -183,13 +183,25 @@ function Get-FileLength {
 
 function Get-ProcessCpuSeconds {
     param([System.Diagnostics.Process]$Process)
+    $cpuSeconds = 0.0
     try {
         $Process.Refresh()
-        return $Process.TotalProcessorTime.TotalSeconds
+        $cpuSeconds += $Process.TotalProcessorTime.TotalSeconds
     }
     catch {
-        return 0.0
+        return $cpuSeconds
     }
+    $children = Get-CimInstance Win32_Process -Filter ("ParentProcessId={0}" -f $Process.Id)
+    foreach ($child in $children) {
+        try {
+            $childProcess = Get-Process -Id $child.ProcessId -ErrorAction Stop
+            $cpuSeconds += $childProcess.TotalProcessorTime.TotalSeconds
+        }
+        catch {
+            # Child may have exited between the process-tree query and lookup.
+        }
+    }
+    return $cpuSeconds
 }
 
 function Stop-RunningBenchmarks {

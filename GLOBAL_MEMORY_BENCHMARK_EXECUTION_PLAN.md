@@ -68,3 +68,10 @@ Use this rubric before changing code:
 - Proxy summary: `results/matrix/proxy_*.json`
 - Global coverage: `results/matrix/global_memory_benchmark_coverage.{md,json}`
 - Status rollup: `GLOBAL_MEMORY_BENCHMARK_STATUS.md`
+
+## Local cleanup rule
+
+Use `tools/clean_local_artifacts.ps1` for cache cleanup. Do not delete
+`.tmp/memory-benchmarks`; `tools/run_mem0_benchmark_with_mapu.py` imports the
+Mem0 benchmark runners from that checkout, and
+`tools/report_full_sweep_leaderboard.py` reads baseline data from it.

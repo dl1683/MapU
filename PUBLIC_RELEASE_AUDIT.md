@@ -111,6 +111,7 @@ Prepare this repository for open-source release with claim-backed documentation,
   - Measured local generated size before exclusion: `results/` about 1.1GB, `datasets/` about 1.05GB
   - 2026-05-15 tracked-file size scan found no committed files over 1MB
   - 2026-05-15 secret-pattern scan found only dummy benchmark keys, example text, and test fixture references; no real key material detected
+  - `tools/clean_local_artifacts.ps1` removes disposable local caches while preserving `.tmp/memory-benchmarks`, which benchmark tools require.
 - Status: PASS
 
 ## Release Gate

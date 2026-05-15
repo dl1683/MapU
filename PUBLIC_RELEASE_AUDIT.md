@@ -87,6 +87,7 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Evidence:
   - Executed `python -m build --wheel`
   - Result: `Successfully built mapu-0.1.0-py3-none-any.whl`
+  - 2026-05-15 package metadata check: name `mapu`, version `0.1.0`, license `AGPL-3.0-only`, Python `>=3.12,<3.15`
 - Status: PASS
 
 12. Local environment and migrations use documented config

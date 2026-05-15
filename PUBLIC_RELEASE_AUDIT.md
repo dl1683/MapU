@@ -115,7 +115,7 @@ Prepare this repository for open-source release with claim-backed documentation,
 Do not call this repository fully public ready until all PARTIAL items are closed by a successful prepublish benchmark gate run on the exact release code.
 
 Current pause point:
-- Latest pushed commit checked before pause: `dfa66a6bde2da6aabdcb07613d39cfafa5f883b0`
+- Latest pushed commit checked before pause: `e0e8bcc75393a0069e775483e346be9af2c4fe17`
 - Worktree state before pause: clean and synced with `origin/main`
 - Repository visibility checked before pause: public at `https://github.com/dl1683/MapU`
 - Benchmark gate state: paused to free compute; no benchmark process should be left running

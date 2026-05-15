@@ -33,6 +33,25 @@ Claim-grade release numbers require a fresh prepublish gate run.
 
 Code, legal, finance, and biomedical workflows are high-value validation targets. They should be treated as benchmark targets until domain-specific artifacts exist.
 
+## Two-Year Goals
+
+MapU's two-year validation target is not only memory benchmark performance. It should prove that a persistent memory architecture works inside real existing repositories and long-lived workflows.
+
+Required validation lanes:
+- Repository compatibility: run MapU against existing codebases with real file trees, issue history, docs, tests, and agent workflows.
+- Agent integration compatibility: test MCP usage from coding agents and IDE assistants, including Codex-like and Claude Code-like workflows.
+- Memory efficiency: measure ingest cost, storage growth, retrieval latency, update cost, and reset/repair cost as repositories evolve.
+- Stored data quality: audit extracted entities, claims, relations, temporal facts, provenance links, and stale/incorrect memory over time.
+- Workflow lift: compare agent outcomes with and without MapU memory on repo tasks such as bug diagnosis, refactor planning, documentation, benchmark triage, and release audits.
+- Longitudinal robustness: repeatedly revisit the same repositories after code changes to test whether memory improves, contaminates, or drifts.
+
+This lane should produce its own artifacts, not just anecdotes:
+- compatibility matrix by repository type and agent surface
+- quality scorecards for stored memory
+- cost/latency/storage curves
+- failure taxonomies for bad extraction, stale facts, and retrieval misses
+- repeatable replay tasks that external users can run
+
 ## Roadmap Items
 
 These are not shipped claims unless backed by future artifacts:

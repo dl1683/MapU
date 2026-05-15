@@ -133,6 +133,18 @@ Known limitations before making stronger public claims:
 - Docker was not available in the last active shell, so the documented `docker compose` path needs to be reverified on a host with Docker installed
 - only `LoCoMo`, `LongMemEval`, and `BEAM` are currently integrated in the MapU benchmark harness; additional memory benchmarks remain planned
 
+## Two-Year Validation Direction
+
+MapU's longer-term goal is to prove persistent memory inside real existing repositories, not only on standalone memory benchmarks. The validation program should test:
+
+- compatibility with real codebases, docs, tests, issue histories, and agent workflows
+- MCP usage from coding agents and IDE assistants
+- ingest cost, storage growth, retrieval latency, update cost, and reset/repair cost
+- quality of stored entities, claims, relations, temporal facts, provenance, and stale-memory handling
+- agent task quality with and without MapU on bug diagnosis, refactor planning, documentation, benchmark triage, and release audits
+
+See [PRIORITIES.md](PRIORITIES.md) for the full two-year validation lane.
+
 ## Benchmarks And Claims
 
 Benchmark artifacts and status are tracked in:

@@ -34,6 +34,13 @@ Map every public-facing claim category to concrete evidence artifacts or mark it
 - Evidence: Not shipped in this repository as of 2026-05-13
 - Status: Design intent only
 
+5. Two-year repository compatibility and persistent-memory validation lane
+- Type: Roadmap / validation-program claim
+- Evidence:
+  - `PRIORITIES.md` defines the intended validation lanes and required artifact types
+  - No broad compatibility matrix or longitudinal repository scorecard is shipped yet
+- Status: Design intent and future validation target, not current capability proof
+
 ## PROBLEM_SPACE.md claim mapping
 
 1. Context stuffing degradation / long-context issues

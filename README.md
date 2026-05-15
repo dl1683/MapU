@@ -164,10 +164,10 @@ Claim discipline:
 Before publishing any benchmark number, run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
 ```
 
-On an otherwise free machine, a higher setting such as `-MaxParallel 6` may be reasonable while monitoring host responsiveness.
+On an otherwise free machine, a higher setting such as `-MaxParallel 6` may be reasonable while monitoring host responsiveness. The parallel gate treats null exit codes, lane wall-clock timeouts, and idle lanes as failures instead of letting a stuck benchmark burn compute indefinitely.
 
 ## Domain Modeling Reference
 

@@ -93,7 +93,7 @@ powershell -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1
 For a conservative bounded parallel run:
 
 ```bash
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
 ```
 
 Gate guarantees:
@@ -101,6 +101,7 @@ Gate guarantees:
 - code identity is recorded (`git sha`, dirty/clean state)
 - leaderboard snapshot is generated in the same run
 - pass/fail metadata is written to a timestamped gate folder under `logs/benchmarks/`
+- null exit codes, lane wall-clock timeouts, and idle lanes fail the gate
 
 Operational note:
 - `-MaxParallel 6` can be useful on a free machine, but on 2026-05-13 it made the host difficult to control while other heavy processes were running. Match `MaxParallel` to current host load and monitor responsiveness.

@@ -42,7 +42,7 @@ Not yet runnable in current harness:
 ## Immediate next runs
 
 1. Run the exact-code prepublish gate before any public performance claim:
-   - Conservative: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3`
+   - Conservative: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
    - Faster on an otherwise free machine: use a higher setting such as `-MaxParallel 6` while monitoring host responsiveness.
 2. After a full gate completes, classify misses:
    - retrieval miss

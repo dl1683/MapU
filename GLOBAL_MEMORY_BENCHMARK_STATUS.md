@@ -1,6 +1,6 @@
 # Global Memory Benchmark Status
 
-Last updated: 2026-05-13 (America/New_York)
+Last updated: 2026-05-15 (America/New_York)
 
 ## Public-claim integrity note (critical)
 
@@ -26,6 +26,32 @@ To make a performance claim, use only a successful
 `tools/prepublish_benchmark_gate.ps1` run whose `code_identity.txt` points at
 the exact released commit and whose `leaderboard.txt` was generated in the same
 gate directory.
+
+## Current prepublish gate status
+
+Latest gate attempt:
+- Directory: `logs/benchmarks/prepublish_gate_20260515_180011`
+- Code identity: `238cadecb4d45df2542f0c3d9eb86a7337d0db11`, clean worktree
+- Command: `tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 6`
+- Outcome: failed/aborted, not public evidence
+
+What changed:
+- Restoring `.tmp/memory-benchmarks` cured the earlier immediate harness
+  failure. The wrappers imported and the run produced real LoCoMo,
+  LongMemEval, BEAM 100K, BEAM 500K, BEAM 1M, and BEAM 10M output files.
+- BEAM 100K then stopped making CPU/log/result progress after
+  `100K_0_q2_contradiction_resolution.json`, so the lane was terminated.
+- Because this gate did not complete and did not generate a same-directory
+  `leaderboard.txt`, it supports only the diagnosis above. It does not support
+  publishing any benchmark score.
+
+Follow-up hardening:
+- `tools/run_full_leaderboard_sweeps_parallel.ps1` now has per-lane wall-clock
+  and idle-progress timeouts, normalizes null exit codes as failures, and stops
+  sibling lanes on first failure to avoid burning compute after the gate is
+  already invalid.
+- `tools/prepublish_benchmark_gate.ps1` passes those timeout settings through
+  and records them in `code_identity.txt` and `gate_meta.json`.
 
 ## Historical retrieval-proxy lane (diagnostic only)
 

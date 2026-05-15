@@ -12,9 +12,13 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Evidence:
   - `tools/report_full_sweep_leaderboard.py` output
   - `GLOBAL_MEMORY_BENCHMARK_STATUS.md` quarantine note for historical runs
+  - 2026-05-15 gate attempt `logs/benchmarks/prepublish_gate_20260515_180011`
+    restored the benchmark checkout and produced real lane outputs, but did not
+    complete and did not generate `leaderboard.txt`.
 - Status: PARTIAL
 - Required fix:
-  - Run `tools/prepublish_benchmark_gate.ps1` on the exact release code and update this item with that gate directory.
+  - Run `tools/prepublish_benchmark_gate.ps1` on the exact release code until it
+    completes successfully and update this item with that passing gate directory.
 
 2. Benchmark adapter does not inject gold answers into retrieval output
 - Evidence:
@@ -76,11 +80,14 @@ Prepare this repository for open-source release with claim-backed documentation,
   - `tools/prepublish_benchmark_gate.ps1`
   - `tools/run_full_leaderboard_sweeps_parallel.ps1`
   - `INTEGRATIONS.md` section "Prepublish benchmark gate"
+  - 2026-05-15 hardening: parallel gate now has per-lane wall-clock and
+    idle-progress timeouts, treats null exit codes as failure, and stops sibling
+    lanes after first failure.
 - Status: PARTIAL
 - Required fix:
   - Execute the gate successfully before any public release or benchmark claim update.
-  - Conservative resume command after the 2026-05-13 pause:
-    `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3`
+  - Conservative resume command:
+    `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
   - Higher settings such as `-MaxParallel 6` are valid when the host is otherwise free; avoid combining them with other heavy local processes.
 
 11. Clean package build works
@@ -119,12 +126,11 @@ Prepare this repository for open-source release with claim-backed documentation,
 Do not call this repository fully public ready until all PARTIAL items are closed by a successful prepublish benchmark gate run on the exact release code.
 
 Current pause point:
-- Last substantive release-state commit checked before pause: `e0e8bcc75393a0069e775483e346be9af2c4fe17`
-- Later metadata-only commits may update this audit file without changing the benchmark or release-surface state.
-- Worktree state before pause: clean and synced with `origin/main`
+- Last substantive release-state commit checked before current benchmark attempt: `238cadecb4d45df2542f0c3d9eb86a7337d0db11`
+- Worktree state before the `20260515_180011` gate attempt: clean
 - Repository visibility checked before pause: public at `https://github.com/dl1683/MapU`
 - Branch note: local branch is `master` tracking remote default branch `origin/main`; use `git push origin HEAD:main` unless the local branch is renamed.
-- Benchmark gate state: paused to free compute; no benchmark process should be left running
+- Benchmark gate state: `logs/benchmarks/prepublish_gate_20260515_180011` failed/aborted after BEAM 100K stopped making progress; it is not public benchmark evidence.
 - Local limitation at pause: Docker was not available in the active shell, so `docker compose config` and full documented infra startup were not reverified from this host.
-- Conservative next benchmark command: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3`
+- Conservative next benchmark command: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
 - If the machine is otherwise free, `-MaxParallel 6` is reasonable to try while monitoring responsiveness.

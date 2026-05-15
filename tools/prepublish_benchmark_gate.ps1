@@ -1,6 +1,8 @@
 param(
     [switch]$Parallel,
-    [int]$MaxParallel = 2
+    [int]$MaxParallel = 2,
+    [int]$LaneTimeoutMinutes = 240,
+    [int]$IdleTimeoutMinutes = 20
 )
 
 Set-StrictMode -Version Latest
@@ -40,11 +42,11 @@ if ($LASTEXITCODE -ne 0) { $gitSha = "unknown" }
 $dirty = (& git status --porcelain 2>$null)
 if ($LASTEXITCODE -ne 0) { $dirty = "" }
 $dirtyFlag = if ([string]::IsNullOrWhiteSpace($dirty)) { "clean" } else { "dirty" }
-"sha=$gitSha`nworktree=$dirtyFlag`ntimestamp=$stamp`nparallel=$($Parallel.IsPresent)`nmax_parallel=$MaxParallel" | Set-Content -LiteralPath $codeIdentity -Encoding UTF8
+"sha=$gitSha`nworktree=$dirtyFlag`ntimestamp=$stamp`nparallel=$($Parallel.IsPresent)`nmax_parallel=$MaxParallel`nlane_timeout_minutes=$LaneTimeoutMinutes`nidle_timeout_minutes=$IdleTimeoutMinutes" | Set-Content -LiteralPath $codeIdentity -Encoding UTF8
 
 try {
     if ($Parallel) {
-        powershell -NoProfile -ExecutionPolicy Bypass -File $runParallelSweep -MaxParallel $MaxParallel 1> $sweepOut 2> $sweepErr
+        powershell -NoProfile -ExecutionPolicy Bypass -File $runParallelSweep -MaxParallel $MaxParallel -LaneTimeoutMinutes $LaneTimeoutMinutes -IdleTimeoutMinutes $IdleTimeoutMinutes 1> $sweepOut 2> $sweepErr
     }
     else {
         powershell -NoProfile -ExecutionPolicy Bypass -File $runSweep 1> $sweepOut 2> $sweepErr
@@ -68,6 +70,8 @@ try {
         status_doc = $statusDoc
         parallel = $Parallel.IsPresent
         max_parallel = $MaxParallel
+        lane_timeout_minutes = $LaneTimeoutMinutes
+        idle_timeout_minutes = $IdleTimeoutMinutes
         gate_pass = $true
     }
     ($meta | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $gateMeta -Encoding UTF8
@@ -88,6 +92,8 @@ catch {
         status_doc = $statusDoc
         parallel = $Parallel.IsPresent
         max_parallel = $MaxParallel
+        lane_timeout_minutes = $LaneTimeoutMinutes
+        idle_timeout_minutes = $IdleTimeoutMinutes
         gate_pass = $false
         error = $_.Exception.Message
     }

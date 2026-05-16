@@ -111,6 +111,44 @@ Invoke-Checked "license file matches package metadata" {
     }
 }
 
+Invoke-Checked "tracked markdown local links resolve" {
+    $markdownFiles = @(git ls-files "*.md")
+    $missing = New-Object System.Collections.Generic.List[string]
+    $linkPattern = [regex]'\[[^\]]+\]\(([^)]+)\)'
+
+    foreach ($file in $markdownFiles) {
+        $content = Get-Content -LiteralPath $file -Raw
+        foreach ($match in $linkPattern.Matches($content)) {
+            $target = $match.Groups[1].Value.Trim()
+            if (
+                $target.StartsWith("http://") -or
+                $target.StartsWith("https://") -or
+                $target.StartsWith("mailto:") -or
+                $target.StartsWith("#")
+            ) {
+                continue
+            }
+            $targetPath = ($target -split "#", 2)[0]
+            if ([string]::IsNullOrWhiteSpace($targetPath)) {
+                continue
+            }
+            $normalized = $targetPath -replace "/", [System.IO.Path]::DirectorySeparatorChar
+            $baseDir = Split-Path -Parent $file
+            if ([string]::IsNullOrWhiteSpace($baseDir)) {
+                $baseDir = "."
+            }
+            $candidate = Join-Path $baseDir $normalized
+            if (-not (Test-Path -LiteralPath $candidate)) {
+                $missing.Add(("{0} -> {1}" -f $file, $target))
+            }
+        }
+    }
+
+    if ($missing.Count -gt 0) {
+        throw ($missing -join "; ")
+    }
+}
+
 Invoke-Checked "tracked files contain no obvious private secret material" {
     $patterns = @(
         "sk-[A-Za-z0-9_-]{20,}",

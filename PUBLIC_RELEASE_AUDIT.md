@@ -152,6 +152,12 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Evidence:
   - Executed `python -m build --wheel`
   - Result: `Successfully built mapu-0.1.0-py3-none-any.whl`
+  - 2026-05-15 current environment check found `build` was missing from the
+    venv despite the README documenting `python -m build --wheel`; fixed by
+    adding `build>=1.3,<2` to both dev dependency declarations.
+  - 2026-05-15 verified wheel build with:
+    `uv run --with "build>=1.3,<2" python -m build --wheel`
+    -> `Successfully built mapu-0.1.0-py3-none-any.whl`
   - 2026-05-15 package metadata check: name `mapu`, version `0.1.0`, license `AGPL-3.0-only`, Python `>=3.12,<3.15`
   - 2026-05-15 release audit now checks that tracked `LICENSE` exists and
     matches the package metadata's `AGPL-3.0-only` declaration.

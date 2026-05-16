@@ -262,6 +262,20 @@ wheels = [
 ]
 
 [[package]]
+name = "build"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "os_name == 'nt'" },
+    { name = "packaging" },
+    { name = "pyproject-hooks" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/e0/df5e171f685f82f37b12e1f208064e24244911079d7b767447d1af7e0d70/build-1.5.0.tar.gz", hash = "sha256:302c22c3ba2a0fd5f3911918651341ebb3896176cbdec15bd421f80b1afc7647", size = 89796, upload-time = "2026-04-30T03:18:25.17Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/fe/6bea5c9162869c5beba5d9c8abbed835ec85bf1ec1fba05a3822325c45f3/build-1.5.0-py3-none-any.whl", hash = "sha256:13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f", size = 26018, upload-time = "2026-04-30T03:18:23.644Z" },
+]
+
+[[package]]
 name = "catalogue"
 version = "2.0.10"
 source = { registry = "https://pypi.org/simple" }
@@ -1469,6 +1483,22 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+dev = [
+    { name = "build" },
+    { name = "freezegun" },
+    { name = "gliner" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+    { name = "sentence-transformers" },
+    { name = "setfit" },
+    { name = "testcontainers" },
+    { name = "torch" },
+    { name = "transformers" },
+    { name = "types-python-dateutil" },
+]
 ml = [
     { name = "gliner" },
     { name = "sentence-transformers" },
@@ -1479,6 +1509,7 @@ ml = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "build" },
     { name = "freezegun" },
     { name = "mapu", extra = ["ml"] },
     { name = "mypy" },
@@ -1494,29 +1525,44 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.18,<2" },
     { name = "asyncpg", specifier = ">=0.31,<1" },
+    { name = "build", marker = "extra == 'dev'", specifier = ">=1.3,<2" },
+    { name = "freezegun", marker = "extra == 'dev'", specifier = ">=1.5,<2" },
+    { name = "gliner", marker = "extra == 'dev'", specifier = ">=0.2,<1" },
     { name = "gliner", marker = "extra == 'ml'", specifier = ">=0.2,<1" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "litestar", extras = ["standard"], specifier = ">=2.21,<3" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.27,<2" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20,<2" },
     { name = "orjson", specifier = ">=3.11,<4" },
     { name = "pgvector", specifier = ">=0.4,<1" },
     { name = "pydantic", specifier = ">=2.13,<3" },
     { name = "pydantic-settings", specifier = ">=2.13,<3" },
     { name = "pypdf", specifier = ">=5.7,<6" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9,<10" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.3,<2" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7,<8" },
     { name = "python-dateutil", specifier = ">=2.9,<3" },
     { name = "python-docx", specifier = ">=1.1,<2" },
     { name = "redis", extras = ["hiredis"], specifier = ">=7.4,<8" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15,<1" },
+    { name = "sentence-transformers", marker = "extra == 'dev'", specifier = ">=3.0,<6" },
     { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=3.0,<6" },
+    { name = "setfit", marker = "extra == 'dev'", specifier = ">=1.1,<2" },
     { name = "setfit", marker = "extra == 'ml'", specifier = ">=1.1,<2" },
     { name = "spacy", specifier = ">=3.8,<4" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.49,<2.1" },
+    { name = "testcontainers", extras = ["postgres"], marker = "extra == 'dev'", specifier = ">=4.14,<5" },
+    { name = "torch", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'ml'", specifier = ">=2.0" },
+    { name = "transformers", marker = "extra == 'dev'", specifier = ">=4.40,<5" },
     { name = "transformers", marker = "extra == 'ml'", specifier = ">=4.40,<5" },
+    { name = "types-python-dateutil", marker = "extra == 'dev'", specifier = ">=2.9,<3" },
 ]
-provides-extras = ["ml"]
+provides-extras = ["ml", "dev"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "build", specifier = ">=1.3,<2" },
     { name = "freezegun", specifier = ">=1.5,<2" },
     { name = "mapu", extras = ["ml"] },
     { name = "mypy", specifier = ">=1.20,<2" },
@@ -2682,6 +2728,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/89/3a/584b97a228950ed85aec97c811c68473d9b8d149e6a8c155668287cf1a28/pypdf-5.9.0.tar.gz", hash = "sha256:30f67a614d558e495e1fbb157ba58c1de91ffc1718f5e0dfeb82a029233890a1", size = 5035118, upload-time = "2025-07-27T14:04:52.364Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/48/d9/6cff57c80a6963e7dd183bf09e9f21604a77716644b1e580e97b259f7612/pypdf-5.9.0-py3-none-any.whl", hash = "sha256:be10a4c54202f46d9daceaa8788be07aa8cd5ea8c25c529c50dd509206382c35", size = 313193, upload-time = "2025-07-27T14:04:50.53Z" },
+]
+
+[[package]]
+name = "pyproject-hooks"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e7/82/28175b2414effca1cdac8dc99f76d660e7a4fb0ceefa4b4ab8f5f6742925/pyproject_hooks-1.2.0.tar.gz", hash = "sha256:1e859bd5c40fae9448642dd871adf459e5e2084186e8d2c2a79a824c970da1f8", size = 19228, upload-time = "2024-09-29T09:24:13.293Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl", hash = "sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913", size = 10216, upload-time = "2024-09-29T09:24:11.978Z" },
 ]
 
 [[package]]

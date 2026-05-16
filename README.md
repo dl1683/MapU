@@ -131,7 +131,7 @@ Verified before the current pause:
 - REST API app import works
 - MCP server module imports and exposes the server/run entrypoints
 - focused CLI/API/MCP unit surface passes
-- full unit suite previously passed with `554 passed, 55 deselected`
+- full non-integration suite passed on 2026-05-15 with `557 passed, 55 deselected`
 - tracked generated artifacts and heavyweight benchmark outputs are excluded from the public repo
 
 Known limitations before making stronger public claims:
@@ -199,7 +199,7 @@ Useful local checks:
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1
 python -m mapu.cli --help
-python -m pytest tests/unit/test_cli.py tests/unit/test_mcp_server.py tests/unit/test_api.py -q
+python -m pytest
 python -m build --wheel
 ```
 

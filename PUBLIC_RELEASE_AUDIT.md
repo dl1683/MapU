@@ -174,6 +174,8 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Follow-up 2026-05-13 focused surface check: `python -m pytest tests/unit/test_cli.py tests/unit/test_mcp_server.py tests/unit/test_api.py -q` -> pass
 - Follow-up 2026-05-15 focused surface check at `64576196f65c70207cbfe6dff296f4f17a0f37f0`:
   `python -m pytest tests/unit/test_cli.py tests/unit/test_mcp_server.py tests/unit/test_api.py -q` -> pass
+- Follow-up 2026-05-15 non-integration suite at `d167c7977e8ad4792b730fa477d7c405e4626562`:
+  `.venv\Scripts\python.exe -m pytest` -> `557 passed, 55 deselected`
 - Status: PASS
 
 14. Generated and heavyweight artifacts are excluded from public release

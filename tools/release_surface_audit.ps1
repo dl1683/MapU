@@ -189,16 +189,16 @@ if (-not $SkipFreshInstall) {
         if (-not (Test-Path -LiteralPath $python)) {
             throw "venv Python executable not found"
         }
+        & $python -m pip install $checkout | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "pip install failed"
+        }
         $mapu = Join-Path $venv "Scripts\mapu.exe"
         if (-not (Test-Path -LiteralPath $mapu)) {
             $mapu = Join-Path $venv "bin/mapu"
         }
         if (-not (Test-Path -LiteralPath $mapu)) {
             throw "installed mapu console script not found"
-        }
-        & $python -m pip install $checkout | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "pip install failed"
         }
         & $python -c "import mapu, mapu.cli, mapu.api.app, mapu.mcp.server; from importlib.metadata import metadata; m=metadata('mapu'); assert m['License-Expression']=='AGPL-3.0-only'; assert m['Requires-Python']=='<3.15,>=3.12'; print(mapu.__file__)"
         if ($LASTEXITCODE -ne 0) {

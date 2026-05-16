@@ -300,6 +300,10 @@ if (-not $SkipFreshInstall) {
         if ($LASTEXITCODE -ne 0) {
             throw "installed CLI help check failed"
         }
+        & $python (Join-Path $repoRoot "tools\mcp_stdio_smoke.py") --command $mapu --arg mcp | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "installed MCP stdio smoke failed"
+        }
 
         if (-not $KeepTemp) {
             Remove-Item -LiteralPath $auditRoot -Recurse -Force

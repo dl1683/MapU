@@ -180,6 +180,9 @@ final release commit.
   - 2026-05-15 package metadata check: name `mapu`, version `0.1.0`, license `AGPL-3.0-only`, Python `>=3.12,<3.15`
   - 2026-05-15 release audit now checks that tracked `LICENSE` exists and
     matches the package metadata's `AGPL-3.0-only` declaration.
+  - 2026-05-15 wheel inspection verified `License-Expression:
+    AGPL-3.0-only`, `License-File: LICENSE`, and packaged license file
+    `mapu-0.1.0.dist-info/licenses/LICENSE`.
   - 2026-05-15 external-install audit from ignored fresh clone:
     - `py -3.13 -m venv .tmp/release-audit-install/venv`
     - `python -m pip install .tmp/release-audit-install/checkout`

@@ -94,14 +94,12 @@ wrapper, MapU adapter, local model endpoint, and tiny LoCoMo/LongMemEval/BEAM
 slices can run end to end. Its metadata sets `smoke_only=true` and
 `public_performance_evidence=false`.
 
-Latest smoke result:
-- `logs/benchmarks/benchmark_smoke_gate_20260515_225557` passed on 2026-05-15.
-- It covered tiny LoCoMo, LongMemEval, and BEAM 100K slices through the same
-  wrapper/local endpoint path.
-- The metadata recorded `gate_pass=true`, `smoke_only=true`, and
-  `public_performance_evidence=false`.
-- The metadata recorded `git_sha=f1378a7cb44fd3bb22633ccc74544c77172c0dea`
-  and `worktree=clean`.
+Smoke evidence use:
+- Smoke logs are ignored local artifacts, not durable release artifacts.
+- For an exact release check, rerun the smoke gate on the same commit being
+  audited and inspect `gate_meta.json`.
+- Passing metadata must record `gate_pass=true`, `worktree=clean`,
+  `smoke_only=true`, and `public_performance_evidence=false`.
 
 Do not use smoke-gate outputs as public benchmark evidence. Public performance
 claims still require a successful `tools/prepublish_benchmark_gate.ps1` run on

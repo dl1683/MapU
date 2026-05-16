@@ -116,13 +116,12 @@ final release commit.
   - The smoke gate writes metadata with `smoke_only=true` and
     `public_performance_evidence=false`.
 - Status: PASS for harness smoke coverage; still not benchmark evidence
-- Latest result:
-  - 2026-05-15 run passed:
-    `logs/benchmarks/benchmark_smoke_gate_20260515_221231`
-  - Metadata recorded `gate_pass=true`, `smoke_only=true`, and
-    `public_performance_evidence=false`.
-  - Metadata recorded `git_sha=f22bb3d41631daebadfe8ac7b36f96c9e05a86c6`
-    and `worktree=clean`.
+- Exact-SHA use:
+  - Run the smoke gate on the same commit being audited and inspect its
+    `gate_meta.json`.
+  - A passing smoke gate proves only that the benchmark wrapper/local-endpoint
+    path can execute tiny LoCoMo, LongMemEval, and BEAM slices. It is not
+    leaderboard or public performance evidence.
 - Required fix:
   - Keep this separate from the full prepublish benchmark gate; smoke output is
     not public performance evidence.
@@ -199,11 +198,11 @@ final release commit.
     `tools/public_github_install_audit.ps1`.
   - 2026-05-15 script fix: MCP stdio smoke now runs from the cloned public
     checkout instead of the local working tree.
-  - Latest public-install audit: 2026-05-15 repeatable script run against
-    public `main` at
-    `f1378a7cb44fd3bb22633ccc74544c77172c0dea` passed clone, venv creation,
+  - Exact-SHA public-install evidence must come from rerunning
+    `tools/public_github_install_audit.ps1` against public `main` after the
+    final commit is pushed. A passing run covers public clone, venv creation,
     `pip install`, import/metadata checks, CLI help checks, and installed MCP
-    stdio smoke. The JSON summary recorded `passed=true`.
+    stdio smoke.
   - Earlier one-off and pre-fix public-install checks also passed, but the
     repeatable script above is the relevant path for final release evidence.
   - 2026-05-15 release audit can now write `-OutputJson <path>` summaries
@@ -288,10 +287,11 @@ Current handoff state:
   not public benchmark evidence.
 - Smoke-only benchmark command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1 -TimeoutMinutes 45`
-- Latest smoke-only evidence:
-  `logs/benchmarks/benchmark_smoke_gate_20260515_225557` passed on
-  `f1378a7cb44fd3bb22633ccc74544c77172c0dea` with `worktree=clean`,
-  `smoke_only=true`, and `public_performance_evidence=false`.
+- Smoke-only evidence note:
+  smoke logs are ignored local artifacts. Rerun the smoke command on the exact
+  commit being audited and inspect `gate_meta.json`; it must show
+  `gate_pass=true`, `worktree=clean`, `smoke_only=true`, and
+  `public_performance_evidence=false`.
 - Prior full prepublish gate state:
   `logs/benchmarks/prepublish_gate_20260515_190928` confirmed the child-worker
   idle fix but was manually stopped because the full BEAM 100K lane remained too

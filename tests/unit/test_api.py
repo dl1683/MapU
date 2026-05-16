@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 
+from mapu.api.app import create_app
 from mapu.api.dtos import (
     CorpusCreate,
     CorpusResponse,
@@ -20,6 +21,7 @@ from mapu.api.dtos import (
     RepairPreviewResponse,
     RepairProposeRequest,
 )
+from mapu.config import ServerSettings, Settings
 
 
 class TestDTOSerialization:
@@ -213,3 +215,27 @@ class TestDTOValidation:
     def test_repair_propose_rejects_invalid_operation(self) -> None:
         with pytest.raises(ValueError):
             RepairProposeRequest(proposition_id=uuid.uuid4(), operation="delete")
+
+
+class TestAppConfiguration:
+    def test_api_key_is_stored_for_guard(self) -> None:
+        app = create_app(Settings(server=ServerSettings(api_key="secret-key")))
+
+        assert app.state["api_key"] == "secret-key"
+
+    def test_empty_cors_origins_disable_cors_config(self) -> None:
+        app = create_app(Settings(server=ServerSettings(cors_origins="")))
+
+        assert app.cors_config is None
+
+    def test_cors_origins_are_parsed_from_settings(self) -> None:
+        app = create_app(Settings(server=ServerSettings(
+            cors_origins="https://one.example, https://two.example",
+        )))
+
+        assert app.cors_config is not None
+        assert app.cors_config.allow_origins == [
+            "https://one.example",
+            "https://two.example",
+        ]
+        assert "x-api-key" in app.cors_config.allow_headers

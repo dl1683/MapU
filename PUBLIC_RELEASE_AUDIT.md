@@ -134,6 +134,9 @@ Prepare this repository for open-source release with claim-backed documentation,
   - 2026-05-15 `.env.example` expanded to cover database, embeddings,
     chunking, parser/source policy, extraction, LLM, query synthesis, and
     server auth/CORS settings from `src/mapu/config.py`
+  - 2026-05-15 implementation fix: `MAPU_SERVER_CORS_ORIGINS` is now wired into
+    Litestar `CORSConfig`; focused API tests cover API-key state and CORS
+    parsing.
   - `src/mapu/config.py` reads `.env`
   - `src/mapu/db/migrations/env.py` uses `Settings().database.url`
   - Executed `alembic current`; result: `202605070004 (head)`

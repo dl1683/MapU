@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 
 from litestar import Litestar
+from litestar.config.cors import CORSConfig
 from litestar.connection import ASGIConnection
 from litestar.di import Provide
 from litestar.handlers import BaseRouteHandler
@@ -30,6 +31,7 @@ def _api_key_guard(connection: ASGIConnection, _: BaseRouteHandler) -> None:
 def create_app(settings: Settings | None = None) -> Litestar:
     settings = settings or Settings()
     engine, session_factory = build_engine(settings.database)
+    cors_config = _build_cors_config(settings.server.cors_origins)
 
     async def provide_session() -> AsyncGenerator[AsyncSession, None]:
         async with session_factory() as session:
@@ -48,11 +50,23 @@ def create_app(settings: Settings | None = None) -> Litestar:
             version="0.1.0",
             description="Persistent knowledge substrate for document-heavy reasoning",
         ),
+        cors_config=cors_config,
         guards=[_api_key_guard],
         debug=False,
     )
     app.state["api_key"] = settings.server.api_key
     return app
+
+
+def _build_cors_config(origins: str) -> CORSConfig | None:
+    allow_origins = [origin.strip() for origin in origins.split(",") if origin.strip()]
+    if not allow_origins:
+        return None
+    return CORSConfig(
+        allow_origins=allow_origins,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["content-type", "x-api-key"],
+    )
 
 
 app = create_app()

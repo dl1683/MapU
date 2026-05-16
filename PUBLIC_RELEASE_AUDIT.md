@@ -198,6 +198,9 @@ final release commit.
       `mapu corpus --help`, `mapu serve --help`, `mapu mcp --help`
     - installed MCP stdio smoke reports `16 tools` and
       `Required tools present: True`
+  - 2026-05-15 release audit can now write `-OutputJson <path>` summaries
+    containing commit SHA, pass/fail status, skipped fresh-install state, passed
+    checks, and failed checks. This is intended for final release evidence.
 - Status: PASS
 
 12. Local environment and migrations use documented config

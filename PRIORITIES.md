@@ -29,6 +29,29 @@ Memory benchmark validation currently centers on:
 
 Claim-grade release numbers require a fresh prepublish gate run.
 
+## Priority 2b: Dynamic Agent Memory
+
+MapU should be validated as a memory substrate for agentic coding and research systems that repeatedly learn from changing repositories over time.
+
+Implemented foundation:
+- durable corpora
+- MCP ingest/query/investigation/activity/gap/repair/reset tools
+- source-backed propositions and attestations
+- situations, truth states, supersession schema, changesets, and activity logs
+
+Unproven public claims:
+- autonomous repo-study loops
+- reliable stale-memory suppression as repositories change
+- measurable agent task improvement from persistent MapU memory
+- long-term cost, latency, storage, and repair behavior under repeated use
+
+Near-term validation artifacts should include:
+- replay tasks over the same repository at multiple commits
+- before/after memory quality audits
+- stale fact and supersession test cases
+- agent-with-memory versus agent-without-memory task comparisons
+- storage and latency curves after repeated ingest/update cycles
+
 ## Priority 3: Domain Expansion
 
 Code, legal, finance, and biomedical workflows are high-value validation targets. They should be treated as benchmark targets until domain-specific artifacts exist.

@@ -35,6 +35,15 @@ Claims in this file should be read as implementation-backed unless explicitly ma
 - Blast-radius preview and changeset flows are exposed via API/MCP
 - Activity and gap surfaces are queryable through API/MCP/CLI paths
 
+4. Agent Memory Loop
+- Implemented primitives support repeated agent use: create or reuse a corpus,
+  ingest new evidence, query accumulated state, inspect activity/gaps, and
+  repair bad state.
+- The current repository does not yet ship an autonomous scheduler or agent
+  policy that decides when to study, refresh, supersede, or prune memory.
+- Longitudinal learning quality must be validated by replaying real repository
+  work over time, not inferred from one ingestion/query smoke test.
+
 ## Data Model (Implemented Core)
 
 Core persisted objects include:
@@ -42,6 +51,9 @@ Core persisted objects include:
 - DocumentWork / DocumentExpression / TextSpan / Chunk / ChunkEmbedding
 - Handle / Proposition / PropositionParticipant
 - Attestation / AttestationSituation
+- Situation / QueryView
+- PropositionState / PropositionStateBasis
+- SupersessionEdge / Changeset / ChangesetOperation
 - Activity / Gap
 
 See `src/mapu/models/` for exact schema definitions and `src/mapu/db/migrations/` for migration history.

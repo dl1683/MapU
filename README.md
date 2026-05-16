@@ -35,6 +35,23 @@ Long-running agents need a memory layer that survives outside one chat window an
 - query answers can use retrieval, direct lookup, or investigation workflows
 - repair/reset paths make it possible to clean up bad state instead of starting from an opaque transcript
 
+## Dynamic Agent Memory Status
+
+MapU's intended role is a persistent memory layer for agentic coding and research systems. The goal is not one-time ingestion; it is repeated study, retrieval, correction, and reuse across sessions as repositories and documents change.
+
+What is implemented now:
+- long-lived corpora that can accumulate documents over time
+- MCP tools for agent-facing ingest, query, investigation, activity, gaps, repair, delete, and reset workflows
+- provenance-backed spans, chunks, propositions, attestations, and activity records
+- situations, truth states, gaps, changesets, and repair/rollback surfaces for evolving knowledge
+
+What is not yet proven as a public claim:
+- autonomous continuous repo-study loops
+- longitudinal improvement across repeated agent sessions
+- robust stale-memory detection and supersession in real changing repositories
+- measured agent task lift from MapU memory versus no persistent memory
+- storage, latency, update, and repair cost curves over months of accumulated state
+
 ## Surfaces In This Repository
 
 - `MCP server` via `mapu mcp`

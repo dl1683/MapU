@@ -158,6 +158,7 @@ See [PRIORITIES.md](PRIORITIES.md) for the full two-year validation lane.
 Benchmark artifacts and status are tracked in:
 - [GLOBAL_MEMORY_BENCHMARK_STATUS.md](GLOBAL_MEMORY_BENCHMARK_STATUS.md)
 - [GLOBAL_MEMORY_BENCHMARK_EXECUTION_PLAN.md](GLOBAL_MEMORY_BENCHMARK_EXECUTION_PLAN.md)
+- [LOCAL_ARTIFACT_POLICY.md](LOCAL_ARTIFACT_POLICY.md)
 - `tools/benchmark_smoke_gate.ps1`
 - `tools/prepublish_benchmark_gate.ps1`
 - `tools/report_full_sweep_leaderboard.py`

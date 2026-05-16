@@ -239,6 +239,8 @@ final release commit.
 14. Generated and heavyweight artifacts are excluded from public release
 - Evidence:
   - `.gitignore` excludes `results/`, `datasets/`, `logs/`, `dist/`, `.tmp/`, `.uv-cache/`, `.codex_tmp/`
+  - `LOCAL_ARTIFACT_POLICY.md` documents expected ignored local directories and
+    why `.tmp/memory-benchmarks` is preserved by cleanup.
   - Measured local generated size before exclusion: `results/` about 1.1GB, `datasets/` about 1.05GB
   - 2026-05-15 tracked-file size scan found no committed files over 1MB
   - 2026-05-15 secret-pattern scan found only dummy benchmark keys, example text, and test fixture references; no real key material detected

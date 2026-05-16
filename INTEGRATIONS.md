@@ -102,6 +102,12 @@ For a detached long run that writes launcher logs under `logs/benchmarks/`:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/start_prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
 ```
 
+Monitor the latest full/prepublish sweep:
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/check_full_sweep_progress.ps1
+```
+
 Successful full-gate evidence includes:
 - benchmarks are run on the current code state
 - code identity is recorded (`git sha`, dirty/clean state)

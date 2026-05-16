@@ -78,6 +78,9 @@ Current open issue:
   the benchmark semantics, or split the release process into an explicitly
   labeled bounded smoke gate plus a separate overnight/full evidence run. Do
   not publish scores from partial gate outputs.
+- Long-running gates can be launched with
+  `tools/start_prepublish_benchmark_gate.ps1` and monitored with
+  `tools/check_full_sweep_progress.ps1`.
 
 ## Benchmark smoke gate
 

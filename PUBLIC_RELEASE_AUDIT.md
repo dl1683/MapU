@@ -259,15 +259,35 @@ final release commit.
 
 ## Release Gate
 
-Do not call this repository fully public ready until all PARTIAL items are closed by a successful prepublish benchmark gate run on the exact release code.
+Do not call this repository fully public ready until every PARTIAL item is
+closed by exact-release evidence on the final public commit.
 
-Current pause point:
-- Last substantive release-state commit checked before current benchmark attempt: `238cadecb4d45df2542f0c3d9eb86a7337d0db11`
-- Worktree state before the `20260515_180011` gate attempt: clean
-- Repository visibility checked before pause: public at `https://github.com/dl1683/MapU`
-- Branch note: local branch is `master` tracking remote default branch `origin/main`; use `git push origin HEAD:main` unless the local branch is renamed.
-- Benchmark gate state: `logs/benchmarks/prepublish_gate_20260515_184056` failed due an over-strict first idle detector; `logs/benchmarks/prepublish_gate_20260515_180011` failed/aborted after BEAM 100K stopped making progress. Neither is public benchmark evidence.
-- Latest gate state: `logs/benchmarks/prepublish_gate_20260515_190928` confirmed the child-worker idle fix but was manually stopped because the full BEAM 100K lane remained too slow for a practical prepublish run on this host/model stack. It is not public benchmark evidence.
-- Local limitation at pause: Docker was not available in the active shell, so `docker compose config` and full documented infra startup were not reverified from this host.
-- Conservative next benchmark command: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
-- If the machine is otherwise free, `-MaxParallel 6` is reasonable to try while monitoring responsiveness.
+Current handoff state:
+- Latest pushed head checked in this session:
+  `8e9c650d31b4f9ff4eb7246a8db7a99d19cfe384` on `origin/main`.
+- Repository visibility checked before pause: public at
+  `https://github.com/dl1683/MapU`.
+- Branch note: local branch is `master` tracking remote default branch
+  `origin/main`; use `git push origin HEAD:main` unless the local branch is
+  renamed.
+- Current release-surface fast audit command:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1 -SkipFreshInstall -OutputJson .tmp\release_surface_audit_summary.json`
+- Current public-install audit command:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\public_github_install_audit.ps1 -OutputJson .tmp\public_github_install_audit_summary.json`
+- Docker blocker command to rerun on a Docker-enabled host:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1 -OutputJson .tmp\release_surface_audit_summary.json`
+- Full benchmark blocker command:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
+- Smoke-only benchmark command:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1 -TimeoutMinutes 45`
+- Latest smoke-only evidence:
+  `logs/benchmarks/benchmark_smoke_gate_20260515_221231` passed on
+  `f22bb3d41631daebadfe8ac7b36f96c9e05a86c6` with `worktree=clean`,
+  `smoke_only=true`, and `public_performance_evidence=false`.
+- Prior full prepublish gate state:
+  `logs/benchmarks/prepublish_gate_20260515_190928` confirmed the child-worker
+  idle fix but was manually stopped because the full BEAM 100K lane remained too
+  slow for a practical prepublish run on this host/model stack. It is not public
+  benchmark evidence.
+- If the machine is otherwise free, `-MaxParallel 6` is reasonable to try while
+  monitoring responsiveness.

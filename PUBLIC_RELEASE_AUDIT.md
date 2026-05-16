@@ -210,6 +210,10 @@ final release commit.
     `78478dbf60da500ec9b8b430d81c78be87d5833c` passed clone, venv creation,
     `pip install`, import/metadata checks, CLI help checks, and installed MCP
     stdio smoke. The JSON summary recorded `passed=true`.
+  - 2026-05-15 repeatable script run against public `main` at
+    `b52859d6cd5e73197aeb35184d79ebe5bb4e9aca` passed clone, venv creation,
+    `pip install`, import/metadata checks, CLI help checks, and installed MCP
+    stdio smoke. The JSON summary recorded `passed=true`.
   - 2026-05-15 release audit can now write `-OutputJson <path>` summaries
     containing commit SHA, pass/fail status, skipped fresh-install state, passed
     checks, and failed checks. This is intended for final release evidence.

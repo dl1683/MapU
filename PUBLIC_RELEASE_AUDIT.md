@@ -170,6 +170,8 @@ final release commit.
   - Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1`
     successfully on a host with Docker available before calling the repo
     release-ready.
+  - Run `python -m pytest -m integration` on a Docker-enabled host to cover the
+    PostgreSQL/testcontainers integration suite that default pytest deselects.
 
 11. Clean package build works
 - Evidence:

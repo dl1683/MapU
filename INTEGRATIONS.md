@@ -11,6 +11,13 @@ docker compose up -d
 alembic upgrade head
 ```
 
+Docker-backed integration tests are deselected from the default pytest command.
+After Docker is available, run:
+
+```bash
+python -m pytest -m integration
+```
+
 ## 2) MCP surface (primary integration path)
 
 MapU exposes MCP over stdio via:

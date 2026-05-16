@@ -202,11 +202,11 @@ For a quick harness sanity check that is explicitly not performance evidence:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1
 ```
 
-Latest smoke status: the harness smoke gate passed on clean commit
-`f22bb3d41631daebadfe8ac7b36f96c9e05a86c6` at
-`logs/benchmarks/benchmark_smoke_gate_20260515_221231`, covering tiny LoCoMo,
-LongMemEval, and BEAM 100K slices. That confirms the wrapper/local-endpoint path
-is functioning, but it is not leaderboard or public performance evidence.
+Smoke logs are ignored local artifacts. For release evidence, rerun the smoke
+gate on the exact commit being audited and inspect its `gate_meta.json`. A
+passing smoke confirms only the wrapper/local-endpoint path for tiny LoCoMo,
+LongMemEval, and BEAM 100K slices; it is not leaderboard or public performance
+evidence.
 
 ## Domain Modeling Reference
 
@@ -222,6 +222,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\public_github_install_
 python -m mapu.cli --help
 python -m pytest
 python -m build --wheel
+```
+
+The default pytest command excludes Docker-backed integration tests. On a host
+with Docker available, run the PostgreSQL/testcontainers suite explicitly:
+
+```bash
+python -m pytest -m integration
 ```
 
 For the full release audit state, see [PUBLIC_RELEASE_AUDIT.md](PUBLIC_RELEASE_AUDIT.md).

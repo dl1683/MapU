@@ -147,6 +147,38 @@ Invoke-Checked "dummy benchmark API keys are explicitly dummy only" {
     }
 }
 
+Invoke-Checked "docker compose file matches documented local infra" {
+    $composePath = Join-Path $repoRoot "docker-compose.yml"
+    $envExamplePath = Join-Path $repoRoot ".env.example"
+    if (-not (Test-Path -LiteralPath $composePath)) {
+        throw "missing docker-compose.yml"
+    }
+    if (-not (Test-Path -LiteralPath $envExamplePath)) {
+        throw "missing .env.example"
+    }
+
+    $compose = Get-Content -LiteralPath $composePath -Raw
+    $envExample = Get-Content -LiteralPath $envExamplePath -Raw
+    foreach ($required in @(
+            "postgres:",
+            "image: pgvector/pgvector:pg17",
+            "POSTGRES_USER: mapu",
+            "POSTGRES_PASSWORD: mapu",
+            "POSTGRES_DB: mapu",
+            '"5432:5432"',
+            "redis:",
+            "image: redis:7-alpine",
+            '"6379:6379"'
+        )) {
+        if (-not $compose.Contains($required)) {
+            throw "docker-compose.yml missing expected local infra entry: $required"
+        }
+    }
+    if (-not $envExample.Contains("MAPU_DB_URL=postgresql+asyncpg://mapu:mapu@localhost:5432/mapu")) {
+        throw ".env.example MAPU_DB_URL does not match docker-compose.yml postgres service"
+    }
+}
+
 Invoke-Checked "docker command is available for compose verification" {
     $docker = Get-Command docker -ErrorAction Stop
     & $docker.Source --version | Out-Null

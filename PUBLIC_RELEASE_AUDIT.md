@@ -108,6 +108,9 @@ Prepare this repository for open-source release with claim-backed documentation,
   - 2026-05-15 portability hardening: fresh-install audit no longer hardcodes
     the Windows `py -3.13` launcher; it supports `-Python <path>`, falls back to
     `python`, and handles Windows/POSIX virtualenv script paths.
+  - 2026-05-15 full run at `72a9d0be1af6cedce2e867da892e55542174a173`
+    passed clean git, tracked-size, private-secret, dummy-key, and fresh-clone
+    install/import/CLI checks; it failed only because `docker` was unavailable.
 - Status: PARTIAL
 - Required fix:
   - Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1`

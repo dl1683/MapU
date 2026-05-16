@@ -243,6 +243,8 @@ final release commit.
   `.venv\Scripts\python.exe -m pytest` -> `569 passed, 55 deselected`
 - Follow-up 2026-05-15 non-integration suite at `cafce2773bcebbc9939248aceb40628b6f17704c`:
   `.venv\Scripts\python.exe -m pytest` -> `569 passed, 55 deselected`
+- Follow-up 2026-05-15 non-integration suite after env-example drift coverage:
+  `.venv\Scripts\python.exe -m pytest` -> `570 passed, 55 deselected`
 - Status: PASS
 
 14. Generated and heavyweight artifacts are excluded from public release
@@ -263,7 +265,7 @@ closed by exact-release evidence on the final public commit.
 
 Current handoff state:
 - Latest pushed head checked in this session:
-  `8e9c650d31b4f9ff4eb7246a8db7a99d19cfe384` on `origin/main`.
+  `946af9ac7255c1f6321f6cb811e13b074d6fa874` on `origin/main`.
 - Repository visibility checked before pause: public at
   `https://github.com/dl1683/MapU`.
 - Branch note: local branch is `master` tracking remote default branch

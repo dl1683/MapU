@@ -150,7 +150,7 @@ Verified before the current pause:
 - MCP server module imports and exposes the server/run entrypoints; installed
   stdio startup/tool listing is covered by `tools/mcp_stdio_smoke.py`
 - focused CLI/API/MCP unit surface passes
-- full non-integration suite passed on 2026-05-15 with `569 passed, 55 deselected`
+- full non-integration suite passed on 2026-05-15 with `570 passed, 55 deselected`
 - tracked generated artifacts and heavyweight benchmark outputs are excluded from the public repo
 
 Known limitations before making stronger public claims:

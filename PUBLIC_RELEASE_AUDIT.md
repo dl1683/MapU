@@ -237,6 +237,8 @@ final release commit.
   `.venv\Scripts\python.exe -m pytest` -> `566 passed, 55 deselected`
 - Follow-up 2026-05-15 non-integration suite after MCP stdio smoke helper coverage:
   `.venv\Scripts\python.exe -m pytest` -> `569 passed, 55 deselected`
+- Follow-up 2026-05-15 non-integration suite at `cafce2773bcebbc9939248aceb40628b6f17704c`:
+  `.venv\Scripts\python.exe -m pytest` -> `569 passed, 55 deselected`
 - Status: PASS
 
 14. Generated and heavyweight artifacts are excluded from public release

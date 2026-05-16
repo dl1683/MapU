@@ -270,6 +270,8 @@ Current handoff state:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\start_prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
 - Full benchmark progress command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_full_sweep_progress.ps1`
+  This command can show partial counts from an interrupted run; it is a
+  monitoring/debug aid, not public benchmark evidence.
 - Smoke-only benchmark command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1 -TimeoutMinutes 45`
 - Latest smoke-only evidence:

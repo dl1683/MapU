@@ -81,6 +81,9 @@ Current open issue:
 - Long-running gates can be launched with
   `tools/start_prepublish_benchmark_gate.ps1` and monitored with
   `tools/check_full_sweep_progress.ps1`.
+- `tools/check_full_sweep_progress.ps1` may report partial counts from an old
+  interrupted gate when no current gate is active. Treat it as a progress/debug
+  view only, not public benchmark evidence.
 
 ## Benchmark smoke gate
 

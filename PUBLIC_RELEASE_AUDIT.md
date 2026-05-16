@@ -133,6 +133,7 @@ Current pause point:
 - Repository visibility checked before pause: public at `https://github.com/dl1683/MapU`
 - Branch note: local branch is `master` tracking remote default branch `origin/main`; use `git push origin HEAD:main` unless the local branch is renamed.
 - Benchmark gate state: `logs/benchmarks/prepublish_gate_20260515_184056` failed due an over-strict first idle detector; `logs/benchmarks/prepublish_gate_20260515_180011` failed/aborted after BEAM 100K stopped making progress. Neither is public benchmark evidence.
+- Latest gate state: `logs/benchmarks/prepublish_gate_20260515_190928` confirmed the child-worker idle fix but was manually stopped because the full BEAM 100K lane remained too slow for a practical prepublish run on this host/model stack. It is not public benchmark evidence.
 - Local limitation at pause: Docker was not available in the active shell, so `docker compose config` and full documented infra startup were not reverified from this host.
 - Conservative next benchmark command: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
 - If the machine is otherwise free, `-MaxParallel 6` is reasonable to try while monitoring responsiveness.

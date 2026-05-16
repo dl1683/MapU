@@ -30,6 +30,14 @@ gate directory.
 ## Current prepublish gate status
 
 Latest gate attempts:
+- Directory: `logs/benchmarks/prepublish_gate_20260515_190928`
+  - Code identity: `f4cd4cc1080452a884827b3030c6349834c22f6a`, clean worktree
+  - Command: `tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
+  - Outcome: manually stopped, not public evidence
+  - Diagnosis: the child-worker idle detection fix worked and the gate kept
+    making progress, but the full BEAM 100K lane was too slow for a practical
+    prepublish check on this host/model stack. Partial outputs at stop time:
+    BEAM 100K `40` files, LoCoMo `391` files, LongMemEval `594` files.
 - Directory: `logs/benchmarks/prepublish_gate_20260515_184056`
   - Code identity: `0c79ed0a95d56168f36d0f6c6c3a24c51eb33825`, clean worktree
   - Command: `tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
@@ -63,6 +71,13 @@ Follow-up hardening:
   still active.
 - `tools/prepublish_benchmark_gate.ps1` passes those timeout settings through
   and records them in `code_identity.txt` and `gate_meta.json`.
+
+Current open issue:
+- The full public-evidence gate remains unresolved. The next work should either
+  make the full BEAM/LoCoMo/LongMemEval gate materially faster without changing
+  the benchmark semantics, or split the release process into an explicitly
+  labeled bounded smoke gate plus a separate overnight/full evidence run. Do
+  not publish scores from partial gate outputs.
 
 ## Historical retrieval-proxy lane (diagnostic only)
 

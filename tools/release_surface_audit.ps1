@@ -243,7 +243,7 @@ Invoke-Checked "docker command is available for compose verification" {
 }
 
 if (-not $SkipFreshInstall) {
-    Invoke-Checked "fresh clone installs and exposes public Python/CLI surfaces" {
+    Invoke-Checked "fresh clone installs and exposes public Python/CLI/MCP surfaces" {
         $auditRoot = Join-Path $repoRoot ".tmp\release-surface-audit"
         if (Test-Path -LiteralPath $auditRoot) {
             $resolved = Resolve-Path -LiteralPath $auditRoot

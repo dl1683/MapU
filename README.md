@@ -182,10 +182,11 @@ For a quick harness sanity check that is explicitly not performance evidence:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1
 ```
 
-Latest smoke status: the harness smoke gate passed on 2026-05-15 at
-`logs/benchmarks/benchmark_smoke_gate_20260515_214425`, covering tiny LoCoMo,
-LongMemEval, and BEAM 100K slices. That confirms the wrapper/local-endpoint
-path is functioning, but it is not leaderboard or public performance evidence.
+Latest smoke status: the harness smoke gate passed on clean commit
+`8640342939421b1512a37093bfb51aba489ec31c` at
+`logs/benchmarks/benchmark_smoke_gate_20260515_214642`, covering tiny LoCoMo,
+LongMemEval, and BEAM 100K slices. That confirms the wrapper/local-endpoint path
+is functioning, but it is not leaderboard or public performance evidence.
 
 ## Domain Modeling Reference
 

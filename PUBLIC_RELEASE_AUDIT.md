@@ -103,12 +103,11 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Status: PASS for harness smoke coverage; still not benchmark evidence
 - Latest result:
   - 2026-05-15 run passed:
-    `logs/benchmarks/benchmark_smoke_gate_20260515_214425`
+    `logs/benchmarks/benchmark_smoke_gate_20260515_214642`
   - Metadata recorded `gate_pass=true`, `smoke_only=true`, and
     `public_performance_evidence=false`.
-  - The worktree was dirty because this smoke-gate script and documentation were
-    still being prepared; rerun after committing for a strict clean-code smoke
-    record.
+  - Metadata recorded `git_sha=8640342939421b1512a37093bfb51aba489ec31c`
+    and `worktree=clean`.
 - Required fix:
   - Keep this separate from the full prepublish benchmark gate; smoke output is
     not public performance evidence.

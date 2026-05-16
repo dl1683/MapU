@@ -87,14 +87,13 @@ slices can run end to end. Its metadata sets `smoke_only=true` and
 `public_performance_evidence=false`.
 
 Latest smoke result:
-- `logs/benchmarks/benchmark_smoke_gate_20260515_214425` passed on 2026-05-15.
+- `logs/benchmarks/benchmark_smoke_gate_20260515_214642` passed on 2026-05-15.
 - It covered tiny LoCoMo, LongMemEval, and BEAM 100K slices through the same
   wrapper/local endpoint path.
 - The metadata recorded `gate_pass=true`, `smoke_only=true`, and
   `public_performance_evidence=false`.
-- The worktree was dirty because the smoke-gate script and documentation were
-  still uncommitted; rerun after committing if a strict clean-code smoke record
-  is needed.
+- The metadata recorded `git_sha=8640342939421b1512a37093bfb51aba489ec31c`
+  and `worktree=clean`.
 
 Do not use smoke-gate outputs as public benchmark evidence. Public performance
 claims still require a successful `tools/prepublish_benchmark_gate.ps1` run on

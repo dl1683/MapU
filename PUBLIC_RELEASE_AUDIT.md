@@ -128,6 +128,9 @@ Prepare this repository for open-source release with claim-backed documentation,
 12. Local environment and migrations use documented config
 - Evidence:
   - `.env.example` added
+  - 2026-05-15 `.env.example` expanded to cover database, embeddings,
+    chunking, parser/source policy, extraction, LLM, query synthesis, and
+    server auth/CORS settings from `src/mapu/config.py`
   - `src/mapu/config.py` reads `.env`
   - `src/mapu/db/migrations/env.py` uses `Settings().database.url`
   - Executed `alembic current`; result: `202605070004 (head)`

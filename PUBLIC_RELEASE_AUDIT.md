@@ -6,6 +6,14 @@ Last updated: 2026-05-15
 
 Prepare this repository for open-source release with claim-backed documentation, reproducible performance evidence, and working user-facing surfaces.
 
+## Evidence Model
+
+Audit entries below are tied to the exact commit SHA recorded in each entry.
+Doc-only follow-up commits can make prior evidence historical. Before calling a
+final public release ready, rerun the release surface audit, public GitHub
+install audit, Docker startup check, and full prepublish benchmark gate on the
+final release commit.
+
 ## Checklist: Requirement -> Evidence -> Status
 
 1. Performance claims are backed by fresh, reproducible artifacts

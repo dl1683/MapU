@@ -51,6 +51,8 @@ Prepare this repository for open-source release with claim-backed documentation,
   - CLI reset/delete added: `mapu corpus reset --yes`, `mapu corpus delete <id> --yes`
   - MCP reset/delete added: `reset_all_corpora(confirm=true)`, `delete_corpus(..., confirm=true)`
   - 2026-05-13 lightweight verification: `python -m mapu.cli corpus reset --help`, `python -m mapu.cli corpus delete --help`
+  - 2026-05-15 focused destructive-guard tests cover CLI refusal without
+    `--yes` and MCP refusal without `confirm=true`.
 - Status: PASS
 
 7. MCP integration works end-to-end in real run
@@ -178,6 +180,8 @@ Prepare this repository for open-source release with claim-backed documentation,
   `python -m pytest tests/unit/test_cli.py tests/unit/test_mcp_server.py tests/unit/test_api.py -q` -> pass
 - Follow-up 2026-05-15 non-integration suite at `d167c7977e8ad4792b730fa477d7c405e4626562`:
   `.venv\Scripts\python.exe -m pytest` -> `557 passed, 55 deselected`
+- Follow-up 2026-05-15 non-integration suite after reset/delete guard coverage:
+  `.venv\Scripts\python.exe -m pytest` -> `563 passed, 55 deselected`
 - Status: PASS
 
 14. Generated and heavyweight artifacts are excluded from public release

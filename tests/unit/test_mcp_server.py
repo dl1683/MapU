@@ -222,6 +222,28 @@ class TestListCorporaTool:
         assert result["corpora"] == []
 
 
+class TestDestructiveCorpusToolGuards:
+    @pytest.mark.asyncio
+    async def test_delete_corpus_requires_confirm(self) -> None:
+        from mapu.mcp.server import delete_corpus
+
+        with patch("mapu.mcp.server._get_session_factory") as mock_factory:
+            result = await delete_corpus(corpus_id=str(uuid.uuid4()))
+
+        assert result == {"error": "Refusing delete without confirm=true"}
+        mock_factory.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reset_all_corpora_requires_confirm(self) -> None:
+        from mapu.mcp.server import reset_all_corpora
+
+        with patch("mapu.mcp.server._get_session_factory") as mock_factory:
+            result = await reset_all_corpora()
+
+        assert result == {"error": "Refusing reset without confirm=true"}
+        mock_factory.assert_not_called()
+
+
 class TestIngestContentLimit:
     @pytest.mark.asyncio
     async def test_ingest_rejects_oversized_content(self) -> None:

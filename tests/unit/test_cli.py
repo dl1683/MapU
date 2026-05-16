@@ -112,6 +112,23 @@ class TestCLIParsing:
             main()
             mock_run.assert_called_once()
 
+    def test_corpus_delete_dispatches(self) -> None:
+        cid = "00000000-0000-0000-0000-000000000001"
+        with (
+            patch.object(sys, "argv", ["mapu", "corpus", "delete", cid, "--yes"]),
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
+        ):
+            main()
+            mock_run.assert_called_once()
+
+    def test_corpus_reset_dispatches(self) -> None:
+        with (
+            patch.object(sys, "argv", ["mapu", "corpus", "reset", "--yes"]),
+            patch("mapu.cli.asyncio.run", side_effect=_close_coro) as mock_run,
+        ):
+            main()
+            mock_run.assert_called_once()
+
     def test_entities_dispatches(self) -> None:
         cid = "00000000-0000-0000-0000-000000000001"
         with (
@@ -158,6 +175,43 @@ class TestRunMCP:
 
             _run_mcp()
             mock_run.assert_called_once()
+
+
+class TestCorpusDestructiveGuards:
+    @pytest.mark.asyncio
+    async def test_run_corpus_delete_requires_yes(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from mapu.cli import _run_corpus_delete
+
+        args = argparse.Namespace(
+            corpus_id="00000000-0000-0000-0000-000000000001",
+            yes=False,
+        )
+
+        with (
+            patch("mapu.cli._build_engine") as mock_build_engine,
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            await _run_corpus_delete(args)
+
+        assert exc_info.value.code == 2
+        assert "Refusing delete without --yes flag." in capsys.readouterr().err
+        mock_build_engine.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_run_corpus_reset_requires_yes(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from mapu.cli import _run_corpus_reset
+
+        args = argparse.Namespace(yes=False)
+
+        with (
+            patch("mapu.cli._build_engine") as mock_build_engine,
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            await _run_corpus_reset(args)
+
+        assert exc_info.value.code == 2
+        assert "Refusing reset without --yes flag." in capsys.readouterr().err
+        mock_build_engine.assert_not_called()
 
 
 class TestRunQuery:

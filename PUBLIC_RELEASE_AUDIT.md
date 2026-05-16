@@ -288,5 +288,7 @@ Current handoff state:
   idle fix but was manually stopped because the full BEAM 100K lane remained too
   slow for a practical prepublish run on this host/model stack. It is not public
   benchmark evidence.
+- 2026-05-15 final local process check found no active benchmark/server process
+  left running from this audit session.
 - If the machine is otherwise free, `-MaxParallel 6` is reasonable to try while
   monitoring responsiveness.

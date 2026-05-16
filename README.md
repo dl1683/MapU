@@ -200,6 +200,7 @@ Useful local checks:
 
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\public_github_install_audit.ps1
 python -m mapu.cli --help
 python -m pytest
 python -m build --wheel

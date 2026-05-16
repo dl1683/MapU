@@ -198,6 +198,12 @@ final release commit.
       `mapu corpus --help`, `mapu serve --help`, `mapu mcp --help`
     - installed MCP stdio smoke reports `16 tools` and
       `Required tools present: True`
+  - 2026-05-15 repeatable public GitHub install audit added:
+    `tools/public_github_install_audit.ps1`.
+  - 2026-05-15 script run against public `main` at
+    `2925d689d1536676fddbae7f44c44e643d9ec196` passed clone, venv creation,
+    `pip install`, import/metadata checks, CLI help checks, and installed MCP
+    stdio smoke. The JSON summary recorded `passed=true`.
   - 2026-05-15 release audit can now write `-OutputJson <path>` summaries
     containing commit SHA, pass/fail status, skipped fresh-install state, passed
     checks, and failed checks. This is intended for final release evidence.

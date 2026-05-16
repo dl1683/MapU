@@ -201,7 +201,7 @@ final release commit.
     checkout instead of the local working tree.
   - Latest public-install audit: 2026-05-15 repeatable script run against
     public `main` at
-    `24d28a178717040a18756edd24fbf3b48ddf166a` passed clone, venv creation,
+    `f1378a7cb44fd3bb22633ccc74544c77172c0dea` passed clone, venv creation,
     `pip install`, import/metadata checks, CLI help checks, and installed MCP
     stdio smoke. The JSON summary recorded `passed=true`.
   - Earlier one-off and pre-fix public-install checks also passed, but the
@@ -289,8 +289,8 @@ Current handoff state:
 - Smoke-only benchmark command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1 -TimeoutMinutes 45`
 - Latest smoke-only evidence:
-  `logs/benchmarks/benchmark_smoke_gate_20260515_224959` passed on
-  `4ce5fd76ec946ee7c34a059e0d86f90a76dbf910` with `worktree=clean`,
+  `logs/benchmarks/benchmark_smoke_gate_20260515_225557` passed on
+  `f1378a7cb44fd3bb22633ccc74544c77172c0dea` with `worktree=clean`,
   `smoke_only=true`, and `public_performance_evidence=false`.
 - Prior full prepublish gate state:
   `logs/benchmarks/prepublish_gate_20260515_190928` confirmed the child-worker

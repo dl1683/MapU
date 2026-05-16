@@ -146,7 +146,7 @@ try {
     }
     $checksPassed.Add("installed CLI help checks completed")
 
-    & $pythonExe (Join-Path $repoRoot "tools\mcp_stdio_smoke.py") --command $mapu --arg mcp | Out-Null
+    & $pythonExe (Join-Path $checkout "tools\mcp_stdio_smoke.py") --command $mapu --arg mcp | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "installed MCP stdio smoke failed"
     }

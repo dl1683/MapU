@@ -129,6 +129,10 @@ Prepare this repository for open-source release with claim-backed documentation,
   - 2026-05-15 full run at `72a9d0be1af6cedce2e867da892e55542174a173`
     passed clean git, tracked-size, private-secret, dummy-key, and fresh-clone
     install/import/CLI checks; it failed only because `docker` was unavailable.
+  - 2026-05-15 full run at `31d093e907cd1b4f6ed6b6fe1568b443dad10b11`
+    passed clean git, tracked-size, private-secret, dummy-key, checked-in
+    compose/env consistency, and fresh-clone install/import/CLI checks; it
+    failed only because `docker` was unavailable.
 - Status: PARTIAL
 - Required fix:
   - Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1`

@@ -96,6 +96,12 @@ For a conservative bounded parallel run:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
 ```
 
+For a detached long run that writes launcher logs under `logs/benchmarks/`:
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/start_prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
+```
+
 Successful full-gate evidence includes:
 - benchmarks are run on the current code state
 - code identity is recorded (`git sha`, dirty/clean state)

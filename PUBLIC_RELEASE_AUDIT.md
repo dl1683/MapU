@@ -266,6 +266,8 @@ Current handoff state:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1 -OutputJson .tmp\release_surface_audit_summary.json`
 - Full benchmark blocker command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
+- Detached full benchmark blocker command:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\start_prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
 - Smoke-only benchmark command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1 -TimeoutMinutes 45`
 - Latest smoke-only evidence:

@@ -161,6 +161,11 @@ final release commit.
     local-link, private-secret, dummy-key, checked-in compose/env consistency,
     and fresh-clone install/import/CLI/MCP stdio checks; it failed only because
     `docker` was unavailable.
+  - 2026-05-15 full run at `4adc41a5ecca36201bd2f29b2437a4db7af57631`
+    passed clean git, tracked-size, license/package metadata, tracked Markdown
+    local-link, private-secret, dummy-key, checked-in compose/env consistency,
+    and fresh-clone install/import/CLI/MCP stdio checks; it failed only because
+    `docker` was unavailable.
 - Status: PARTIAL
 - Required fix:
   - Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1`

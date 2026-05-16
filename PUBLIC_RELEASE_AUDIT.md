@@ -59,6 +59,11 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Evidence:
   - Repeated execution of `python tools/mcp_relex_smoke.py` on 2026-05-13
   - Operational path PASS: create corpus -> ingest -> query
+  - 2026-05-15 process-level stdio smoke added:
+    `tools/mcp_stdio_smoke.py` launches `mapu mcp`, initializes an MCP client
+    session, and verifies required tools are present.
+  - The fresh-clone release audit now runs that installed MCP stdio smoke after
+    checking `mapu mcp --help`.
   - Quality hardening applied and verified:
     - modality normalization (`shall/must/may`)
     - obligation-priority rerank
@@ -119,8 +124,9 @@ Prepare this repository for open-source release with claim-backed documentation,
   - `tools/release_surface_audit.ps1` checks clean git state, tracked file size,
     license/package metadata consistency, tracked Markdown local links, obvious
     private secret patterns, dummy-only benchmark API key usage, Docker
-    availability, checked-in compose/env consistency, and fresh-clone
-    install/import/CLI metadata surfaces.
+    availability, checked-in compose/env consistency, fresh-clone
+    install/import/CLI metadata surfaces, and installed MCP stdio startup/tool
+    listing.
   - 2026-05-15 fast run with `-SkipFreshInstall` correctly failed while this
     script was uncommitted and Docker was unavailable; Docker remains the real
     unresolved external-startup blocker on this host.

@@ -179,6 +179,17 @@ Prepare this repository for open-source release with claim-backed documentation,
     - installed imports from site-packages: `mapu`, `mapu.cli`, `mapu.api.app`, `mapu.mcp.server`
     - installed console entry point works: `mapu --help`, `mapu corpus --help`, `mapu serve --help`, `mapu mcp --help`
     - installed metadata emits `License-Expression: AGPL-3.0-only`, `License-File: LICENSE`, and `Requires-Python: <3.15,>=3.12`
+  - 2026-05-15 public GitHub clone audit at
+    `15574f910a22a03a273300c8986e516ed6ecd68c`:
+    - `git clone --depth 1 https://github.com/dl1683/MapU.git`
+    - `py -3.13 -m venv .tmp/public-remote-audit/venv`
+    - `python -m pip install .`
+    - installed imports from site-packages: `mapu`, `mapu.cli`,
+      `mapu.api.app`, `mapu.mcp.server`
+    - installed console entry point works: `mapu --help`,
+      `mapu corpus --help`, `mapu serve --help`, `mapu mcp --help`
+    - installed MCP stdio smoke reports `16 tools` and
+      `Required tools present: True`
 - Status: PASS
 
 12. Local environment and migrations use documented config

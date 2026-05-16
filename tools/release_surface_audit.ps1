@@ -1,7 +1,8 @@
 param(
     [switch]$SkipFreshInstall,
     [switch]$KeepTemp,
-    [string]$Python = ""
+    [string]$Python = "",
+    [string]$OutputJson = ""
 )
 
 Set-StrictMode -Version Latest
@@ -11,6 +12,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location -LiteralPath $repoRoot
 
 $failures = New-Object System.Collections.Generic.List[string]
+$passes = New-Object System.Collections.Generic.List[string]
 
 function Add-Failure {
     param([string]$Message)
@@ -20,6 +22,7 @@ function Add-Failure {
 
 function Add-Pass {
     param([string]$Message)
+    $script:passes.Add($Message)
     Write-Output ("PASS: {0}" -f $Message)
 }
 
@@ -69,7 +72,8 @@ function Get-PythonCommand {
 
 Write-Output "MapU release surface audit"
 Write-Output ("repo: {0}" -f $repoRoot)
-Write-Output ("sha: {0}" -f (& git rev-parse HEAD))
+$auditSha = (& git rev-parse HEAD)
+Write-Output ("sha: {0}" -f $auditSha)
 
 Invoke-Checked "git worktree is clean" {
     $dirty = & git status --porcelain
@@ -315,9 +319,32 @@ else {
 }
 
 if ($failures.Count -gt 0) {
+    if (-not [string]::IsNullOrWhiteSpace($OutputJson)) {
+        $summary = [ordered]@{
+            repo = $repoRoot
+            sha = $auditSha
+            passed = $false
+            skip_fresh_install = [bool]$SkipFreshInstall
+            checks_passed = @($passes)
+            checks_failed = @($failures)
+        }
+        ($summary | ConvertTo-Json -Depth 5) | Set-Content -LiteralPath $OutputJson -Encoding UTF8
+    }
     Write-Output ""
     Write-Output ("Release surface audit failed with {0} issue(s)." -f $failures.Count)
     exit 1
+}
+
+if (-not [string]::IsNullOrWhiteSpace($OutputJson)) {
+    $summary = [ordered]@{
+        repo = $repoRoot
+        sha = $auditSha
+        passed = $true
+        skip_fresh_install = [bool]$SkipFreshInstall
+        checks_passed = @($passes)
+        checks_failed = @()
+    }
+    ($summary | ConvertTo-Json -Depth 5) | Set-Content -LiteralPath $OutputJson -Encoding UTF8
 }
 
 Write-Output ""

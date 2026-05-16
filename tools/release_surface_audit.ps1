@@ -92,6 +92,25 @@ Invoke-Checked "tracked files are under 1 MiB" {
     }
 }
 
+Invoke-Checked "license file matches package metadata" {
+    $licensePath = Join-Path $repoRoot "LICENSE"
+    $projectPath = Join-Path $repoRoot "pyproject.toml"
+    if (-not (Test-Path -LiteralPath $licensePath)) {
+        throw "missing LICENSE file"
+    }
+    if (-not (Test-Path -LiteralPath $projectPath)) {
+        throw "missing pyproject.toml"
+    }
+    $license = Get-Content -LiteralPath $licensePath -Raw
+    $project = Get-Content -LiteralPath $projectPath -Raw
+    if (-not $project.Contains('license = "AGPL-3.0-only"')) {
+        throw "pyproject.toml does not declare AGPL-3.0-only"
+    }
+    if (-not $license.Contains("SPDX-License-Identifier: AGPL-3.0-only")) {
+        throw "LICENSE file does not contain the AGPL-3.0-only SPDX identifier"
+    }
+}
+
 Invoke-Checked "tracked files contain no obvious private secret material" {
     $patterns = @(
         "sk-[A-Za-z0-9_-]{20,}",

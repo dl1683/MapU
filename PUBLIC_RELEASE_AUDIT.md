@@ -205,6 +205,8 @@ Prepare this repository for open-source release with claim-backed documentation,
   `.venv\Scripts\python.exe -m pytest` -> `563 passed, 55 deselected`
 - Follow-up 2026-05-15 non-integration suite after REST request-level coverage:
   `.venv\Scripts\python.exe -m pytest` -> `566 passed, 55 deselected`
+- Follow-up 2026-05-15 non-integration suite after MCP stdio smoke helper coverage:
+  `.venv\Scripts\python.exe -m pytest` -> `569 passed, 55 deselected`
 - Status: PASS
 
 14. Generated and heavyweight artifacts are excluded from public release

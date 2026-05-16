@@ -156,6 +156,7 @@ See [PRIORITIES.md](PRIORITIES.md) for the full two-year validation lane.
 Benchmark artifacts and status are tracked in:
 - [GLOBAL_MEMORY_BENCHMARK_STATUS.md](GLOBAL_MEMORY_BENCHMARK_STATUS.md)
 - [GLOBAL_MEMORY_BENCHMARK_EXECUTION_PLAN.md](GLOBAL_MEMORY_BENCHMARK_EXECUTION_PLAN.md)
+- `tools/benchmark_smoke_gate.ps1`
 - `tools/prepublish_benchmark_gate.ps1`
 - `tools/report_full_sweep_leaderboard.py`
 
@@ -174,6 +175,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_g
 ```
 
 On an otherwise free machine, a higher setting such as `-MaxParallel 6` may be reasonable while monitoring host responsiveness. The parallel gate treats null exit codes, lane wall-clock timeouts, and idle lanes as failures instead of letting a stuck benchmark burn compute indefinitely.
+
+For a quick harness sanity check that is explicitly not performance evidence:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1
+```
+
+Latest smoke status: the harness smoke gate passed on 2026-05-15 at
+`logs/benchmarks/benchmark_smoke_gate_20260515_214425`, covering tiny LoCoMo,
+LongMemEval, and BEAM 100K slices. That confirms the wrapper/local-endpoint
+path is functioning, but it is not leaderboard or public performance evidence.
 
 ## Domain Modeling Reference
 

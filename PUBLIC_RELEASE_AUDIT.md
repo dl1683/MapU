@@ -94,6 +94,25 @@ Prepare this repository for open-source release with claim-backed documentation,
     `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
   - Higher settings such as `-MaxParallel 6` are valid when the host is otherwise free; avoid combining them with other heavy local processes.
 
+10b. Benchmark harness has bounded smoke coverage without claim ambiguity
+- Evidence:
+  - `tools/benchmark_smoke_gate.ps1` runs tiny LoCoMo, LongMemEval, and BEAM
+    slices through the same MapU benchmark wrapper and local model endpoint.
+  - The smoke gate writes metadata with `smoke_only=true` and
+    `public_performance_evidence=false`.
+- Status: PASS for harness smoke coverage; still not benchmark evidence
+- Latest result:
+  - 2026-05-15 run passed:
+    `logs/benchmarks/benchmark_smoke_gate_20260515_214425`
+  - Metadata recorded `gate_pass=true`, `smoke_only=true`, and
+    `public_performance_evidence=false`.
+  - The worktree was dirty because this smoke-gate script and documentation were
+    still being prepared; rerun after committing for a strict clean-code smoke
+    record.
+- Required fix:
+  - Keep this separate from the full prepublish benchmark gate; smoke output is
+    not public performance evidence.
+
 10a. Cheap release-surface audit is repeatable
 - Evidence:
   - `tools/release_surface_audit.ps1` checks clean git state, tracked file size,

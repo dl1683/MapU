@@ -102,6 +102,9 @@ Prepare this repository for open-source release with claim-backed documentation,
   - 2026-05-15 fast run with `-SkipFreshInstall` correctly failed while this
     script was uncommitted and Docker was unavailable; Docker remains the real
     unresolved external-startup blocker on this host.
+  - 2026-05-15 clean fast run at `abc29222fb948e62bcf9f19b690847692a8df92c`
+    passed clean git, tracked-size, private-secret, and dummy-key checks, then
+    failed only because `docker` was not available in the active shell.
 - Status: PARTIAL
 - Required fix:
   - Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1`

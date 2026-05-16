@@ -117,8 +117,10 @@ Prepare this repository for open-source release with claim-backed documentation,
 10a. Cheap release-surface audit is repeatable
 - Evidence:
   - `tools/release_surface_audit.ps1` checks clean git state, tracked file size,
-    obvious private secret patterns, dummy-only benchmark API key usage, Docker
-    availability, and fresh-clone install/import/CLI metadata surfaces.
+    license/package metadata consistency, tracked Markdown local links, obvious
+    private secret patterns, dummy-only benchmark API key usage, Docker
+    availability, checked-in compose/env consistency, and fresh-clone
+    install/import/CLI metadata surfaces.
   - 2026-05-15 fast run with `-SkipFreshInstall` correctly failed while this
     script was uncommitted and Docker was unavailable; Docker remains the real
     unresolved external-startup blocker on this host.

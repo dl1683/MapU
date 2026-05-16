@@ -141,17 +141,19 @@ See [INTEGRATIONS.md](INTEGRATIONS.md) for the agent integration and reset workf
 
 This repository is public and usable for exploration, integration work, and development. It is not currently making a public SOTA or leaderboard performance claim.
 
-Verified before the current pause:
-- package wheel build completed successfully
-- editable dev install metadata resolved
-- CLI help and corpus reset/delete help load
-- REST API app import works, and `/health` plus API-key guard behavior are
-  covered by request-level tests
-- MCP server module imports and exposes the server/run entrypoints; installed
-  stdio startup/tool listing is covered by `tools/mcp_stdio_smoke.py`
-- focused CLI/API/MCP unit surface passes
-- full non-integration suite passed on 2026-05-15 with `570 passed, 55 deselected`
-- tracked generated artifacts and heavyweight benchmark outputs are excluded from the public repo
+Current verification commands:
+- `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1`
+- `powershell -NoProfile -ExecutionPolicy Bypass -File tools\public_github_install_audit.ps1`
+- `python -m pytest`
+- `python -m build --wheel`
+- `powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1`
+
+What those checks cover:
+- package wheel build and install metadata
+- CLI, REST, MCP, and reset/delete surfaces
+- request-level `/health` and API-key guard behavior
+- installed MCP stdio startup/tool listing via `tools/mcp_stdio_smoke.py`
+- tracked-file artifact hygiene, local-link checks, license metadata, and secret-pattern scans
 
 Known limitations before making stronger public claims:
 - the full exact-code prepublish benchmark gate has not completed successfully

@@ -185,8 +185,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.p
 ```
 
 Latest smoke status: the harness smoke gate passed on clean commit
-`8640342939421b1512a37093bfb51aba489ec31c` at
-`logs/benchmarks/benchmark_smoke_gate_20260515_214642`, covering tiny LoCoMo,
+`f22bb3d41631daebadfe8ac7b36f96c9e05a86c6` at
+`logs/benchmarks/benchmark_smoke_gate_20260515_221231`, covering tiny LoCoMo,
 LongMemEval, and BEAM 100K slices. That confirms the wrapper/local-endpoint path
 is functioning, but it is not leaderboard or public performance evidence.
 

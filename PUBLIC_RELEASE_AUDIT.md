@@ -110,10 +110,10 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Status: PASS for harness smoke coverage; still not benchmark evidence
 - Latest result:
   - 2026-05-15 run passed:
-    `logs/benchmarks/benchmark_smoke_gate_20260515_214642`
+    `logs/benchmarks/benchmark_smoke_gate_20260515_221231`
   - Metadata recorded `gate_pass=true`, `smoke_only=true`, and
     `public_performance_evidence=false`.
-  - Metadata recorded `git_sha=8640342939421b1512a37093bfb51aba489ec31c`
+  - Metadata recorded `git_sha=f22bb3d41631daebadfe8ac7b36f96c9e05a86c6`
     and `worktree=clean`.
 - Required fix:
   - Keep this separate from the full prepublish benchmark gate; smoke output is

@@ -87,12 +87,12 @@ slices can run end to end. Its metadata sets `smoke_only=true` and
 `public_performance_evidence=false`.
 
 Latest smoke result:
-- `logs/benchmarks/benchmark_smoke_gate_20260515_214642` passed on 2026-05-15.
+- `logs/benchmarks/benchmark_smoke_gate_20260515_221231` passed on 2026-05-15.
 - It covered tiny LoCoMo, LongMemEval, and BEAM 100K slices through the same
   wrapper/local endpoint path.
 - The metadata recorded `gate_pass=true`, `smoke_only=true`, and
   `public_performance_evidence=false`.
-- The metadata recorded `git_sha=8640342939421b1512a37093bfb51aba489ec31c`
+- The metadata recorded `git_sha=f22bb3d41631daebadfe8ac7b36f96c9e05a86c6`
   and `worktree=clean`.
 
 Do not use smoke-gate outputs as public benchmark evidence. Public performance

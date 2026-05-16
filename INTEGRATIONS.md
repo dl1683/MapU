@@ -82,12 +82,12 @@ Behavior:
 Default interval is 30 minutes. Override with:
 - `MAPU_CONTINUOUS_BENCH_INTERVAL_MINUTES=<n>`
 
-## 7) Prepublish benchmark gate (required for public claims)
+## 7) Benchmark gates and public claims
 
-Run immediately before public release or benchmark claim updates:
+Run this full gate immediately before public release or benchmark claim updates:
 
 ```bash
-powershell -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1
 ```
 
 For a conservative bounded parallel run:
@@ -96,12 +96,23 @@ For a conservative bounded parallel run:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
 ```
 
-Gate guarantees:
+Successful full-gate evidence includes:
 - benchmarks are run on the current code state
 - code identity is recorded (`git sha`, dirty/clean state)
 - leaderboard snapshot is generated in the same run
 - pass/fail metadata is written to a timestamped gate folder under `logs/benchmarks/`
 - null exit codes, lane wall-clock timeouts, and idle lanes fail the gate
+
+For a fast harness sanity check that is explicitly not public performance
+evidence:
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/benchmark_smoke_gate.ps1
+```
+
+The smoke gate runs tiny LoCoMo, LongMemEval, and BEAM slices through the same
+wrapper/local-endpoint path and records `smoke_only=true` plus
+`public_performance_evidence=false`.
 
 Operational note:
 - `-MaxParallel 6` can be useful on a free machine, but on 2026-05-13 it made the host difficult to control while other heavy processes were running. Match `MaxParallel` to current host load and monitor responsiveness.

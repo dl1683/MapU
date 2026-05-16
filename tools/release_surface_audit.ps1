@@ -1,6 +1,7 @@
 param(
     [switch]$SkipFreshInstall,
-    [switch]$KeepTemp
+    [switch]$KeepTemp,
+    [string]$Python = ""
 )
 
 Set-StrictMode -Version Latest
@@ -34,6 +35,36 @@ function Invoke-Checked {
     catch {
         Add-Failure ("{0}: {1}" -f $Description, $_.Exception.Message)
     }
+}
+
+function Get-PythonCommand {
+    if (-not [string]::IsNullOrWhiteSpace($Python)) {
+        return @{
+            Executable = $Python
+            Args = @()
+            Label = $Python
+        }
+    }
+
+    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyLauncher) {
+        return @{
+            Executable = $pyLauncher.Source
+            Args = @("-3.13")
+            Label = "py -3.13"
+        }
+    }
+
+    $pythonExe = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonExe) {
+        return @{
+            Executable = $pythonExe.Source
+            Args = @()
+            Label = "python"
+        }
+    }
+
+    throw "no Python launcher found; install Python 3.12-3.14 or pass -Python <path>"
 }
 
 Write-Output "MapU release surface audit"
@@ -142,14 +173,29 @@ if (-not $SkipFreshInstall) {
             throw "git clone failed"
         }
 
+        $pythonCommand = Get-PythonCommand
+        Write-Output ("Using Python launcher: {0}" -f $pythonCommand.Label)
+
         $venv = Join-Path $auditRoot "venv"
-        & py -3.13 -m venv $venv
+        & $pythonCommand.Executable @($pythonCommand.Args) -m venv $venv
         if ($LASTEXITCODE -ne 0) {
-            throw "py -3.13 venv creation failed"
+            throw "venv creation failed with $($pythonCommand.Label)"
         }
 
         $python = Join-Path $venv "Scripts\python.exe"
+        if (-not (Test-Path -LiteralPath $python)) {
+            $python = Join-Path $venv "bin/python"
+        }
+        if (-not (Test-Path -LiteralPath $python)) {
+            throw "venv Python executable not found"
+        }
         $mapu = Join-Path $venv "Scripts\mapu.exe"
+        if (-not (Test-Path -LiteralPath $mapu)) {
+            $mapu = Join-Path $venv "bin/mapu"
+        }
+        if (-not (Test-Path -LiteralPath $mapu)) {
+            throw "installed mapu console script not found"
+        }
         & $python -m pip install $checkout | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw "pip install failed"

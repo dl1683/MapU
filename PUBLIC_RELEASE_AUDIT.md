@@ -105,6 +105,9 @@ Prepare this repository for open-source release with claim-backed documentation,
   - 2026-05-15 clean fast run at `abc29222fb948e62bcf9f19b690847692a8df92c`
     passed clean git, tracked-size, private-secret, and dummy-key checks, then
     failed only because `docker` was not available in the active shell.
+  - 2026-05-15 portability hardening: fresh-install audit no longer hardcodes
+    the Windows `py -3.13` launcher; it supports `-Python <path>`, falls back to
+    `python`, and handles Windows/POSIX virtualenv script paths.
 - Status: PARTIAL
 - Required fix:
   - Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1`

@@ -282,13 +282,15 @@ Current handoff state:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\start_prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
 - Full benchmark progress command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_full_sweep_progress.ps1`
-  This command can show partial counts from an interrupted run; it is a
-  monitoring/debug aid, not public benchmark evidence.
+  This command reports code identity, gate metadata status, active/dead worker
+  state, completion counts, and a verdict. Use `-Json` for machine-readable
+  status. Any stale, incomplete, or running verdict is a monitoring/debug aid,
+  not public benchmark evidence.
 - Smoke-only benchmark command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1 -TimeoutMinutes 45`
 - Latest smoke-only evidence:
-  `logs/benchmarks/benchmark_smoke_gate_20260515_221231` passed on
-  `f22bb3d41631daebadfe8ac7b36f96c9e05a86c6` with `worktree=clean`,
+  `logs/benchmarks/benchmark_smoke_gate_20260515_224959` passed on
+  `4ce5fd76ec946ee7c34a059e0d86f90a76dbf910` with `worktree=clean`,
   `smoke_only=true`, and `public_performance_evidence=false`.
 - Prior full prepublish gate state:
   `logs/benchmarks/prepublish_gate_20260515_190928` confirmed the child-worker

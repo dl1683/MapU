@@ -108,6 +108,17 @@ Monitor the latest full/prepublish sweep:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/check_full_sweep_progress.ps1
 ```
 
+For machine-readable status:
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/check_full_sweep_progress.ps1 -Json
+```
+
+The progress checker reports code identity, gate metadata status, recorded
+worker PIDs, active/dead worker state, result counts, and an explicit verdict.
+Partial counts from a stale or interrupted gate are not public performance
+evidence.
+
 Successful full-gate evidence includes:
 - benchmarks are run on the current code state
 - code identity is recorded (`git sha`, dirty/clean state)

@@ -81,9 +81,11 @@ Current open issue:
 - Long-running gates can be launched with
   `tools/start_prepublish_benchmark_gate.ps1` and monitored with
   `tools/check_full_sweep_progress.ps1`.
-- `tools/check_full_sweep_progress.ps1` may report partial counts from an old
-  interrupted gate when no current gate is active. Treat it as a progress/debug
-  view only, not public benchmark evidence.
+- `tools/check_full_sweep_progress.ps1` now reports the gate code identity,
+  readable gate metadata status, recorded worker PIDs, active/dead worker
+  state, completion counts, and an explicit verdict. Use `-Json` for machine
+  readable status. Treat any verdict other than complete passing full-gate
+  evidence as a monitoring/debug signal, not public benchmark evidence.
 
 ## Benchmark smoke gate
 
@@ -93,12 +95,12 @@ slices can run end to end. Its metadata sets `smoke_only=true` and
 `public_performance_evidence=false`.
 
 Latest smoke result:
-- `logs/benchmarks/benchmark_smoke_gate_20260515_221231` passed on 2026-05-15.
+- `logs/benchmarks/benchmark_smoke_gate_20260515_224959` passed on 2026-05-15.
 - It covered tiny LoCoMo, LongMemEval, and BEAM 100K slices through the same
   wrapper/local endpoint path.
 - The metadata recorded `gate_pass=true`, `smoke_only=true`, and
   `public_performance_evidence=false`.
-- The metadata recorded `git_sha=f22bb3d41631daebadfe8ac7b36f96c9e05a86c6`
+- The metadata recorded `git_sha=4ce5fd76ec946ee7c34a059e0d86f90a76dbf910`
   and `worktree=clean`.
 
 Do not use smoke-gate outputs as public benchmark evidence. Public performance

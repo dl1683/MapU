@@ -94,6 +94,20 @@ Prepare this repository for open-source release with claim-backed documentation,
     `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
   - Higher settings such as `-MaxParallel 6` are valid when the host is otherwise free; avoid combining them with other heavy local processes.
 
+10a. Cheap release-surface audit is repeatable
+- Evidence:
+  - `tools/release_surface_audit.ps1` checks clean git state, tracked file size,
+    obvious private secret patterns, dummy-only benchmark API key usage, Docker
+    availability, and fresh-clone install/import/CLI metadata surfaces.
+  - 2026-05-15 fast run with `-SkipFreshInstall` correctly failed while this
+    script was uncommitted and Docker was unavailable; Docker remains the real
+    unresolved external-startup blocker on this host.
+- Status: PARTIAL
+- Required fix:
+  - Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1`
+    successfully on a host with Docker available before calling the repo
+    release-ready.
+
 11. Clean package build works
 - Evidence:
   - Executed `python -m build --wheel`

@@ -184,6 +184,7 @@ See [DOMAINS.md](DOMAINS.md) for domain-oriented modeling references.
 Useful local checks:
 
 ```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1
 python -m mapu.cli --help
 python -m pytest tests/unit/test_cli.py tests/unit/test_mcp_server.py tests/unit/test_api.py -q
 python -m build --wheel

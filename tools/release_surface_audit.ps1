@@ -1,0 +1,185 @@
+param(
+    [switch]$SkipFreshInstall,
+    [switch]$KeepTemp
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+Set-Location -LiteralPath $repoRoot
+
+$failures = New-Object System.Collections.Generic.List[string]
+
+function Add-Failure {
+    param([string]$Message)
+    $script:failures.Add($Message)
+    Write-Output ("FAIL: {0}" -f $Message)
+}
+
+function Add-Pass {
+    param([string]$Message)
+    Write-Output ("PASS: {0}" -f $Message)
+}
+
+function Invoke-Checked {
+    param(
+        [string]$Description,
+        [scriptblock]$Script
+    )
+    try {
+        & $Script
+        Add-Pass $Description
+    }
+    catch {
+        Add-Failure ("{0}: {1}" -f $Description, $_.Exception.Message)
+    }
+}
+
+Write-Output "MapU release surface audit"
+Write-Output ("repo: {0}" -f $repoRoot)
+Write-Output ("sha: {0}" -f (& git rev-parse HEAD))
+
+Invoke-Checked "git worktree is clean" {
+    $dirty = & git status --porcelain
+    if ($dirty) {
+        throw "worktree has uncommitted changes"
+    }
+}
+
+Invoke-Checked "tracked files are under 1 MiB" {
+    $large = @(
+        git ls-files | ForEach-Object {
+            $item = Get-Item -LiteralPath $_ -ErrorAction SilentlyContinue
+            if ($item -and $item.Length -gt 1048576) {
+                "{0} ({1:N2} MiB)" -f $_, ($item.Length / 1MB)
+            }
+        }
+    )
+    if ($large.Count -gt 0) {
+        throw ($large -join "; ")
+    }
+}
+
+Invoke-Checked "tracked files contain no obvious private secret material" {
+    $patterns = @(
+        "sk-[A-Za-z0-9_-]{20,}",
+        "BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY"
+    )
+    $hits = New-Object System.Collections.Generic.List[string]
+    foreach ($pattern in $patterns) {
+        $result = & rg -n --hidden `
+            --glob "!.git" `
+            --glob "!logs/**" `
+            --glob "!results/**" `
+            --glob "!datasets/**" `
+            --glob "!.tmp/**" `
+            --glob "!.venv/**" `
+            --glob "!.claude/**" `
+            --glob "!.process/**" `
+            $pattern .
+        if ($LASTEXITCODE -eq 0) {
+            foreach ($line in $result) {
+                $hits.Add($line)
+            }
+        }
+        elseif ($LASTEXITCODE -ne 1) {
+            throw "rg failed for pattern: $pattern"
+        }
+    }
+    if ($hits.Count -gt 0) {
+        throw ($hits -join "; ")
+    }
+}
+
+Invoke-Checked "dummy benchmark API keys are explicitly dummy only" {
+    $result = & rg -n --hidden `
+        --glob "!.git" `
+        --glob "!logs/**" `
+        --glob "!results/**" `
+        --glob "!datasets/**" `
+        --glob "!.tmp/**" `
+        --glob "!.venv/**" `
+        --glob "!.claude/**" `
+        --glob "!.process/**" `
+        "OPENAI_API_KEY|ANTHROPIC_API_KEY" .
+    if ($LASTEXITCODE -eq 1) {
+        return
+    }
+    if ($LASTEXITCODE -ne 0) {
+        throw "rg failed while scanning API key names"
+    }
+    foreach ($line in $result) {
+        if ($line -notmatch "dummy|os\.getenv|GLOBAL_MEMORY_BENCHMARK_STATUS|release_surface_audit\.ps1") {
+            throw $line
+        }
+    }
+}
+
+Invoke-Checked "docker command is available for compose verification" {
+    $docker = Get-Command docker -ErrorAction Stop
+    & $docker.Source --version | Out-Null
+    & $docker.Source compose version | Out-Null
+}
+
+if (-not $SkipFreshInstall) {
+    Invoke-Checked "fresh clone installs and exposes public Python/CLI surfaces" {
+        $auditRoot = Join-Path $repoRoot ".tmp\release-surface-audit"
+        if (Test-Path -LiteralPath $auditRoot) {
+            $resolved = Resolve-Path -LiteralPath $auditRoot
+            $tmpRoot = (Resolve-Path -LiteralPath (Join-Path $repoRoot ".tmp")).Path
+            if (-not $resolved.Path.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "refusing to delete outside .tmp: $($resolved.Path)"
+            }
+            Remove-Item -LiteralPath $resolved.Path -Recurse -Force
+        }
+        New-Item -ItemType Directory -Force -Path $auditRoot | Out-Null
+
+        $checkout = Join-Path $auditRoot "checkout"
+        $repoUri = "file:///" + ($repoRoot -replace "\\", "/")
+        & git clone --depth 1 $repoUri $checkout | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "git clone failed"
+        }
+
+        $venv = Join-Path $auditRoot "venv"
+        & py -3.13 -m venv $venv
+        if ($LASTEXITCODE -ne 0) {
+            throw "py -3.13 venv creation failed"
+        }
+
+        $python = Join-Path $venv "Scripts\python.exe"
+        $mapu = Join-Path $venv "Scripts\mapu.exe"
+        & $python -m pip install $checkout | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "pip install failed"
+        }
+        & $python -c "import mapu, mapu.cli, mapu.api.app, mapu.mcp.server; from importlib.metadata import metadata; m=metadata('mapu'); assert m['License-Expression']=='AGPL-3.0-only'; assert m['Requires-Python']=='<3.15,>=3.12'; print(mapu.__file__)"
+        if ($LASTEXITCODE -ne 0) {
+            throw "installed import/metadata check failed"
+        }
+        & $mapu --help | Out-Null
+        & $mapu corpus --help | Out-Null
+        & $mapu serve --help | Out-Null
+        & $mapu mcp --help | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "installed CLI help check failed"
+        }
+
+        if (-not $KeepTemp) {
+            Remove-Item -LiteralPath $auditRoot -Recurse -Force
+        }
+    }
+}
+else {
+    Write-Output "SKIP: fresh clone install audit"
+}
+
+if ($failures.Count -gt 0) {
+    Write-Output ""
+    Write-Output ("Release surface audit failed with {0} issue(s)." -f $failures.Count)
+    exit 1
+}
+
+Write-Output ""
+Write-Output "Release surface audit passed."

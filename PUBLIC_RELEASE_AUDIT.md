@@ -187,33 +187,17 @@ final release commit.
     - installed imports from site-packages: `mapu`, `mapu.cli`, `mapu.api.app`, `mapu.mcp.server`
     - installed console entry point works: `mapu --help`, `mapu corpus --help`, `mapu serve --help`, `mapu mcp --help`
     - installed metadata emits `License-Expression: AGPL-3.0-only`, `License-File: LICENSE`, and `Requires-Python: <3.15,>=3.12`
-  - 2026-05-15 public GitHub clone audit at current remote head
-    `c243d7c4df8373bbb17b0984582af829a1e1b939`:
-    - `git clone --depth 1 https://github.com/dl1683/MapU.git`
-    - `py -3.13 -m venv .tmp/public-remote-audit/venv`
-    - `python -m pip install .`
-    - installed imports from site-packages: `mapu`, `mapu.cli`,
-      `mapu.api.app`, `mapu.mcp.server`
-    - installed console entry point works: `mapu --help`,
-      `mapu corpus --help`, `mapu serve --help`, `mapu mcp --help`
-    - installed MCP stdio smoke reports `16 tools` and
-      `Required tools present: True`
   - 2026-05-15 repeatable public GitHub install audit added:
     `tools/public_github_install_audit.ps1`.
-  - 2026-05-15 script run against public `main` at
-    `2925d689d1536676fddbae7f44c44e643d9ec196` passed clone, venv creation,
-    `pip install`, import/metadata checks, CLI help checks, and installed MCP
-    stdio smoke. The JSON summary recorded `passed=true`.
   - 2026-05-15 script fix: MCP stdio smoke now runs from the cloned public
     checkout instead of the local working tree.
-  - 2026-05-15 corrected script run against public `main` at
-    `78478dbf60da500ec9b8b430d81c78be87d5833c` passed clone, venv creation,
-    `pip install`, import/metadata checks, CLI help checks, and installed MCP
-    stdio smoke. The JSON summary recorded `passed=true`.
-  - 2026-05-15 repeatable script run against public `main` at
+  - Latest public-install audit: 2026-05-15 repeatable script run against
+    public `main` at
     `b52859d6cd5e73197aeb35184d79ebe5bb4e9aca` passed clone, venv creation,
     `pip install`, import/metadata checks, CLI help checks, and installed MCP
     stdio smoke. The JSON summary recorded `passed=true`.
+  - Earlier one-off and pre-fix public-install checks also passed, but the
+    repeatable script above is the relevant path for final release evidence.
   - 2026-05-15 release audit can now write `-OutputJson <path>` summaries
     containing commit SHA, pass/fail status, skipped fresh-install state, passed
     checks, and failed checks. This is intended for final release evidence.

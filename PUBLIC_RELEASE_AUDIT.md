@@ -196,7 +196,7 @@ final release commit.
     checkout instead of the local working tree.
   - Latest public-install audit: 2026-05-15 repeatable script run against
     public `main` at
-    `b52859d6cd5e73197aeb35184d79ebe5bb4e9aca` passed clone, venv creation,
+    `24d28a178717040a18756edd24fbf3b48ddf166a` passed clone, venv creation,
     `pip install`, import/metadata checks, CLI help checks, and installed MCP
     stdio smoke. The JSON summary recorded `passed=true`.
   - Earlier one-off and pre-fix public-install checks also passed, but the

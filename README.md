@@ -47,18 +47,24 @@ Note: A GitHub Action surface is not currently shipped in this repository and sh
 ## Quick Start
 
 Prerequisites:
-- Python `3.12+`
+- Python `3.12` through `3.14`
 - PostgreSQL `15+`
 - Docker (recommended for local infra)
 
 ```bash
 git clone https://github.com/dl1683/MapU.git
 cd MapU
-pip install -e ".[dev]"
+pip install -e .
 docker compose up -d
 cp .env.example .env  # PowerShell: Copy-Item .env.example .env
 alembic upgrade head
 mapu serve --host 127.0.0.1 --port 8000
+```
+
+For contributor checks and local test work, install the development extras:
+
+```bash
+pip install -e ".[dev]"
 ```
 
 MCP server:

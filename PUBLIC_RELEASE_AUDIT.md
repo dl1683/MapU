@@ -30,6 +30,8 @@ Prepare this repository for open-source release with claim-backed documentation,
 - Evidence:
   - `README.md` rewritten with explicit shipped surfaces (`mapu mcp`, `mapu serve`, CLI, package)
   - README explicitly states GitHub Action is not shipped in this repository
+  - 2026-05-15 quickstart changed from development extras to runtime install:
+    `pip install -e .`; `.[dev]` is documented only for contributor checks.
 - Status: PASS
 
 4. Core docs are encoding-clean and publication-ready

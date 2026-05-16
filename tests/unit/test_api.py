@@ -239,3 +239,35 @@ class TestAppConfiguration:
             "https://two.example",
         ]
         assert "x-api-key" in app.cors_config.allow_headers
+
+    def test_health_endpoint_handles_http_request(self) -> None:
+        from litestar.testing import TestClient
+
+        app = create_app(Settings())
+
+        with TestClient(app=app) as client:
+            response = client.get("/health")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "version": "0.1.0"}
+
+    def test_api_key_guard_rejects_missing_key_on_http_request(self) -> None:
+        from litestar.testing import TestClient
+
+        app = create_app(Settings(server=ServerSettings(api_key="secret-key")))
+
+        with TestClient(app=app) as client:
+            response = client.get("/health")
+
+        assert response.status_code == 401
+
+    def test_api_key_guard_accepts_matching_key_on_http_request(self) -> None:
+        from litestar.testing import TestClient
+
+        app = create_app(Settings(server=ServerSettings(api_key="secret-key")))
+
+        with TestClient(app=app) as client:
+            response = client.get("/health", headers={"x-api-key": "secret-key"})
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "version": "0.1.0"}

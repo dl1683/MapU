@@ -128,10 +128,11 @@ Verified before the current pause:
 - package wheel build completed successfully
 - editable dev install metadata resolved
 - CLI help and corpus reset/delete help load
-- REST API app import works
+- REST API app import works, and `/health` plus API-key guard behavior are
+  covered by request-level tests
 - MCP server module imports and exposes the server/run entrypoints
 - focused CLI/API/MCP unit surface passes
-- full non-integration suite passed on 2026-05-15 with `557 passed, 55 deselected`
+- full non-integration suite passed on 2026-05-15 with `566 passed, 55 deselected`
 - tracked generated artifacts and heavyweight benchmark outputs are excluded from the public repo
 
 Known limitations before making stronger public claims:

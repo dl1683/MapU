@@ -320,6 +320,10 @@ BENCHMARK GATE: PASS` and records the verifier output path in `gate_meta.json`
 as `benchmark_evidence_verifier`. Non-claim paths keep
 `public_performance_evidence=false`; only a verified full gate sets
 `public_performance_evidence=true` and `benchmark_evidence_verified=true`.
+The gate writes `gate_meta.json` before launching expensive lanes with
+`status=running`, so interrupted runs remain auditable and explicitly unfit for
+public claims. Later states include `sweep_complete_unverified`, `passed`,
+`failed`, and `preflight_only`.
 
 The gate preflights the local OpenAI-compatible model endpoint at
 `http://localhost:11434/v1/models` and the MapU database configured by

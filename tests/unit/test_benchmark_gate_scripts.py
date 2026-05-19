@@ -371,8 +371,14 @@ def test_prepublish_gate_records_lane_artifact_directory() -> None:
     script = _read("tools/prepublish_benchmark_gate.ps1")
 
     assert "lane_artifact_dir" in script
+    assert "function New-GateMetadata" in script
     assert "code_identity = $codeIdentity" in script
     assert "benchmark_evidence_verifier = $benchmarkVerifierOut" in script
+    assert '-Status "running"' in script
+    assert "benchmark lanes are running; this is not public performance evidence" in script
+    assert '-Status "sweep_complete_unverified"' in script
+    assert '$meta["status"] = "passed"' in script
+    assert '-Status "failed"' in script
     assert "function Write-TextUtf8NoBom" in script
     assert "function Write-JsonUtf8NoBom" in script
     assert "New-Object System.Text.UTF8Encoding -ArgumentList $false" in script
@@ -380,8 +386,8 @@ def test_prepublish_gate_records_lane_artifact_directory() -> None:
     assert "Write-JsonUtf8NoBom -Data $meta -Path $gateMeta" in script
     assert "Set-Content -LiteralPath $gateMeta -Encoding UTF8" not in script
     assert "Set-Content -LiteralPath $codeIdentity -Encoding UTF8" not in script
-    assert "public_performance_evidence = $false" in script
-    assert "benchmark_evidence_verified = $false" in script
+    assert "public_performance_evidence = $PublicPerformanceEvidence" in script
+    assert "benchmark_evidence_verified = $BenchmarkEvidenceVerified" in script
     assert "parallel_{0}" in script
     assert "sweep_{0}" in script
 

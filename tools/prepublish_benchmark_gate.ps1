@@ -56,6 +56,51 @@ function Write-JsonUtf8NoBom {
     Write-TextUtf8NoBom -Text $json -Path $Path
 }
 
+function New-GateMetadata {
+    param(
+        [string]$Status,
+        [bool]$GatePass,
+        [bool]$PublicPerformanceEvidence,
+        [bool]$BenchmarkEvidenceVerified,
+        [object]$BenchmarkEvidenceVerifiedAt = $null,
+        [string]$ErrorMessage = ""
+    )
+
+    $meta = [ordered]@{
+        timestamp = $stamp
+        git_sha = $gitSha
+        worktree = $dirtyFlag
+        sweep_out_log = $sweepOut
+        sweep_err_log = $sweepErr
+        lane_artifact_dir = $laneArtifactDir
+        leaderboard_report = $leaderboardOut
+        code_identity = $codeIdentity
+        benchmark_evidence_verifier = $benchmarkVerifierOut
+        status_doc = $statusDoc
+        model_base_url = $modelBaseUrl
+        benchmark_mem0_host_arg = $benchmarkMem0HostArg
+        skip_service_preflight = $SkipServicePreflight.IsPresent
+        preflight_only = $PreflightOnly.IsPresent
+        preflight_status = $preflightStatus
+        preflight_checks = $preflightChecks
+        parallel = $Parallel.IsPresent
+        max_parallel = $MaxParallel
+        lane_timeout_minutes = $LaneTimeoutMinutes
+        idle_timeout_minutes = $IdleTimeoutMinutes
+        project_suffix = $env:MAPU_BENCH_PROJECT_SUFFIX
+        resume = $Resume.IsPresent
+        status = $Status
+        gate_pass = $GatePass
+        public_performance_evidence = $PublicPerformanceEvidence
+        benchmark_evidence_verified = $BenchmarkEvidenceVerified
+        benchmark_evidence_verified_at = $BenchmarkEvidenceVerifiedAt
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ErrorMessage)) {
+        $meta["error"] = $ErrorMessage
+    }
+    return $meta
+}
+
 $logDir = Join-Path $repoRoot "logs\benchmarks"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
@@ -201,40 +246,26 @@ try {
     }
 
     if ($PreflightOnly) {
-        $meta = [ordered]@{
-            timestamp = $stamp
-            git_sha = $gitSha
-            worktree = $dirtyFlag
-            sweep_out_log = $sweepOut
-            sweep_err_log = $sweepErr
-            lane_artifact_dir = $laneArtifactDir
-            leaderboard_report = $leaderboardOut
-            code_identity = $codeIdentity
-            benchmark_evidence_verifier = $benchmarkVerifierOut
-            status_doc = $statusDoc
-            model_base_url = $modelBaseUrl
-            benchmark_mem0_host_arg = $benchmarkMem0HostArg
-            skip_service_preflight = $SkipServicePreflight.IsPresent
-            preflight_only = $PreflightOnly.IsPresent
-            preflight_status = $preflightStatus
-            preflight_checks = $preflightChecks
-            parallel = $Parallel.IsPresent
-            max_parallel = $MaxParallel
-            lane_timeout_minutes = $LaneTimeoutMinutes
-            idle_timeout_minutes = $IdleTimeoutMinutes
-            project_suffix = $env:MAPU_BENCH_PROJECT_SUFFIX
-            resume = $Resume.IsPresent
-            gate_pass = $false
-            public_performance_evidence = $false
-            benchmark_evidence_verified = $false
-            error = "preflight-only run; benchmark lanes were not executed"
-        }
+        $meta = New-GateMetadata `
+            -Status "preflight_only" `
+            -GatePass $false `
+            -PublicPerformanceEvidence $false `
+            -BenchmarkEvidenceVerified $false `
+            -ErrorMessage "preflight-only run; benchmark lanes were not executed"
         Write-JsonUtf8NoBom -Data $meta -Path $gateMeta -Depth 5
         Write-Output "PREPUBLISH BENCHMARK GATE: PREFLIGHT ONLY"
         Write-Output "gate dir: $gateDir"
         Write-Output "gate metadata: $gateMeta"
         exit 0
     }
+
+    $meta = New-GateMetadata `
+        -Status "running" `
+        -GatePass $false `
+        -PublicPerformanceEvidence $false `
+        -BenchmarkEvidenceVerified $false `
+        -ErrorMessage "benchmark lanes are running; this is not public performance evidence"
+    Write-JsonUtf8NoBom -Data $meta -Path $gateMeta -Depth 5
 
     if ($Parallel) {
         powershell -NoProfile -ExecutionPolicy Bypass -File $runParallelSweep -MaxParallel $MaxParallel -LaneTimeoutMinutes $LaneTimeoutMinutes -IdleTimeoutMinutes $IdleTimeoutMinutes -BenchmarkMem0HostArg $benchmarkMem0HostArg -Resume:$($Resume.IsPresent) 1> $sweepOut 2> $sweepErr
@@ -251,34 +282,11 @@ try {
         throw "Leaderboard report failed with exit code $LASTEXITCODE"
     }
 
-    $meta = [ordered]@{
-        timestamp = $stamp
-        git_sha = $gitSha
-        worktree = $dirtyFlag
-        sweep_out_log = $sweepOut
-        sweep_err_log = $sweepErr
-        lane_artifact_dir = $laneArtifactDir
-        leaderboard_report = $leaderboardOut
-        code_identity = $codeIdentity
-        benchmark_evidence_verifier = $benchmarkVerifierOut
-        status_doc = $statusDoc
-        model_base_url = $modelBaseUrl
-        benchmark_mem0_host_arg = $benchmarkMem0HostArg
-        skip_service_preflight = $SkipServicePreflight.IsPresent
-        preflight_only = $PreflightOnly.IsPresent
-        preflight_status = $preflightStatus
-        preflight_checks = $preflightChecks
-        parallel = $Parallel.IsPresent
-        max_parallel = $MaxParallel
-        lane_timeout_minutes = $LaneTimeoutMinutes
-        idle_timeout_minutes = $IdleTimeoutMinutes
-        project_suffix = $env:MAPU_BENCH_PROJECT_SUFFIX
-        resume = $Resume.IsPresent
-        gate_pass = $true
-        public_performance_evidence = $false
-        benchmark_evidence_verified = $false
-        benchmark_evidence_verified_at = $null
-    }
+    $meta = New-GateMetadata `
+        -Status "sweep_complete_unverified" `
+        -GatePass $true `
+        -PublicPerformanceEvidence $false `
+        -BenchmarkEvidenceVerified $false
     Write-JsonUtf8NoBom -Data $meta -Path $gateMeta -Depth 4
 
     & $python $verifyBenchmarkEvidence $gateMeta 1> $benchmarkVerifierOut
@@ -288,6 +296,7 @@ try {
     $meta["public_performance_evidence"] = $true
     $meta["benchmark_evidence_verified"] = $true
     $meta["benchmark_evidence_verified_at"] = (Get-Date -Format "o")
+    $meta["status"] = "passed"
     Write-JsonUtf8NoBom -Data $meta -Path $gateMeta -Depth 4
 
     & $python $verifyBenchmarkEvidence $gateMeta --require-public-evidence-labels 1> $benchmarkVerifierOut
@@ -304,34 +313,12 @@ catch {
     if ($preflightStatus -eq "not_run") {
         $preflightStatus = "fail"
     }
-    $meta = [ordered]@{
-        timestamp = $stamp
-        git_sha = $gitSha
-        worktree = $dirtyFlag
-        sweep_out_log = $sweepOut
-        sweep_err_log = $sweepErr
-        lane_artifact_dir = $laneArtifactDir
-        leaderboard_report = $leaderboardOut
-        code_identity = $codeIdentity
-        benchmark_evidence_verifier = $benchmarkVerifierOut
-        status_doc = $statusDoc
-        model_base_url = $modelBaseUrl
-        benchmark_mem0_host_arg = $benchmarkMem0HostArg
-        skip_service_preflight = $SkipServicePreflight.IsPresent
-        preflight_only = $PreflightOnly.IsPresent
-        preflight_status = $preflightStatus
-        preflight_checks = $preflightChecks
-        parallel = $Parallel.IsPresent
-        max_parallel = $MaxParallel
-        lane_timeout_minutes = $LaneTimeoutMinutes
-        idle_timeout_minutes = $IdleTimeoutMinutes
-        project_suffix = $env:MAPU_BENCH_PROJECT_SUFFIX
-        resume = $Resume.IsPresent
-        gate_pass = $false
-        public_performance_evidence = $false
-        benchmark_evidence_verified = $false
-        error = $_.Exception.Message
-    }
+    $meta = New-GateMetadata `
+        -Status "failed" `
+        -GatePass $false `
+        -PublicPerformanceEvidence $false `
+        -BenchmarkEvidenceVerified $false `
+        -ErrorMessage $_.Exception.Message
     Write-JsonUtf8NoBom -Data $meta -Path $gateMeta -Depth 4
     Write-Output "gate dir: $gateDir"
     Write-Output "gate metadata: $gateMeta"

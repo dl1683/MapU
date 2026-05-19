@@ -2228,5 +2228,12 @@ def test_prepublish_gate_requires_checked_resume_suffix() -> None:
 
     assert "[string]$ProjectSuffix" in launcher
     assert "[switch]$Resume" in launcher
-    assert '"-ProjectSuffix", $ProjectSuffix' in launcher
+    assert "$gateProjectSuffix" in launcher
+    assert '"-ProjectSuffix", $gateProjectSuffix' in launcher
+    assert "prepublish_gate_launcher_${stamp}.json" in launcher
+    assert "launcher_metadata" in launcher
+    assert "progress_command" in launcher
+    assert "resume_command" in launcher
+    assert "Resume requires -ProjectSuffix prepublish_yyyyMMdd_HHmmss" in launcher
+    assert "Write-JsonUtf8NoBom -Data $meta -Path $launcherMeta" in launcher
     assert '$argList += "-Resume"' in launcher

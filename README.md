@@ -297,6 +297,13 @@ Before publishing any benchmark number, run:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
 ```
 
+For a long background run, start it through the launcher so the suffix,
+progress command, resume command, PID, and logs are captured immediately:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\start_prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
+```
+
 If a long public gate is interrupted, resume the same exact-code artifact set
 instead of starting a fresh suffix:
 

@@ -4,6 +4,8 @@ import argparse
 import importlib
 import pathlib
 import sys
+from collections.abc import Callable
+from typing import Any
 
 
 def _parse_args() -> tuple[str, list[str]]:
@@ -27,6 +29,35 @@ def _parse_args() -> tuple[str, list[str]]:
     return ns.benchmark, passthrough
 
 
+def _require_nonblank_answer(prompt: str) -> str:
+    return (
+        f"{prompt}\n\n"
+        "OUTPUT FORMAT REQUIREMENT:\n"
+        "After any private reasoning tags, write a final non-empty line exactly as:\n"
+        "ANSWER: <your concise answer>\n"
+        "If the memories are insufficient, still write:\n"
+        "ANSWER: The information provided is not enough.\n"
+        "Never leave ANSWER blank."
+    )
+
+
+def _wrap_prompt_builder(fn: Callable[..., str]) -> Callable[..., str]:
+    def wrapped(*args: Any, **kwargs: Any) -> str:
+        return _require_nonblank_answer(fn(*args, **kwargs))
+
+    return wrapped
+
+
+def _patch_answer_prompt_contract(run_module: Any) -> None:
+    # Some benchmark prompts ask models to reason in tags, then benchmark code
+    # strips those tags. Local OpenAI-compatible models can otherwise return
+    # only stripped reasoning and leave an empty stored answer.
+    for name in ("get_answer_generation_prompt", "get_beam_answer_generation_prompt"):
+        fn = getattr(run_module, name, None)
+        if callable(fn):
+            setattr(run_module, name, _wrap_prompt_builder(fn))
+
+
 def main() -> None:
     benchmark, benchmark_args = _parse_args()
     repo_root = pathlib.Path(__file__).resolve().parents[1]
@@ -44,6 +75,7 @@ def main() -> None:
 
     run_module = importlib.import_module(f"benchmarks.{benchmark}.run")
     run_module.Mem0Client = MapUMem0Client
+    _patch_answer_prompt_contract(run_module)
 
     argv = [f"{benchmark}.run", *benchmark_args]
     old_argv = sys.argv

@@ -2212,6 +2212,17 @@ def test_full_sweep_runners_support_explicit_resume() -> None:
         assert "Resume existing benchmark checkpoints" in script
 
 
+def test_mem0_benchmark_wrapper_requires_nonblank_answer_contract() -> None:
+    script = _read("tools/run_mem0_benchmark_with_mapu.py")
+
+    assert "_patch_answer_prompt_contract(run_module)" in script
+    assert "OUTPUT FORMAT REQUIREMENT" in script
+    assert "ANSWER: <your concise answer>" in script
+    assert "Never leave ANSWER blank." in script
+    assert "get_answer_generation_prompt" in script
+    assert "get_beam_answer_generation_prompt" in script
+
+
 def test_prepublish_gate_requires_checked_resume_suffix() -> None:
     script = _read("tools/prepublish_benchmark_gate.ps1")
     launcher = _read("tools/start_prepublish_benchmark_gate.ps1")

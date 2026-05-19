@@ -607,6 +607,17 @@ _VERSION_RE = re.compile(
     r"\b(?:python|flask|sqlite|postgres(?:ql)?)\s*\d+(?:\.\d+){0,2}\b",
     re.IGNORECASE,
 )
+_POSSESSIVE_NAME_RE = re.compile(
+    r"\bmy\s+([A-Za-z][A-Za-z0-9 _-]{1,48}?)(?:'s)?\s+name\s+is\s+"
+    r"([A-Za-z][A-Za-z0-9 _-]{1,48})\b",
+    re.IGNORECASE,
+)
+_DURATION_RE = re.compile(
+    r"\b(?:takes|took|lasts|lasted|duration\s+is)\s+"
+    r"(\d+(?:\.\d+)?\s+(?:minutes?|hours?|days?|weeks?)"
+    r"(?:\s+each\s+way)?)\b",
+    re.IGNORECASE,
+)
 _DEADLINE_RE = re.compile(r"\bdeadline(?: is|:)?\s+([A-Za-z0-9, ]+)", re.IGNORECASE)
 _CHANGE_RE = re.compile(
     r"\b(?:initially|was)\s+([^,.]{1,80})\s*(?:,?\s*now|to)\s+([^,.]{1,80})",
@@ -687,6 +698,15 @@ def _derive_fact_hints(content: str, timestamp: int | None) -> list[str]:
         desc = m[1].strip().rstrip(".,;:")
         if name and desc:
             out.append(f"wardrobe_fact: {name} was wearing {desc}")
+    for m in _POSSESSIVE_NAME_RE.findall(c):
+        subject = m[0].strip()
+        value = m[1].strip().rstrip(".,;:")
+        if subject and value:
+            out.append(f"identity_fact: user's {subject} name is {value}")
+    for m in _DURATION_RE.findall(c):
+        duration = m.strip().rstrip(".,;:")
+        if duration and any(k in low for k in ("commute", "travel", "drive", "ride", "walk")):
+            out.append(f"duration_fact: commute takes {duration}")
 
     for pat, label in (
         (_DATE_NUM_RE, "date_fact"),
@@ -714,6 +734,26 @@ def _derive_fact_hints(content: str, timestamp: int | None) -> list[str]:
             out.append(f"session_time_human: {dt.day} {dt.strftime('%B')} {dt.year}")
 
             # Relative-time normalization to improve temporal retrieval matching.
+            if _YESTERDAY_RE.search(c):
+                yd = dt - timedelta(days=1)
+                out.append(
+                    "relative_time_fact: yesterday was "
+                    f"{yd.day} {yd.strftime('%B')} {yd.year}"
+                )
+                out.append(f"date_fact: {yd.day} {yd.strftime('%B')} {yd.year}")
+            if _TODAY_RE.search(c):
+                out.append(
+                    "relative_time_fact: today was "
+                    f"{dt.day} {dt.strftime('%B')} {dt.year}"
+                )
+                out.append(f"date_fact: {dt.day} {dt.strftime('%B')} {dt.year}")
+            if _TOMORROW_RE.search(c):
+                td = dt + timedelta(days=1)
+                out.append(
+                    "relative_time_fact: tomorrow was "
+                    f"{td.day} {td.strftime('%B')} {td.year}"
+                )
+                out.append(f"date_fact: {td.day} {td.strftime('%B')} {td.year}")
             if _LAST_WEEK_RE.search(c):
                 wk_start = dt - timedelta(days=7)
                 out.append(
@@ -1024,8 +1064,17 @@ def _derive_beam_precise_hints(content: str, timestamp: int | None = None) -> li
     # Preference hints only when explicit.
     if any(k in low for k in ("lightweight", "minimal dependencies", "keep it simple")):
         hints.append("preference_hint: lightweight minimal dependencies simple stack")
+    for m in _POSSESSIVE_NAME_RE.findall(c):
+        subject = m[0].strip()
+        value = m[1].strip().rstrip(".,;:")
+        if subject and value:
+            hints.append(f"identity_hint: user's {subject} name is {value}")
+    for m in _DURATION_RE.findall(c):
+        duration = m.strip().rstrip(".,;:")
+        if duration and any(k in low for k in ("commute", "travel", "drive", "ride", "walk")):
+            hints.append(f"duration_hint: commute takes {duration}")
 
-    # Keep only strongest four hints to limit noise while preserving temporal deltas.
+    # Keep only strongest six hints to limit noise while preserving temporal deltas.
     dedup: list[str] = []
     seen: set[str] = set()
     for item in hints:
@@ -1034,7 +1083,7 @@ def _derive_beam_precise_hints(content: str, timestamp: int | None = None) -> li
             continue
         seen.add(key)
         dedup.append(item)
-    return dedup[:4]
+    return dedup[:6]
 
 
 def _role_diverse_ranking(
@@ -1225,13 +1274,16 @@ def _enrich_with_temporal_hints(content: str, timestamp: int | None) -> str:
 
     if _YESTERDAY_RE.search(content):
         yd = base - timedelta(days=1)
+        hints.append(f"resolved_event_date={_fmt_day(yd)}")
         hints.append(f"date_hint={yd.date().isoformat()}")
         hints.append(f"date_hint_human={_fmt_day(yd)}")
     if _TODAY_RE.search(content):
+        hints.append(f"resolved_event_date={_fmt_day(base)}")
         hints.append(f"date_hint={base.date().isoformat()}")
         hints.append(f"date_hint_human={_fmt_day(base)}")
     if _TOMORROW_RE.search(content):
         td = base + timedelta(days=1)
+        hints.append(f"resolved_event_date={_fmt_day(td)}")
         hints.append(f"date_hint={td.date().isoformat()}")
         hints.append(f"date_hint_human={_fmt_day(td)}")
     if _LAST_WEEK_RE.search(content):
@@ -1253,6 +1305,7 @@ def _enrich_with_temporal_hints(content: str, timestamp: int | None) -> str:
     if _LAST_FRIDAY_RE.search(content):
         days_back = (base.weekday() - 4) % 7 or 7
         fri = base - timedelta(days=days_back)
+        hints.append(f"resolved_event_date={_fmt_day(fri)}")
         hints.append(f"date_hint={fri.date().isoformat()}")
         hints.append(f"date_hint_human={_fmt_day(fri)}")
     if _LAST_WEEKEND_RE.search(content):

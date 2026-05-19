@@ -937,6 +937,66 @@ def test_objective_completion_audit_rejects_stale_release_sha(
     ]
 
 
+def test_objective_completion_rejects_stale_full_sweep_progress_sha(
+    tmp_path: Path,
+) -> None:
+    release_audit = tmp_path / "release_audit.json"
+    public_install = tmp_path / "public_install.json"
+    smoke_path = tmp_path / "smoke_report.json"
+    progress = tmp_path / "full_sweep_progress.json"
+    release_audit.write_text(json.dumps(_release_audit_data()), encoding="utf-8")
+    public_install.write_text(json.dumps(_public_install_audit_data()), encoding="utf-8")
+    smoke_path.write_text(json.dumps(_benchmark_smoke_data()), encoding="utf-8")
+    progress.write_text(
+        json.dumps(
+            {
+                "suffix": "prepublish_20260519_054949",
+                "gate_dir": "logs/benchmarks/prepublish_gate_20260519_054949",
+                "code_sha": "old-sha",
+                "worktree": "clean",
+                "gate_meta_present": True,
+                "gate_pass": True,
+                "active_worker_count": 0,
+                "public_performance_evidence": True,
+                "locomo": {"completed": 1540, "total": 1540},
+                "longmemeval": {"completed": 500, "total": 500},
+                "beam": [
+                    {"project": "beam_100k", "completed": 500, "total": 500},
+                    {"project": "beam_500k", "completed": 500, "total": 500},
+                    {"project": "beam_1m", "completed": 500, "total": 500},
+                    {"project": "beam_10m", "completed": 500, "total": 500},
+                ],
+                "workers": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        if args == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(args, 0, stdout="new-sha\n", stderr="")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    report = audit_objective_completion(
+        repo_root=tmp_path,
+        release_audit=release_audit,
+        public_install_audit=public_install,
+        benchmark_gate_meta=tmp_path / "missing_gate.json",
+        full_sweep_progress=progress,
+        benchmark_smoke=smoke_path,
+        run_command=fake_run,
+    )
+
+    progress_check = next(
+        check for check in report["checks"] if check["name"] == "full_sweep_progress"
+    )
+    assert progress_check["status"] == "fail"
+    assert (
+        "full-sweep progress code_sha 'old-sha' does not match current HEAD 'new-sha'"
+        in progress_check["errors"]
+    )
+
+
 def test_objective_completion_reports_publication_tool_delta(tmp_path: Path) -> None:
     release_audit = tmp_path / "release_audit.json"
     public_install = tmp_path / "public_install.json"
@@ -1402,6 +1462,69 @@ def test_validation_evidence_bundle_rejects_stale_release_sha(tmp_path: Path) ->
     assert "public install sha 'abc123' does not match current HEAD 'new-sha'" in sha_check[
         "errors"
     ]
+
+
+def test_validation_evidence_bundle_rejects_stale_benchmark_progress_sha(
+    tmp_path: Path,
+) -> None:
+    release_audit = tmp_path / "release_audit.json"
+    public_install = tmp_path / "public_install.json"
+    progress = tmp_path / "full_sweep_progress.json"
+    gate_meta = tmp_path / "gate_meta.json"
+    release_audit.write_text(json.dumps(_release_audit_data()), encoding="utf-8")
+    public_install.write_text(json.dumps(_public_install_audit_data()), encoding="utf-8")
+    gate_meta.write_text(json.dumps({"git_sha": "old-sha"}), encoding="utf-8")
+    progress.write_text(
+        json.dumps(
+            {
+                "suffix": "prepublish_20260519_054949",
+                "gate_dir": "logs/benchmarks/prepublish_gate_20260519_054949",
+                "code_sha": "old-sha",
+                "worktree": "clean",
+                "gate_meta_present": True,
+                "gate_pass": True,
+                "active_worker_count": 0,
+                "public_performance_evidence": True,
+                "locomo": {"completed": 1540, "total": 1540},
+                "longmemeval": {"completed": 500, "total": 500},
+                "beam": [
+                    {"project": "beam_100k", "completed": 500, "total": 500},
+                    {"project": "beam_500k", "completed": 500, "total": 500},
+                    {"project": "beam_1m", "completed": 500, "total": 500},
+                    {"project": "beam_10m", "completed": 500, "total": 500},
+                ],
+                "workers": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        if args == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(args, 0, stdout="new-sha\n", stderr="")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    ok, results = verify_validation_evidence_bundle(
+        mode="release",
+        repo_root=tmp_path,
+        release_audit=release_audit,
+        public_install_audit=public_install,
+        benchmark_gate_meta=gate_meta,
+        full_sweep_progress=progress,
+        require_public_benchmark=True,
+        run_command=fake_run,
+    )
+
+    assert ok is False
+    gate_check = next(result for result in results if result["name"] == "benchmark_gate_meta")
+    progress_check = next(result for result in results if result["name"] == "full_sweep_progress")
+    assert "benchmark gate git_sha 'old-sha' does not match current HEAD 'new-sha'" in gate_check[
+        "errors"
+    ]
+    assert (
+        "full-sweep progress code_sha 'old-sha' does not match current HEAD 'new-sha'"
+        in progress_check["errors"]
+    )
 
 
 def test_validation_evidence_bundle_rejects_stubbed_public_install(

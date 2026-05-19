@@ -150,6 +150,37 @@ def _release_public_sha_errors(
     return errors
 
 
+def _current_head_sha(repo_root: Path | None, run_command: RunCommand | None) -> str:
+    if repo_root is None:
+        return ""
+    runner = run_command or _run_command
+    result = runner(["git", "rev-parse", "HEAD"], repo_root)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def _artifact_current_sha_errors(
+    data: dict[str, Any],
+    *,
+    key: str,
+    label: str,
+    repo_root: Path | None,
+    run_command: RunCommand | None,
+) -> list[str]:
+    current_sha = _current_head_sha(repo_root, run_command)
+    artifact_sha = data.get(key)
+    if (
+        current_sha
+        and isinstance(artifact_sha, str)
+        and artifact_sha.strip()
+        and artifact_sha != current_sha
+    ):
+        return [
+            f"{label} {key} {artifact_sha!r} does not match current HEAD "
+            f"{current_sha!r}"
+        ]
+    return []
+
+
 def verify_validation_evidence_bundle(
     *,
     mode: str,
@@ -267,6 +298,16 @@ def verify_validation_evidence_bundle(
                 require_clean_worktree=True,
                 require_public_evidence_labels=True,
             )
+            errors.extend(
+                _artifact_current_sha_errors(
+                    data,
+                    key="git_sha",
+                    label="benchmark gate",
+                    repo_root=repo_root,
+                    run_command=run_command,
+                )
+            )
+            ok = ok and not errors
             _record(
                 results,
                 name="benchmark_gate_meta",
@@ -291,6 +332,16 @@ def verify_validation_evidence_bundle(
                 data,
                 require_public_evidence=True,
             )
+            errors.extend(
+                _artifact_current_sha_errors(
+                    data,
+                    key="code_sha",
+                    label="full-sweep progress",
+                    repo_root=repo_root,
+                    run_command=run_command,
+                )
+            )
+            ok = ok and not errors
             _record(
                 results,
                 name="full_sweep_progress",
@@ -317,11 +368,30 @@ def verify_validation_evidence_bundle(
                     require_clean_worktree=True,
                     require_public_evidence_labels=True,
                 )
+                errors.extend(
+                    _artifact_current_sha_errors(
+                        data,
+                        key="git_sha",
+                        label="benchmark gate",
+                        repo_root=repo_root,
+                        run_command=run_command,
+                    )
+                )
             else:
                 ok, errors = verify_full_sweep_progress(
                     data,
                     require_public_evidence=True,
                 )
+                errors.extend(
+                    _artifact_current_sha_errors(
+                        data,
+                        key="code_sha",
+                        label="full-sweep progress",
+                        repo_root=repo_root,
+                        run_command=run_command,
+                    )
+                )
+            ok = ok and not errors
             _record(
                 results,
                 name=name,

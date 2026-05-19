@@ -557,7 +557,11 @@ def _check_release_public_sha_match(
     )
 
 
-def _check_benchmark_gate(gate_meta_path: Path) -> AuditCheck:
+def _check_benchmark_gate(
+    gate_meta_path: Path,
+    repo_root: Path,
+    run_command: RunCommand,
+) -> AuditCheck:
     data, errors = _load_json(gate_meta_path, "benchmark gate")
     if errors or data is None:
         return AuditCheck("public_benchmark_gate", "fail", True, str(gate_meta_path), tuple(errors))
@@ -567,26 +571,56 @@ def _check_benchmark_gate(gate_meta_path: Path) -> AuditCheck:
         require_clean_worktree=True,
         require_public_evidence_labels=True,
     )
+    all_errors = list(verifier_errors)
+    current_sha = _current_head_sha(repo_root, run_command)
+    gate_sha = data.get("git_sha")
+    if (
+        current_sha
+        and isinstance(gate_sha, str)
+        and gate_sha.strip()
+        and gate_sha != current_sha
+    ):
+        all_errors.append(
+            f"benchmark gate git_sha {gate_sha!r} does not match current HEAD "
+            f"{current_sha!r}"
+        )
     return AuditCheck(
         "public_benchmark_gate",
-        "ok" if ok else "fail",
+        "ok" if ok and not all_errors else "fail",
         True,
         str(gate_meta_path),
-        tuple(verifier_errors),
+        tuple(all_errors),
     )
 
 
-def _check_full_sweep_progress(progress_path: Path) -> AuditCheck:
+def _check_full_sweep_progress(
+    progress_path: Path,
+    repo_root: Path,
+    run_command: RunCommand,
+) -> AuditCheck:
     data, errors = _load_json(progress_path, "full-sweep progress")
     if errors or data is None:
         return AuditCheck("full_sweep_progress", "fail", True, str(progress_path), tuple(errors))
     ok, verifier_errors = verify_full_sweep_progress(data, require_public_evidence=True)
+    all_errors = list(verifier_errors)
+    current_sha = _current_head_sha(repo_root, run_command)
+    progress_sha = data.get("code_sha")
+    if (
+        current_sha
+        and isinstance(progress_sha, str)
+        and progress_sha.strip()
+        and progress_sha != current_sha
+    ):
+        all_errors.append(
+            f"full-sweep progress code_sha {progress_sha!r} does not match current HEAD "
+            f"{current_sha!r}"
+        )
     return AuditCheck(
         "full_sweep_progress",
-        "ok" if ok else "fail",
+        "ok" if ok and not all_errors else "fail",
         True,
         str(progress_path),
-        tuple(verifier_errors),
+        tuple(all_errors),
     )
 
 
@@ -1099,8 +1133,8 @@ def audit_objective_completion(
             repo_root,
             run_command,
         ),
-        _check_benchmark_gate(benchmark_gate_meta),
-        _check_full_sweep_progress(full_sweep_progress),
+        _check_benchmark_gate(benchmark_gate_meta, repo_root, run_command),
+        _check_full_sweep_progress(full_sweep_progress, repo_root, run_command),
         _check_smoke_boundary(benchmark_smoke, repo_root, run_command),
         _check_benchmark_isolation(repo_root),
         _check_continuity_replay_quality(continuity_replay),

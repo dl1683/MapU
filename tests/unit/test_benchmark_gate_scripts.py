@@ -1674,7 +1674,7 @@ def test_prepublish_gate_preflights_live_benchmark_services() -> None:
     assert "preflight_checks" in script
     assert "benchmark_mem0_host_arg" in script
     assert "BenchmarkMem0HostArg" in script
-    assert "-BenchmarkMem0HostArg $benchmarkMem0HostArg" in script
+    assert '"-BenchmarkMem0HostArg", $benchmarkMem0HostArg' in script
     assert "PREPUBLISH BENCHMARK GATE: PREFLIGHT ONLY" in script
     assert "gate metadata: $gateMeta" in script
 
@@ -2222,7 +2222,8 @@ def test_prepublish_gate_requires_checked_resume_suffix() -> None:
     assert "Resume requires -ProjectSuffix prepublish_yyyyMMdd_HHmmss" in script
     assert "existing code sha" in script
     assert "existing worktree" in script
-    assert "-Resume:$($Resume.IsPresent)" in script
+    assert "$sweepArgs += \"-Resume\"" in script
+    assert "-Resume:$($Resume.IsPresent)" not in script
     assert "project_suffix" in script
     assert "resume = $Resume.IsPresent" in script
 

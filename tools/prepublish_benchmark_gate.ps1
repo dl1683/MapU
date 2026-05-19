@@ -268,11 +268,28 @@ try {
     Write-JsonUtf8NoBom -Data $meta -Path $gateMeta -Depth 5
 
     if ($Parallel) {
-        powershell -NoProfile -ExecutionPolicy Bypass -File $runParallelSweep -MaxParallel $MaxParallel -LaneTimeoutMinutes $LaneTimeoutMinutes -IdleTimeoutMinutes $IdleTimeoutMinutes -BenchmarkMem0HostArg $benchmarkMem0HostArg -Resume:$($Resume.IsPresent) 1> $sweepOut 2> $sweepErr
+        $sweepArgs = @(
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", $runParallelSweep,
+            "-MaxParallel", $MaxParallel,
+            "-LaneTimeoutMinutes", $LaneTimeoutMinutes,
+            "-IdleTimeoutMinutes", $IdleTimeoutMinutes,
+            "-BenchmarkMem0HostArg", $benchmarkMem0HostArg
+        )
     }
     else {
-        powershell -NoProfile -ExecutionPolicy Bypass -File $runSweep -BenchmarkMem0HostArg $benchmarkMem0HostArg -Resume:$($Resume.IsPresent) 1> $sweepOut 2> $sweepErr
+        $sweepArgs = @(
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", $runSweep,
+            "-BenchmarkMem0HostArg", $benchmarkMem0HostArg
+        )
     }
+    if ($Resume) {
+        $sweepArgs += "-Resume"
+    }
+    powershell @sweepArgs 1> $sweepOut 2> $sweepErr
     if ($LASTEXITCODE -ne 0) {
         throw "Sweep failed with exit code $LASTEXITCODE"
     }

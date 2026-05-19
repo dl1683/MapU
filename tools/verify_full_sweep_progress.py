@@ -129,11 +129,19 @@ def verify_full_sweep_progress(
 ) -> tuple[bool, list[str]]:
     errors: list[str] = []
 
-    for key in ("suffix", "gate_dir", "code_sha", "worktree"):
+    for key in ("suffix", "gate_dir", "code_sha", "current_sha", "worktree", "gate_status"):
         value = data.get(key)
         if value is not None and not isinstance(value, str):
             errors.append(f"{key} must be a string or null")
-    for key in ("gate_meta_present", "gate_pass", "public_performance_evidence"):
+    for key in (
+        "current_sha_matches",
+        "gate_meta_present",
+        "gate_pass",
+        "benchmark_evidence_verified",
+        "public_performance_evidence",
+    ):
+        if key not in data:
+            continue
         if not isinstance(data.get(key), bool):
             errors.append(f"{key} must be a boolean")
     active_worker_count = _require_int(errors, data, "active_worker_count")
@@ -160,10 +168,14 @@ def verify_full_sweep_progress(
     if require_public_evidence:
         if data.get("public_performance_evidence") is not True:
             errors.append("public_performance_evidence is not true")
+        if data.get("benchmark_evidence_verified") is not True:
+            errors.append("benchmark_evidence_verified is not true")
         if data.get("gate_pass") is not True:
             errors.append("gate_pass is not true")
         if data.get("gate_meta_present") is not True:
             errors.append("gate_meta_present is not true")
+        if data.get("current_sha_matches") is not True:
+            errors.append("current_sha_matches is not true")
         if data.get("worktree") != "clean":
             errors.append(f"worktree is {data.get('worktree')!r}, not 'clean'")
         if active_worker_count not in (0, None):

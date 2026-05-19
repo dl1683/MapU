@@ -109,6 +109,9 @@ if ($gateMetaPath -and (Test-Path -LiteralPath $gateMetaPath)) {
 
 $codeSha = if ($codeIdentityPath) { Get-FirstRegexMatch $codeIdentityPath "^sha=(.+)$" } else { $null }
 $codeWorktree = if ($codeIdentityPath) { Get-FirstRegexMatch $codeIdentityPath "^worktree=(.+)$" } else { $null }
+$currentSha = (& git rev-parse HEAD 2>$null)
+if ($LASTEXITCODE -ne 0) { $currentSha = $null }
+$currentShaMatches = if ($codeSha -and $currentSha) { $codeSha -eq $currentSha } else { $false }
 $workerPids = if ($latestOut) { Get-WorkerPids $latestOut.FullName } else { @() }
 if ($null -eq $workerPids) {
     $workerPids = @()
@@ -120,21 +123,34 @@ $activeWorkerCount = @($workerPids | Where-Object { $_.running }).Count
 $allBeamComplete = @($beamStatus | Where-Object { $_.completed -lt $_.total }).Count -eq 0
 $allCountsComplete = ($locomoDone -ge $locomoTotal) -and ($longmemDone -ge $longmemTotal) -and $allBeamComplete
 $gatePass = if ($gateMeta -and $null -ne $gateMeta.gate_pass) { [bool]$gateMeta.gate_pass } else { $false }
-$publicEvidence = $gatePass -and $allCountsComplete
+$gateStatus = if ($gateMeta -and $gateMeta.status) { [string]$gateMeta.status } else { $null }
+$benchmarkEvidenceVerified = if ($gateMeta -and $null -ne $gateMeta.benchmark_evidence_verified) { [bool]$gateMeta.benchmark_evidence_verified } else { $false }
+$gatePublicEvidence = if ($gateMeta -and $null -ne $gateMeta.public_performance_evidence) { [bool]$gateMeta.public_performance_evidence } else { $false }
+$publicEvidence = $gatePass -and $gatePublicEvidence -and $benchmarkEvidenceVerified -and $allCountsComplete -and $currentShaMatches
+$resumeCommand = if ($Suffix -and $Suffix -match "^prepublish_\d{8}_\d{6}$") {
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20 -ProjectSuffix $Suffix -Resume"
+} else {
+    $null
+}
 
 $summary = [ordered]@{
     suffix = $Suffix
     gate_dir = $latestGate
     code_sha = $codeSha
+    current_sha = $currentSha
+    current_sha_matches = $currentShaMatches
     worktree = $codeWorktree
+    gate_status = $gateStatus
     gate_meta_present = [bool]$gateMeta
     gate_pass = $gatePass
+    benchmark_evidence_verified = $benchmarkEvidenceVerified
     active_worker_count = $activeWorkerCount
     public_performance_evidence = $publicEvidence
     locomo = [ordered]@{ completed = $locomoDone; total = $locomoTotal }
     longmemeval = [ordered]@{ completed = $longmemDone; total = $longmemTotal }
     beam = $beamStatus
     workers = @($workerPids)
+    resume_command = $resumeCommand
 }
 
 if ($Json) {
@@ -149,11 +165,17 @@ if ($latestGate) {
 if ($codeSha) {
     Write-Output ("Code identity: sha={0}; worktree={1}" -f $codeSha, $codeWorktree)
 }
+if ($currentSha) {
+    Write-Output ("Current HEAD: {0}; matches gate code identity: {1}" -f $currentSha, $currentShaMatches)
+}
 if ($gateMeta) {
-    Write-Output ("Gate metadata: present; gate_pass={0}" -f $gatePass)
+    Write-Output ("Gate metadata: present; status={0}; gate_pass={1}; verified={2}; public_evidence={3}" -f $gateStatus, $gatePass, $benchmarkEvidenceVerified, $gatePublicEvidence)
 }
 else {
     Write-Output "Gate metadata: missing or unreadable"
+}
+if ($resumeCommand) {
+    Write-Output ("Resume command: {0}" -f $resumeCommand)
 }
 Write-Output ("Worker status: {0} active / {1} recorded" -f $activeWorkerCount, @($workerPids).Count)
 if (@($workerPids).Count -gt 0) {

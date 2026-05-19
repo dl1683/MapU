@@ -1563,6 +1563,11 @@ def test_full_sweep_progress_json_preserves_empty_worker_array() -> None:
     assert "workers = @($workerPids)" in script
     assert "if ($null -eq $workerPids)" in script
     assert "$summary | ConvertTo-Json -Depth 6" in script
+    assert "current_sha_matches = $currentShaMatches" in script
+    assert "gate_status = $gateStatus" in script
+    assert "benchmark_evidence_verified = $benchmarkEvidenceVerified" in script
+    assert "$gatePublicEvidence -and $benchmarkEvidenceVerified" in script
+    assert "resume_command = $resumeCommand" in script
 
 
 def test_full_sweep_progress_verifier_accepts_monitoring_schema() -> None:
@@ -1570,9 +1575,13 @@ def test_full_sweep_progress_verifier_accepts_monitoring_schema() -> None:
         "suffix": "prepublish_20260519_054949",
         "gate_dir": "logs/benchmarks/prepublish_gate_20260519_054949",
         "code_sha": "abc",
+        "current_sha": "abc",
+        "current_sha_matches": False,
         "worktree": "dirty",
+        "gate_status": "running",
         "gate_meta_present": True,
         "gate_pass": False,
+        "benchmark_evidence_verified": False,
         "active_worker_count": 0,
         "public_performance_evidence": False,
         "locomo": {"completed": 0, "total": 1540},
@@ -1597,9 +1606,13 @@ def test_full_sweep_progress_verifier_rejects_incomplete_public_evidence() -> No
         "suffix": "prepublish_20260519_054949",
         "gate_dir": "logs/benchmarks/prepublish_gate_20260519_054949",
         "code_sha": "abc",
+        "current_sha": "abc",
+        "current_sha_matches": False,
         "worktree": "dirty",
+        "gate_status": "failed",
         "gate_meta_present": True,
         "gate_pass": False,
+        "benchmark_evidence_verified": False,
         "active_worker_count": 0,
         "public_performance_evidence": False,
         "locomo": {"completed": 0, "total": 1540},
@@ -1617,7 +1630,9 @@ def test_full_sweep_progress_verifier_rejects_incomplete_public_evidence() -> No
 
     assert ok is False
     assert "public_performance_evidence is not true" in errors
+    assert "benchmark_evidence_verified is not true" in errors
     assert "gate_pass is not true" in errors
+    assert "current_sha_matches is not true" in errors
     assert "worktree is 'dirty', not 'clean'" in errors
     assert "benchmark result counts are incomplete" in errors
 

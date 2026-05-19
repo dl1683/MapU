@@ -25,6 +25,18 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution path
 RunCommand = Callable[[list[str], Path], subprocess.CompletedProcess[str]]
 
 
+def _run_command(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        return subprocess.CompletedProcess(
+            args,
+            127,
+            stdout="",
+            stderr=f"{args[0]} command unavailable: {exc}",
+        )
+
+
 def _load_json(path: Path, label: str) -> dict[str, Any]:
     try:
         text = None
@@ -100,6 +112,9 @@ def _scoped_worktree_fingerprint_errors(
 def _release_public_sha_errors(
     release_data: dict[str, Any],
     public_install_data: dict[str, Any],
+    *,
+    repo_root: Path | None = None,
+    run_command: RunCommand | None = None,
 ) -> list[str]:
     release_sha = release_data.get("sha")
     public_sha = public_install_data.get("sha")
@@ -112,6 +127,26 @@ def _release_public_sha_errors(
         errors.append(
             f"release audit sha {release_sha!r} does not match public install sha {public_sha!r}"
         )
+    if repo_root is not None:
+        runner = run_command or _run_command
+        result = runner(["git", "rev-parse", "HEAD"], repo_root)
+        current_sha = result.stdout.strip() if result.returncode == 0 else ""
+        if current_sha:
+            if isinstance(release_sha, str) and release_sha.strip() and release_sha != current_sha:
+                errors.append(
+                    f"release audit sha {release_sha!r} does not match current HEAD "
+                    f"{current_sha!r}"
+                )
+            if (
+                isinstance(public_sha, str)
+                and public_sha.strip()
+                and public_sha != "unknown"
+                and public_sha != current_sha
+            ):
+                errors.append(
+                    f"public install sha {public_sha!r} does not match current HEAD "
+                    f"{current_sha!r}"
+                )
     return errors
 
 
@@ -188,7 +223,12 @@ def verify_validation_evidence_bundle(
                 required=True,
             )
             if release_data is not None:
-                sha_errors = _release_public_sha_errors(release_data, public_install_data)
+                sha_errors = _release_public_sha_errors(
+                    release_data,
+                    public_install_data,
+                    repo_root=repo_root,
+                    run_command=run_command,
+                )
                 _record(
                     results,
                     name="release_public_sha_match",

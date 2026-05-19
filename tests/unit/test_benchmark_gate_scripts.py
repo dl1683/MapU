@@ -900,6 +900,43 @@ def test_objective_completion_audit_rejects_release_public_sha_mismatch(
     assert public_item["status"] == "fail"
 
 
+def test_objective_completion_audit_rejects_stale_release_sha(
+    tmp_path: Path,
+) -> None:
+    release_audit = tmp_path / "release_audit.json"
+    public_install = tmp_path / "public_install.json"
+    smoke_path = tmp_path / "smoke_report.json"
+    release_audit.write_text(json.dumps(_release_audit_data()), encoding="utf-8")
+    public_install.write_text(json.dumps(_public_install_audit_data()), encoding="utf-8")
+    smoke_path.write_text(json.dumps(_benchmark_smoke_data()), encoding="utf-8")
+
+    def fake_run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        if args == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(args, 0, stdout="new-sha\n", stderr="")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    report = audit_objective_completion(
+        repo_root=tmp_path,
+        release_audit=release_audit,
+        public_install_audit=public_install,
+        benchmark_gate_meta=tmp_path / "missing_gate.json",
+        full_sweep_progress=tmp_path / "missing_progress.json",
+        benchmark_smoke=smoke_path,
+        run_command=fake_run,
+    )
+
+    sha_check = next(
+        check for check in report["checks"] if check["name"] == "release_public_sha_match"
+    )
+    assert sha_check["status"] == "fail"
+    assert "release audit sha 'abc123' does not match current HEAD 'new-sha'" in sha_check[
+        "errors"
+    ]
+    assert "public install sha 'abc123' does not match current HEAD 'new-sha'" in sha_check[
+        "errors"
+    ]
+
+
 def test_objective_completion_reports_publication_tool_delta(tmp_path: Path) -> None:
     release_audit = tmp_path / "release_audit.json"
     public_install = tmp_path / "public_install.json"
@@ -1334,6 +1371,36 @@ def test_validation_evidence_bundle_rejects_release_public_sha_mismatch(
     assert sha_check["status"] == "fail"
     assert sha_check["errors"] == [
         "release audit sha 'abc123' does not match public install sha 'other-sha'"
+    ]
+
+
+def test_validation_evidence_bundle_rejects_stale_release_sha(tmp_path: Path) -> None:
+    release_audit = tmp_path / "release_audit.json"
+    public_install = tmp_path / "public_install.json"
+    release_audit.write_text(json.dumps(_release_audit_data()), encoding="utf-8")
+    public_install.write_text(json.dumps(_public_install_audit_data()), encoding="utf-8")
+
+    def fake_run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        if args == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(args, 0, stdout="new-sha\n", stderr="")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    ok, results = verify_validation_evidence_bundle(
+        mode="release",
+        repo_root=tmp_path,
+        release_audit=release_audit,
+        public_install_audit=public_install,
+        run_command=fake_run,
+    )
+
+    assert ok is False
+    sha_check = next(result for result in results if result["name"] == "release_public_sha_match")
+    assert sha_check["status"] == "fail"
+    assert "release audit sha 'abc123' does not match current HEAD 'new-sha'" in sha_check[
+        "errors"
+    ]
+    assert "public install sha 'abc123' does not match current HEAD 'new-sha'" in sha_check[
+        "errors"
     ]
 
 

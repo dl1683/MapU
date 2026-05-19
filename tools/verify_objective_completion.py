@@ -502,7 +502,20 @@ def _check_public_install(path: Path) -> AuditCheck:
     )
 
 
-def _check_release_public_sha_match(release_audit: Path, public_install: Path) -> AuditCheck:
+def _current_head_sha(repo_root: Path, run_command: RunCommand) -> str | None:
+    result = run_command(["git", "rev-parse", "HEAD"], repo_root)
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.strip()
+    return sha or None
+
+
+def _check_release_public_sha_match(
+    release_audit: Path,
+    public_install: Path,
+    repo_root: Path,
+    run_command: RunCommand,
+) -> AuditCheck:
     release_data, release_errors = _load_json(release_audit, "release audit")
     public_data, public_errors = _load_json(public_install, "public install audit")
     errors = [*release_errors, *public_errors]
@@ -518,6 +531,23 @@ def _check_release_public_sha_match(release_audit: Path, public_install: Path) -
                 f"release audit sha {release_sha!r} does not match "
                 f"public install sha {public_sha!r}"
             )
+        current_sha = _current_head_sha(repo_root, run_command)
+        if current_sha:
+            if isinstance(release_sha, str) and release_sha.strip() and release_sha != current_sha:
+                errors.append(
+                    f"release audit sha {release_sha!r} does not match current HEAD "
+                    f"{current_sha!r}"
+                )
+            if (
+                isinstance(public_sha, str)
+                and public_sha.strip()
+                and public_sha != "unknown"
+                and public_sha != current_sha
+            ):
+                errors.append(
+                    f"public install sha {public_sha!r} does not match current HEAD "
+                    f"{current_sha!r}"
+                )
     return AuditCheck(
         "release_public_sha_match",
         "ok" if not errors else "fail",
@@ -1063,7 +1093,12 @@ def audit_objective_completion(
         _check_local_cli_mcp_audit(release_audit, repo_root, run_command),
         _check_release_audit(release_audit),
         _check_public_install(public_install_audit),
-        _check_release_public_sha_match(release_audit, public_install_audit),
+        _check_release_public_sha_match(
+            release_audit,
+            public_install_audit,
+            repo_root,
+            run_command,
+        ),
         _check_benchmark_gate(benchmark_gate_meta),
         _check_full_sweep_progress(full_sweep_progress),
         _check_smoke_boundary(benchmark_smoke, repo_root, run_command),

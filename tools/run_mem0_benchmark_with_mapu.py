@@ -106,6 +106,31 @@ def _wrap_prompt_builder(fn: Callable[..., str]) -> Callable[..., str]:
     return wrapped
 
 
+def _require_strict_judge_contract(prompt: str) -> str:
+    return (
+        f"{prompt}\n\n"
+        "STRICT JUDGE OVERRIDE:\n"
+        "Grade only whether the model response matches the provided correct "
+        "answer, rubric, or nugget. Do not infer correctness from whether the "
+        "retrieved memories might or might not contain the answer.\n"
+        "A refusal or insufficiency response is correct only when the provided "
+        "correct answer, rubric, or nugget is itself explicitly unanswerable, "
+        "unknown, not mentioned, nothing found, or not enough information.\n"
+        "If the provided correct answer, rubric, or nugget contains a substantive "
+        "fact, item, place, name, number, date, identity, or preference, then a "
+        "model response saying the answer is unavailable, unknown, not in the "
+        "memories, or not enough information is incorrect.\n"
+        "Follow the benchmark's requested output schema exactly."
+    )
+
+
+def _wrap_judge_prompt_builder(fn: Callable[..., str]) -> Callable[..., str]:
+    def wrapped(*args: Any, **kwargs: Any) -> str:
+        return _require_strict_judge_contract(fn(*args, **kwargs))
+
+    return wrapped
+
+
 def _patch_answer_prompt_contract(run_module: Any) -> None:
     # Some benchmark prompts ask models to reason in tags, then benchmark code
     # strips those tags. Local OpenAI-compatible models can otherwise return
@@ -114,6 +139,17 @@ def _patch_answer_prompt_contract(run_module: Any) -> None:
         fn = getattr(run_module, name, None)
         if callable(fn):
             setattr(run_module, name, _wrap_prompt_builder(fn))
+
+
+def _patch_judge_prompt_contract(run_module: Any) -> None:
+    for name in (
+        "get_judge_prompt",
+        "get_judge_prompt_with_evidence",
+        "get_beam_nugget_judge_prompt",
+    ):
+        fn = getattr(run_module, name, None)
+        if callable(fn):
+            setattr(run_module, name, _wrap_judge_prompt_builder(fn))
 
 
 def main() -> None:
@@ -134,6 +170,7 @@ def main() -> None:
     run_module = importlib.import_module(f"benchmarks.{benchmark}.run")
     run_module.Mem0Client = MapUMem0Client
     _patch_answer_prompt_contract(run_module)
+    _patch_judge_prompt_contract(run_module)
 
     argv = [f"{benchmark}.run", *benchmark_args]
     old_argv = sys.argv

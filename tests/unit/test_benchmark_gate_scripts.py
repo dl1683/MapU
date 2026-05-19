@@ -2224,6 +2224,7 @@ def test_mem0_benchmark_wrapper_requires_nonblank_answer_contract() -> None:
     script = _read("tools/run_mem0_benchmark_with_mapu.py")
 
     assert "_patch_answer_prompt_contract(run_module)" in script
+    assert "_patch_judge_prompt_contract(run_module)" in script
     assert "_suppress_printed_reasoning(prompt)" in script
     assert "_extract_fact_hints(prompt)" in script
     assert "DIRECT FACT HINTS FROM RETRIEVED MEMORIES" in script
@@ -2242,6 +2243,14 @@ def test_mem0_benchmark_wrapper_requires_nonblank_answer_contract() -> None:
     assert "Never leave ANSWER blank." in script
     assert "get_answer_generation_prompt" in script
     assert "get_beam_answer_generation_prompt" in script
+    assert "STRICT JUDGE OVERRIDE" in script
+    assert "Grade only whether the model response matches" in script
+    assert "A refusal or insufficiency response is correct only when" in script
+    assert "correct answer, rubric, or nugget contains a substantive" in script
+    assert "model response saying the answer is unavailable" in script
+    assert "get_judge_prompt" in script
+    assert "get_judge_prompt_with_evidence" in script
+    assert "get_beam_nugget_judge_prompt" in script
 
 
 def test_prepublish_gate_requires_checked_resume_suffix() -> None:

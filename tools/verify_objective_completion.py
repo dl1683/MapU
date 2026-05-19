@@ -132,7 +132,11 @@ def _resolve_repo_path(repo_root: Path, path: Path) -> Path:
     return path if path.is_absolute() else repo_root / path
 
 
-def _resolve_latest_benchmark_gate_meta(repo_root: Path, requested: Path) -> Path:
+def _resolve_latest_benchmark_gate_meta(
+    repo_root: Path,
+    requested: Path,
+    full_sweep_progress: Path | None = None,
+) -> Path:
     requested_path = requested if requested.is_absolute() else repo_root / requested
     if requested_path.exists():
         return requested
@@ -140,6 +144,19 @@ def _resolve_latest_benchmark_gate_meta(repo_root: Path, requested: Path) -> Pat
     default_path = repo_root / DEFAULT_BENCHMARK_GATE_META
     if requested_path.resolve() != default_path.resolve():
         return requested
+
+    if full_sweep_progress is not None:
+        progress_path = (
+            full_sweep_progress
+            if full_sweep_progress.is_absolute()
+            else repo_root / full_sweep_progress
+        )
+        progress, errors = _load_json(progress_path, "full-sweep progress")
+        if not errors and progress is not None:
+            gate_dir = progress.get("gate_dir")
+            if isinstance(gate_dir, str) and gate_dir.strip():
+                gate_meta = Path(gate_dir) / "gate_meta.json"
+                return gate_meta if gate_meta.is_absolute() else repo_root / gate_meta
 
     benchmark_root = repo_root / "logs" / "benchmarks"
     candidates = sorted(
@@ -1402,6 +1419,7 @@ def main(argv: list[str] | None = None) -> int:
     benchmark_gate_meta = _resolve_latest_benchmark_gate_meta(
         args.repo_root,
         args.benchmark_gate_meta,
+        args.full_sweep_progress,
     )
     report = audit_objective_completion(
         repo_root=args.repo_root,

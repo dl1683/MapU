@@ -343,6 +343,30 @@ def test_objective_completion_discovers_latest_timestamped_gate_meta(
     assert resolved == newer_meta
 
 
+def test_objective_completion_prefers_progress_gate_meta_over_unrelated_latest(
+    tmp_path: Path,
+) -> None:
+    unrelated = tmp_path / "logs" / "benchmarks" / "prepublish_gate_20260519_020202"
+    unrelated.mkdir(parents=True)
+    (unrelated / "gate_meta.json").write_text("{}", encoding="utf-8")
+
+    selected = tmp_path / "logs" / "benchmarks" / "prepublish_gate_20260519_010101"
+    progress = tmp_path / ".tmp" / "full_sweep_progress.json"
+    progress.parent.mkdir()
+    progress.write_text(
+        json.dumps({"gate_dir": str(selected.relative_to(tmp_path))}),
+        encoding="utf-8",
+    )
+
+    resolved = _resolve_latest_benchmark_gate_meta(
+        tmp_path,
+        DEFAULT_BENCHMARK_GATE_META,
+        progress,
+    )
+
+    assert resolved == selected / "gate_meta.json"
+
+
 def test_prepublish_gate_records_lane_artifact_directory() -> None:
     script = _read("tools/prepublish_benchmark_gate.ps1")
 

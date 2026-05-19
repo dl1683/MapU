@@ -2216,7 +2216,20 @@ def test_mem0_benchmark_wrapper_requires_nonblank_answer_contract() -> None:
     script = _read("tools/run_mem0_benchmark_with_mapu.py")
 
     assert "_patch_answer_prompt_contract(run_module)" in script
+    assert "_suppress_printed_reasoning(prompt)" in script
+    assert "_extract_fact_hints(prompt)" in script
+    assert "DIRECT FACT HINTS FROM RETRIEVED MEMORIES" in script
     assert "OUTPUT FORMAT REQUIREMENT" in script
+    assert "Use the retrieved memories first." in script
+    assert "fact_hint" in script
+    assert "do not answer that the " in script
+    assert "information is insufficient" in script
+    assert "Preserve qualifiers from direct evidence" in script
+    assert "unless the question explicitly asks for a" in script
+    assert "with the full duration phrase" in script
+    assert "Only say the information is insufficient" in script
+    assert "Override any earlier instruction to print <mem_thinking> tags." in script
+    assert "use these internal checks silently" in script
     assert "ANSWER: <your concise answer>" in script
     assert "Never leave ANSWER blank." in script
     assert "get_answer_generation_prompt" in script

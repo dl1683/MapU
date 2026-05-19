@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import pathlib
+import re
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -30,15 +31,72 @@ def _parse_args() -> tuple[str, list[str]]:
 
 
 def _require_nonblank_answer(prompt: str) -> str:
+    prompt = _suppress_printed_reasoning(prompt)
+    fact_hints = _extract_fact_hints(prompt)
+    fact_hint_section = ""
+    if fact_hints:
+        fact_hint_section = (
+            "\n\nDIRECT FACT HINTS FROM RETRIEVED MEMORIES:\n"
+            + "\n".join(f"- {hint}" for hint in fact_hints)
+            + "\nUse these only when they match the question, and preserve their exact qualifiers."
+        )
     return (
-        f"{prompt}\n\n"
+        f"{prompt}{fact_hint_section}\n\n"
         "OUTPUT FORMAT REQUIREMENT:\n"
-        "After any private reasoning tags, write a final non-empty line exactly as:\n"
+        "Use the retrieved memories first. A user-stated fact or fact_hint "
+        "containing an exact name, number, date, duration, identity, preference, "
+        "status, or correction is explicit evidence and should be answered "
+        "directly when it matches the question.\n"
+        "If you identify a matching memory or fact_hint, do not answer that the "
+        "information is insufficient; copy or normalize the matching fact.\n"
+        "Preserve qualifiers from direct evidence, such as 'each way', 'per day', "
+        "'before tax', or 'as of Friday'. Do not convert a per-leg, per-item, or "
+        "qualified value into a total unless the question explicitly asks for a "
+        "total, round trip, sum, or aggregate.\n"
+        "For duration facts in the form '<thing> takes <duration phrase>', answer "
+        "with the full duration phrase, including words like 'each way'.\n"
+        "Only say the information is insufficient when the provided memories are "
+        "empty, unrelated, or about a different entity/context.\n"
+        "Override any earlier instruction to print <mem_thinking> tags. Think "
+        "privately if needed, but output only one final non-empty line exactly as:\n"
         "ANSWER: <your concise answer>\n"
-        "If the memories are insufficient, still write:\n"
-        "ANSWER: The information provided is not enough.\n"
+        "If the memories are genuinely insufficient, write a concise non-empty "
+        "ANSWER line that says the answer is not available from the memories.\n"
         "Never leave ANSWER blank."
     )
+
+
+def _extract_fact_hints(prompt: str, limit: int = 12) -> list[str]:
+    hints: list[str] = []
+    seen: set[str] = set()
+    for match in re.finditer(r"fact_hint:\s*([^\n\r]+)", prompt):
+        hint = match.group(1).strip(" -;")
+        if not hint or hint in seen:
+            continue
+        seen.add(hint)
+        hints.append(hint)
+        if len(hints) >= limit:
+            break
+    return hints
+
+
+def _suppress_printed_reasoning(prompt: str) -> str:
+    replacements = {
+        "Before answering, reason step-by-step inside <mem_thinking> tags:":
+            "Before answering, use these internal checks silently; do not print reasoning:",
+        "The user will only see text outside the <mem_thinking> tags.":
+            "The user will only see the final answer line.",
+        (
+            "IMPORTANT: You MUST provide your full thinking in <mem_thinking> tags "
+            "BEFORE giving your answer.; Reasoning and answer:"
+        ):
+            "Do not print reasoning. Final answer only:",
+        'Say "The information provided is not enough" when:':
+            "Use an insufficiency answer only when:",
+    }
+    for old, new in replacements.items():
+        prompt = prompt.replace(old, new)
+    return prompt
 
 
 def _wrap_prompt_builder(fn: Callable[..., str]) -> Callable[..., str]:

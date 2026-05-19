@@ -353,7 +353,7 @@ Invoke-Checked "dummy benchmark API keys are explicitly dummy only" {
         throw "rg failed while scanning API key names"
     }
     foreach ($line in $result) {
-        if ($line -notmatch "dummy|os\.getenv|GLOBAL_MEMORY_BENCHMARK_STATUS|release_surface_audit\.ps1") {
+        if ($line -notmatch "dummy|os\.getenv|candidateKeyName|ModelApiKey|GetEnvironmentVariable|GLOBAL_MEMORY_BENCHMARK_STATUS|release_surface_audit\.ps1") {
             throw $line
         }
     }

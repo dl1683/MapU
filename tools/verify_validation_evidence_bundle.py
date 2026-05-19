@@ -27,7 +27,20 @@ RunCommand = Callable[[list[str], Path], subprocess.CompletedProcess[str]]
 
 def _load_json(path: Path, label: str) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        text = None
+        encoding_errors: list[str] = []
+        for encoding in ("utf-8-sig", "utf-16"):
+            try:
+                text = path.read_text(encoding=encoding)
+                break
+            except UnicodeError as exc:
+                encoding_errors.append(f"{encoding}: {exc}")
+        if text is None:
+            raise SystemExit(
+                f"{label} evidence could not be decoded: {path}: "
+                f"{'; '.join(encoding_errors)}"
+            )
+        data = json.loads(text)
     except FileNotFoundError as exc:
         raise SystemExit(f"{label} evidence not found: {path}") from exc
     except json.JSONDecodeError as exc:

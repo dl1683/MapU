@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from tools.verify_benchmark_isolation import verify_benchmark_isolation
+from tools.verify_full_sweep_progress import _load_json as load_full_sweep_progress_json
 from tools.verify_full_sweep_progress import verify_full_sweep_progress
 from tools.verify_objective_completion import (
     DEFAULT_BENCHMARK_GATE_META,
@@ -37,6 +38,7 @@ from tools.verify_release_audit_evidence import (
 from tools.verify_release_audit_evidence import (
     verify_release_audit_evidence,
 )
+from tools.verify_validation_evidence_bundle import _load_json as load_bundle_json
 from tools.verify_validation_evidence_bundle import verify_validation_evidence_bundle
 
 
@@ -1408,6 +1410,16 @@ def test_objective_audit_loads_windows_powershell_redirected_json(tmp_path: Path
 
     assert errors == []
     assert data == {"status": "ok"}
+
+
+def test_progress_and_bundle_verifiers_load_windows_powershell_redirected_json(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "progress.json"
+    path.write_text('{"status": "ok"}', encoding="utf-16")
+
+    assert load_full_sweep_progress_json(str(path)) == {"status": "ok"}
+    assert load_bundle_json(path, "full-sweep progress") == {"status": "ok"}
 
 
 def test_prepublish_gate_preflights_live_benchmark_services() -> None:

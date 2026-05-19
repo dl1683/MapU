@@ -12,7 +12,20 @@ def _load_json(path_text: str) -> dict[str, Any]:
         if path_text == "-":
             raw = sys.stdin.read()
         else:
-            raw = Path(path_text).read_text(encoding="utf-8-sig")
+            path = Path(path_text)
+            raw = None
+            encoding_errors: list[str] = []
+            for encoding in ("utf-8-sig", "utf-16"):
+                try:
+                    raw = path.read_text(encoding=encoding)
+                    break
+                except UnicodeError as exc:
+                    encoding_errors.append(f"{encoding}: {exc}")
+            if raw is None:
+                raise SystemExit(
+                    "full-sweep progress JSON could not be decoded: "
+                    f"{path_text}: {'; '.join(encoding_errors)}"
+                )
         data = json.loads(raw)
     except FileNotFoundError as exc:
         raise SystemExit(f"full-sweep progress JSON not found: {path_text}") from exc

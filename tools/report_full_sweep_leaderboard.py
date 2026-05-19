@@ -49,27 +49,36 @@ def _print_pair(label: str, ours: float | None, baseline: float | None) -> None:
 
 def main() -> None:
     suffix = os.getenv("MAPU_BENCH_PROJECT_SUFFIX", "v2")
+    model_label = os.getenv("MAPU_BENCH_MODEL_LABEL", "qwen06")
     ours_locomo_path = _latest_result(
         ROOT / "results" / "locomo",
         "locomo_results",
-        f"mapu_fullsweep_qwen06_locomo_{suffix}",
+        f"mapu_fullsweep_{model_label}_locomo_{suffix}",
     )
     ours_longmem_path = _latest_result(
         ROOT / "results" / "longmemeval",
         "longmemeval_results",
-        f"mapu_fullsweep_qwen06_longmemeval_{suffix}",
+        f"mapu_fullsweep_{model_label}_longmemeval_{suffix}",
     )
     ours_beam_100k_path = _latest_result(
-        ROOT / "results" / "beam", "beam_results", f"mapu_fullsweep_qwen06_beam_100k_{suffix}"
+        ROOT / "results" / "beam",
+        "beam_results",
+        f"mapu_fullsweep_{model_label}_beam_100k_{suffix}",
     )
     ours_beam_500k_path = _latest_result(
-        ROOT / "results" / "beam", "beam_results", f"mapu_fullsweep_qwen06_beam_500k_{suffix}"
+        ROOT / "results" / "beam",
+        "beam_results",
+        f"mapu_fullsweep_{model_label}_beam_500k_{suffix}",
     )
     ours_beam_1m_path = _latest_result(
-        ROOT / "results" / "beam", "beam_results", f"mapu_fullsweep_qwen06_beam_1m_{suffix}"
+        ROOT / "results" / "beam",
+        "beam_results",
+        f"mapu_fullsweep_{model_label}_beam_1m_{suffix}",
     )
     ours_beam_10m_path = _latest_result(
-        ROOT / "results" / "beam", "beam_results", f"mapu_fullsweep_qwen06_beam_10m_{suffix}"
+        ROOT / "results" / "beam",
+        "beam_results",
+        f"mapu_fullsweep_{model_label}_beam_10m_{suffix}",
     )
 
     baseline_dir = ROOT / ".tmp" / "memory-benchmarks" / "results" / "platform"

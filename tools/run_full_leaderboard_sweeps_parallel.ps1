@@ -3,6 +3,13 @@ param(
     [int]$LaneTimeoutMinutes = 240,
     [int]$IdleTimeoutMinutes = 20,
     [string]$BenchmarkMem0HostArg = "http://localhost:8000",
+    [string]$AnswererModel = "qwen3:0.6b",
+    [string]$JudgeModel = "",
+    [string]$Provider = "openai",
+    [string]$JudgeProvider = "",
+    [string]$ModelBaseUrl = "http://localhost:11434/v1",
+    [string]$ModelApiKey = "",
+    [string]$ModelLabel = "",
     [switch]$Resume
 )
 
@@ -21,6 +28,45 @@ if ($IdleTimeoutMinutes -lt 1) {
 if ([string]::IsNullOrWhiteSpace($BenchmarkMem0HostArg)) {
     throw "BenchmarkMem0HostArg must not be blank"
 }
+if ([string]::IsNullOrWhiteSpace($AnswererModel)) {
+    throw "AnswererModel must not be blank"
+}
+if ([string]::IsNullOrWhiteSpace($JudgeModel)) {
+    $JudgeModel = $AnswererModel
+}
+if ([string]::IsNullOrWhiteSpace($Provider)) {
+    throw "Provider must not be blank"
+}
+if ([string]::IsNullOrWhiteSpace($JudgeProvider)) {
+    $JudgeProvider = $Provider
+}
+if ([string]::IsNullOrWhiteSpace($ModelBaseUrl)) {
+    throw "ModelBaseUrl must not be blank"
+}
+if ([string]::IsNullOrWhiteSpace($ModelLabel)) {
+    $ModelLabel = ($AnswererModel.ToLowerInvariant() -replace "[^a-z0-9]+", "_").Trim("_")
+}
+if ([string]::IsNullOrWhiteSpace($ModelLabel)) {
+    throw "ModelLabel must not be blank"
+}
+if ($ModelLabel -notmatch "^[A-Za-z0-9_-]+$") {
+    throw "ModelLabel must contain only letters, numbers, underscores, or hyphens"
+}
+if ([string]::IsNullOrWhiteSpace($ModelApiKey)) {
+    $candidateKeyNames = @("GEMINI_API_KEY", "GOOGLE_API_KEY", "MAPU_LLM_API_KEY", "OPENAI_API_KEY")
+    foreach ($candidateKeyName in $candidateKeyNames) {
+        foreach ($target in @("Process", "User", "Machine")) {
+            $candidateKey = [Environment]::GetEnvironmentVariable($candidateKeyName, $target)
+            if (-not [string]::IsNullOrWhiteSpace($candidateKey)) {
+                $ModelApiKey = $candidateKey
+                break
+            }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ModelApiKey)) {
+            break
+        }
+    }
+}
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location -LiteralPath $repoRoot
@@ -30,8 +76,8 @@ if (-not (Test-Path -LiteralPath $python)) {
     throw "Python executable not found: $python"
 }
 
-$env:OPENAI_API_KEY = "dummy"
-$env:OPENAI_BASE_URL = "http://localhost:11434/v1"
+$env:OPENAI_API_KEY = if ([string]::IsNullOrWhiteSpace($ModelApiKey)) { "dummy" } else { $ModelApiKey }
+$env:OPENAI_BASE_URL = $ModelBaseUrl
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 $env:MAPU_BENCH_CONTEXT_LIMIT = "40"
@@ -46,7 +92,14 @@ if (-not $projectSuffix) {
     $projectSuffix = "public_parallel_" + (Get-Date -Format "yyyyMMdd_HHmmss")
     $env:MAPU_BENCH_PROJECT_SUFFIX = $projectSuffix
 }
+$env:MAPU_BENCH_MODEL_LABEL = $ModelLabel
 Write-Output ("[{0}] Public benchmark project suffix: {1}" -f (Get-Date -Format "s"), $projectSuffix)
+Write-Output ("[{0}] Answerer model: {1}" -f (Get-Date -Format "s"), $AnswererModel)
+Write-Output ("[{0}] Judge model: {1}" -f (Get-Date -Format "s"), $JudgeModel)
+Write-Output ("[{0}] Model provider: {1}; judge provider: {2}" -f (Get-Date -Format "s"), $Provider, $JudgeProvider)
+Write-Output ("[{0}] Model base URL: {1}" -f (Get-Date -Format "s"), $ModelBaseUrl)
+Write-Output ("[{0}] Model API key present: {1}" -f (Get-Date -Format "s"), (-not [string]::IsNullOrWhiteSpace($ModelApiKey)))
+Write-Output ("[{0}] Benchmark model label: {1}" -f (Get-Date -Format "s"), $ModelLabel)
 Write-Output ("[{0}] Max parallel benchmark jobs: {1}" -f (Get-Date -Format "s"), $MaxParallel)
 Write-Output ("[{0}] Lane timeout minutes: {1}" -f (Get-Date -Format "s"), $LaneTimeoutMinutes)
 Write-Output ("[{0}] Idle timeout minutes: {1}" -f (Get-Date -Format "s"), $IdleTimeoutMinutes)
@@ -75,14 +128,14 @@ function Write-JsonUtf8NoBom {
 
 $jobs = @(
     @{
-        Name = "locomo_full_qwen06"
+        Name = "locomo_full_$ModelLabel"
         Args = @(
             "tools/run_mem0_benchmark_with_mapu.py", "locomo",
-            "--project-name", "mapu_fullsweep_qwen06_locomo_$projectSuffix",
-            "--answerer-model", "qwen3:0.6b",
-            "--judge-model", "qwen3:0.6b",
-            "--provider", "openai",
-            "--judge-provider", "openai",
+            "--project-name", "mapu_fullsweep_${ModelLabel}_locomo_$projectSuffix",
+            "--answerer-model", $AnswererModel,
+            "--judge-model", $JudgeModel,
+            "--provider", $Provider,
+            "--judge-provider", $JudgeProvider,
             "--backend", "oss",
             "--mem0-host", $BenchmarkMem0HostArg,
             "--conversations", "0,1,2,3,4,5,6,7,8,9",
@@ -94,14 +147,14 @@ $jobs = @(
         )
     },
     @{
-        Name = "longmemeval_full_qwen06"
+        Name = "longmemeval_full_$ModelLabel"
         Args = @(
             "tools/run_mem0_benchmark_with_mapu.py", "longmemeval",
-            "--project-name", "mapu_fullsweep_qwen06_longmemeval_$projectSuffix",
-            "--answerer-model", "qwen3:0.6b",
-            "--judge-model", "qwen3:0.6b",
-            "--provider", "openai",
-            "--judge-provider", "openai",
+            "--project-name", "mapu_fullsweep_${ModelLabel}_longmemeval_$projectSuffix",
+            "--answerer-model", $AnswererModel,
+            "--judge-model", $JudgeModel,
+            "--provider", $Provider,
+            "--judge-provider", $JudgeProvider,
             "--backend", "oss",
             "--mem0-host", $BenchmarkMem0HostArg,
             "--all-questions",
@@ -112,14 +165,14 @@ $jobs = @(
         )
     },
     @{
-        Name = "beam_full_100k_qwen06"
+        Name = "beam_full_100k_$ModelLabel"
         Args = @(
             "tools/run_mem0_benchmark_with_mapu.py", "beam",
-            "--project-name", "mapu_fullsweep_qwen06_beam_100k_$projectSuffix",
-            "--answerer-model", "qwen3:0.6b",
-            "--judge-model", "qwen3:0.6b",
-            "--provider", "openai",
-            "--judge-provider", "openai",
+            "--project-name", "mapu_fullsweep_${ModelLabel}_beam_100k_$projectSuffix",
+            "--answerer-model", $AnswererModel,
+            "--judge-model", $JudgeModel,
+            "--provider", $Provider,
+            "--judge-provider", $JudgeProvider,
             "--backend", "oss",
             "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "100K",
@@ -131,14 +184,14 @@ $jobs = @(
         )
     },
     @{
-        Name = "beam_full_500k_qwen06"
+        Name = "beam_full_500k_$ModelLabel"
         Args = @(
             "tools/run_mem0_benchmark_with_mapu.py", "beam",
-            "--project-name", "mapu_fullsweep_qwen06_beam_500k_$projectSuffix",
-            "--answerer-model", "qwen3:0.6b",
-            "--judge-model", "qwen3:0.6b",
-            "--provider", "openai",
-            "--judge-provider", "openai",
+            "--project-name", "mapu_fullsweep_${ModelLabel}_beam_500k_$projectSuffix",
+            "--answerer-model", $AnswererModel,
+            "--judge-model", $JudgeModel,
+            "--provider", $Provider,
+            "--judge-provider", $JudgeProvider,
             "--backend", "oss",
             "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "500K",
@@ -150,14 +203,14 @@ $jobs = @(
         )
     },
     @{
-        Name = "beam_full_1m_qwen06"
+        Name = "beam_full_1m_$ModelLabel"
         Args = @(
             "tools/run_mem0_benchmark_with_mapu.py", "beam",
-            "--project-name", "mapu_fullsweep_qwen06_beam_1m_$projectSuffix",
-            "--answerer-model", "qwen3:0.6b",
-            "--judge-model", "qwen3:0.6b",
-            "--provider", "openai",
-            "--judge-provider", "openai",
+            "--project-name", "mapu_fullsweep_${ModelLabel}_beam_1m_$projectSuffix",
+            "--answerer-model", $AnswererModel,
+            "--judge-model", $JudgeModel,
+            "--provider", $Provider,
+            "--judge-provider", $JudgeProvider,
             "--backend", "oss",
             "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "1M",
@@ -169,14 +222,14 @@ $jobs = @(
         )
     },
     @{
-        Name = "beam_full_10m_qwen06"
+        Name = "beam_full_10m_$ModelLabel"
         Args = @(
             "tools/run_mem0_benchmark_with_mapu.py", "beam",
-            "--project-name", "mapu_fullsweep_qwen06_beam_10m_$projectSuffix",
-            "--answerer-model", "qwen3:0.6b",
-            "--judge-model", "qwen3:0.6b",
-            "--provider", "openai",
-            "--judge-provider", "openai",
+            "--project-name", "mapu_fullsweep_${ModelLabel}_beam_10m_$projectSuffix",
+            "--answerer-model", $AnswererModel,
+            "--judge-model", $JudgeModel,
+            "--provider", $Provider,
+            "--judge-provider", $JudgeProvider,
             "--backend", "oss",
             "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "10M",

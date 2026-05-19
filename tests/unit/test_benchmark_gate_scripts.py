@@ -2182,6 +2182,10 @@ def test_sequential_full_sweep_keeps_per_lane_logs_and_metadata() -> None:
     assert "BenchmarkMem0HostArg" in script
     assert '"--mem0-host", $BenchmarkMem0HostArg' in script
     assert '"--mem0-host", "http://localhost:8000"' not in script
+    assert "[string]$AnswererModel" in script
+    assert "[string]$ModelBaseUrl" in script
+    assert "[string]$ModelLabel" in script
+    assert "mapu_fullsweep_${ModelLabel}_locomo_$projectSuffix" in script
     assert "GetTempFileName" not in script
     assert "Remove-Item -LiteralPath $tmpOut" not in script
 
@@ -2196,6 +2200,10 @@ def test_parallel_full_sweep_writes_failure_metadata() -> None:
     assert "BenchmarkMem0HostArg" in script
     assert '"--mem0-host", $BenchmarkMem0HostArg' in script
     assert '"--mem0-host", "http://localhost:8000"' not in script
+    assert "[string]$AnswererModel" in script
+    assert "[string]$ModelBaseUrl" in script
+    assert "[string]$ModelLabel" in script
+    assert "mapu_fullsweep_${ModelLabel}_longmemeval_$projectSuffix" in script
     assert "exited with code $exitCodeLabel" in script
     assert "exceeded idle timeout" in script
     assert "exceeded lane timeout" in script
@@ -2249,15 +2257,22 @@ def test_prepublish_gate_requires_checked_resume_suffix() -> None:
     assert "$sweepArgs += \"-Resume\"" in script
     assert "-Resume:$($Resume.IsPresent)" not in script
     assert "project_suffix" in script
+    assert "answerer_model" in script
+    assert "model_api_key_present" in script
+    assert "answer_generation_scope" in script
     assert "resume = $Resume.IsPresent" in script
 
     assert "[string]$ProjectSuffix" in launcher
+    assert "[string]$AnswererModel" in launcher
+    assert "[string]$ModelBaseUrl" in launcher
+    assert "[string]$ModelLabel" in launcher
     assert "[switch]$Resume" in launcher
     assert "$gateProjectSuffix" in launcher
     assert '"-ProjectSuffix", $gateProjectSuffix' in launcher
     assert "prepublish_gate_launcher_${stamp}.json" in launcher
     assert "launcher_metadata" in launcher
     assert "progress_command" in launcher
+    assert "-LauncherMetadata $launcherMeta -Json" in launcher
     assert "resume_command" in launcher
     assert "Resume requires -ProjectSuffix prepublish_yyyyMMdd_HHmmss" in launcher
     assert "Write-JsonUtf8NoBom -Data $meta -Path $launcherMeta" in launcher
@@ -2265,8 +2280,10 @@ def test_prepublish_gate_requires_checked_resume_suffix() -> None:
 
     progress = _read("tools/check_full_sweep_progress.ps1")
     assert "[string]$LauncherMetadata = $env:MAPU_BENCH_LAUNCHER_METADATA" in progress
+    assert "[string]$ModelLabel = $env:MAPU_BENCH_MODEL_LABEL" in progress
     assert 'Get-ChildItem "logs/benchmarks" -Filter "prepublish_gate_launcher_*.json"' in progress
     assert "project_suffix" in progress
+    assert "model_label" in progress
     assert "launcher_metadata" in progress
     assert "launcher_pid" in progress
     assert "launcher_running" in progress

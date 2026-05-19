@@ -1,5 +1,6 @@
 param(
     [string]$Suffix = $env:MAPU_BENCH_PROJECT_SUFFIX,
+    [string]$ModelLabel = $env:MAPU_BENCH_MODEL_LABEL,
     [string]$LauncherMetadata = $env:MAPU_BENCH_LAUNCHER_METADATA,
     [switch]$Json
 )
@@ -88,6 +89,13 @@ if ($launcherMeta -and $launcherMeta.project_suffix) {
     }
     $Suffix = $launcherSuffix
 }
+$modelLabel = $ModelLabel
+if ($launcherMeta -and $launcherMeta.model_label) {
+    $modelLabel = [string]$launcherMeta.model_label
+}
+if ([string]::IsNullOrWhiteSpace($modelLabel)) {
+    $modelLabel = "qwen06"
+}
 
 if (-not $Suffix) {
     $latestGate = Get-ChildItem "logs/benchmarks" -Directory -Filter "prepublish_gate_*" -ErrorAction SilentlyContinue |
@@ -102,16 +110,16 @@ if (-not $Suffix) {
 }
 
 $locomoTotal = 1540
-$locomoDone = Get-JsonCount "results/locomo/predicted_mapu_fullsweep_qwen06_locomo_$Suffix"
+$locomoDone = Get-JsonCount "results/locomo/predicted_mapu_fullsweep_${modelLabel}_locomo_$Suffix"
 
 $longmemTotal = 500
-$longmemDone = Get-JsonCount "results/longmemeval/predicted_mapu_fullsweep_qwen06_longmemeval_$Suffix"
+$longmemDone = Get-JsonCount "results/longmemeval/predicted_mapu_fullsweep_${modelLabel}_longmemeval_$Suffix"
 
 $beamDirs = @(
-    "predicted_mapu_fullsweep_qwen06_beam_100k_$Suffix",
-    "predicted_mapu_fullsweep_qwen06_beam_500k_$Suffix",
-    "predicted_mapu_fullsweep_qwen06_beam_1m_$Suffix",
-    "predicted_mapu_fullsweep_qwen06_beam_10m_$Suffix"
+    "predicted_mapu_fullsweep_${modelLabel}_beam_100k_$Suffix",
+    "predicted_mapu_fullsweep_${modelLabel}_beam_500k_$Suffix",
+    "predicted_mapu_fullsweep_${modelLabel}_beam_1m_$Suffix",
+    "predicted_mapu_fullsweep_${modelLabel}_beam_10m_$Suffix"
 )
 $beamStatus = @()
 foreach ($d in $beamDirs) {
@@ -184,6 +192,7 @@ $resumeCommand = if ($Suffix -and $Suffix -match "^prepublish_\d{8}_\d{6}$") {
 
 $summary = [ordered]@{
     suffix = $Suffix
+    model_label = $modelLabel
     gate_dir = $latestGate
     code_sha = $codeSha
     current_sha = $currentSha
@@ -211,6 +220,7 @@ if ($Json) {
 }
 
 Write-Output ("Project suffix: {0}" -f $Suffix)
+Write-Output ("Model label: {0}" -f $modelLabel)
 if ($launcherMetaPath) {
     Write-Output ("Launcher metadata: {0}" -f $launcherMetaPath)
     if ($launcherPid) {

@@ -6,6 +6,13 @@ param(
     [int]$LaneTimeoutMinutes = 240,
     [int]$IdleTimeoutMinutes = 20,
     [string]$ProjectSuffix = "",
+    [string]$AnswererModel = "qwen3:0.6b",
+    [string]$JudgeModel = "",
+    [string]$Provider = "openai",
+    [string]$JudgeProvider = "",
+    [string]$ModelBaseUrl = "http://localhost:11434/v1",
+    [string]$ModelApiKey = "",
+    [string]$ModelLabel = "",
     [switch]$Resume
 )
 
@@ -21,7 +28,7 @@ $runParallelSweep = Join-Path $repoRoot "tools\run_full_leaderboard_sweeps_paral
 $report = Join-Path $repoRoot "tools\report_full_sweep_leaderboard.py"
 $verifyBenchmarkEvidence = Join-Path $repoRoot "tools\verify_prepublish_benchmark_evidence.py"
 $statusDoc = Join-Path $repoRoot "GLOBAL_MEMORY_BENCHMARK_STATUS.md"
-$modelBaseUrl = "http://localhost:11434/v1"
+$modelBaseUrl = $ModelBaseUrl
 $benchmarkMem0HostArg = "http://localhost:8000"
 
 if (-not (Test-Path -LiteralPath $python)) { throw "Missing python: $python" }
@@ -29,6 +36,32 @@ if (-not (Test-Path -LiteralPath $runSweep)) { throw "Missing sweep runner: $run
 if ($Parallel -and -not (Test-Path -LiteralPath $runParallelSweep)) { throw "Missing parallel sweep runner: $runParallelSweep" }
 if (-not (Test-Path -LiteralPath $report)) { throw "Missing report script: $report" }
 if (-not (Test-Path -LiteralPath $verifyBenchmarkEvidence)) { throw "Missing benchmark evidence verifier: $verifyBenchmarkEvidence" }
+if ([string]::IsNullOrWhiteSpace($AnswererModel)) { throw "AnswererModel must not be blank" }
+if ([string]::IsNullOrWhiteSpace($JudgeModel)) { $JudgeModel = $AnswererModel }
+if ([string]::IsNullOrWhiteSpace($Provider)) { throw "Provider must not be blank" }
+if ([string]::IsNullOrWhiteSpace($JudgeProvider)) { $JudgeProvider = $Provider }
+if ([string]::IsNullOrWhiteSpace($modelBaseUrl)) { throw "ModelBaseUrl must not be blank" }
+if ([string]::IsNullOrWhiteSpace($ModelLabel)) {
+    $ModelLabel = ($AnswererModel.ToLowerInvariant() -replace "[^a-z0-9]+", "_").Trim("_")
+}
+if ([string]::IsNullOrWhiteSpace($ModelLabel)) { throw "ModelLabel must not be blank" }
+if ($ModelLabel -notmatch "^[A-Za-z0-9_-]+$") {
+    throw "ModelLabel must contain only letters, numbers, underscores, or hyphens"
+}
+if ([string]::IsNullOrWhiteSpace($ModelApiKey)) {
+    foreach ($candidateKeyName in @("GEMINI_API_KEY", "GOOGLE_API_KEY", "MAPU_LLM_API_KEY", "OPENAI_API_KEY")) {
+        foreach ($target in @("Process", "User", "Machine")) {
+            $candidateKey = [Environment]::GetEnvironmentVariable($candidateKeyName, $target)
+            if (-not [string]::IsNullOrWhiteSpace($candidateKey)) {
+                $ModelApiKey = $candidateKey
+                break
+            }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ModelApiKey)) {
+            break
+        }
+    }
+}
 
 function Write-TextUtf8NoBom {
     param(
@@ -78,6 +111,13 @@ function New-GateMetadata {
         benchmark_evidence_verifier = $benchmarkVerifierOut
         status_doc = $statusDoc
         model_base_url = $modelBaseUrl
+        answerer_model = $AnswererModel
+        judge_model = $JudgeModel
+        provider = $Provider
+        judge_provider = $JudgeProvider
+        model_label = $ModelLabel
+        model_api_key_present = (-not [string]::IsNullOrWhiteSpace($ModelApiKey))
+        answer_generation_scope = "evaluation harness only; MapU memory storage/retrieval does not require this LLM"
         benchmark_mem0_host_arg = $benchmarkMem0HostArg
         skip_service_preflight = $SkipServicePreflight.IsPresent
         preflight_only = $PreflightOnly.IsPresent
@@ -116,6 +156,7 @@ if (-not [string]::IsNullOrWhiteSpace($providedProjectSuffix)) {
 else {
     $env:MAPU_BENCH_PROJECT_SUFFIX = "prepublish_$stamp"
 }
+$env:MAPU_BENCH_MODEL_LABEL = $ModelLabel
 Remove-Item Env:\MAPU_BENCH_SKIP_INGEST -ErrorAction SilentlyContinue
 $gateDir = Join-Path $logDir "prepublish_gate_$stamp"
 New-Item -ItemType Directory -Force -Path $gateDir | Out-Null
@@ -158,9 +199,11 @@ if (-not [string]::IsNullOrWhiteSpace($providedProjectSuffix) -and (Test-Path -L
         throw "Refusing to reuse $($env:MAPU_BENCH_PROJECT_SUFFIX): existing worktree $($existingIdentity["worktree"]) does not match current worktree $dirtyFlag"
     }
 }
-Write-TextUtf8NoBom -Path $codeIdentity -Text "sha=$gitSha`nworktree=$dirtyFlag`ntimestamp=$stamp`nparallel=$($Parallel.IsPresent)`nskip_service_preflight=$($SkipServicePreflight.IsPresent)`npreflight_only=$($PreflightOnly.IsPresent)`nmodel_base_url=$modelBaseUrl`nbenchmark_mem0_host_arg=$benchmarkMem0HostArg`nmax_parallel=$MaxParallel`nlane_timeout_minutes=$LaneTimeoutMinutes`nidle_timeout_minutes=$IdleTimeoutMinutes`nproject_suffix=$($env:MAPU_BENCH_PROJECT_SUFFIX)`nresume=$($Resume.IsPresent)"
+Write-TextUtf8NoBom -Path $codeIdentity -Text "sha=$gitSha`nworktree=$dirtyFlag`ntimestamp=$stamp`nparallel=$($Parallel.IsPresent)`nskip_service_preflight=$($SkipServicePreflight.IsPresent)`npreflight_only=$($PreflightOnly.IsPresent)`nmodel_base_url=$modelBaseUrl`nanswerer_model=$AnswererModel`njudge_model=$JudgeModel`nprovider=$Provider`njudge_provider=$JudgeProvider`nmodel_label=$ModelLabel`nmodel_api_key_present=$(-not [string]::IsNullOrWhiteSpace($ModelApiKey))`nanswer_generation_scope=evaluation harness only; MapU memory storage/retrieval does not require this LLM`nbenchmark_mem0_host_arg=$benchmarkMem0HostArg`nmax_parallel=$MaxParallel`nlane_timeout_minutes=$LaneTimeoutMinutes`nidle_timeout_minutes=$IdleTimeoutMinutes`nproject_suffix=$($env:MAPU_BENCH_PROJECT_SUFFIX)`nresume=$($Resume.IsPresent)"
 $preflightStatus = if ($SkipServicePreflight) { "skipped" } else { "not_run" }
 $preflightChecks = [ordered]@{}
+$env:OPENAI_API_KEY = if ([string]::IsNullOrWhiteSpace($ModelApiKey)) { "dummy" } else { $ModelApiKey }
+$env:OPENAI_BASE_URL = $modelBaseUrl
 
 function Test-HttpEndpoint {
     param(
@@ -169,7 +212,11 @@ function Test-HttpEndpoint {
     )
 
     try {
-        $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 8
+        $headers = @{}
+        if ($Name -eq "model endpoint" -and -not [string]::IsNullOrWhiteSpace($ModelApiKey)) {
+            $headers["Authorization"] = "Bearer $ModelApiKey"
+        }
+        $response = Invoke-WebRequest -Uri $Uri -Headers $headers -UseBasicParsing -TimeoutSec 8
     }
     catch {
         $script:preflightChecks[$Name] = [ordered]@{
@@ -237,7 +284,7 @@ asyncio.run(main())
 
 try {
     if (-not $SkipServicePreflight) {
-        Test-HttpEndpoint -Name "model endpoint" -Uri "$modelBaseUrl/models"
+        Test-HttpEndpoint -Name "model endpoint" -Uri "$($modelBaseUrl.TrimEnd('/'))/models"
         Test-MapUDatabase
         $preflightStatus = "ok"
     }
@@ -275,7 +322,13 @@ try {
             "-MaxParallel", $MaxParallel,
             "-LaneTimeoutMinutes", $LaneTimeoutMinutes,
             "-IdleTimeoutMinutes", $IdleTimeoutMinutes,
-            "-BenchmarkMem0HostArg", $benchmarkMem0HostArg
+            "-BenchmarkMem0HostArg", $benchmarkMem0HostArg,
+            "-AnswererModel", $AnswererModel,
+            "-JudgeModel", $JudgeModel,
+            "-Provider", $Provider,
+            "-JudgeProvider", $JudgeProvider,
+            "-ModelBaseUrl", $modelBaseUrl,
+            "-ModelLabel", $ModelLabel
         )
     }
     else {
@@ -283,7 +336,13 @@ try {
             "-NoProfile",
             "-ExecutionPolicy", "Bypass",
             "-File", $runSweep,
-            "-BenchmarkMem0HostArg", $benchmarkMem0HostArg
+            "-BenchmarkMem0HostArg", $benchmarkMem0HostArg,
+            "-AnswererModel", $AnswererModel,
+            "-JudgeModel", $JudgeModel,
+            "-Provider", $Provider,
+            "-JudgeProvider", $JudgeProvider,
+            "-ModelBaseUrl", $modelBaseUrl,
+            "-ModelLabel", $ModelLabel
         )
     }
     if ($Resume) {

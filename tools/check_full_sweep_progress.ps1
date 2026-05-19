@@ -1,5 +1,6 @@
 param(
     [string]$Suffix = $env:MAPU_BENCH_PROJECT_SUFFIX,
+    [string]$LauncherMetadata = $env:MAPU_BENCH_LAUNCHER_METADATA,
     [switch]$Json
 )
 
@@ -45,6 +46,47 @@ function Get-WorkerPids([string]$path) {
         }
     }
     return $pids
+}
+
+function Read-JsonFile([string]$path) {
+    try {
+        return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    }
+    catch {
+        throw "Could not read JSON metadata: $path"
+    }
+}
+
+$launcherMeta = $null
+$launcherMetaPath = $null
+if (-not [string]::IsNullOrWhiteSpace($LauncherMetadata)) {
+    $launcherMetaPath = if ([System.IO.Path]::IsPathRooted($LauncherMetadata)) {
+        $LauncherMetadata
+    }
+    else {
+        Join-Path $repoRoot $LauncherMetadata
+    }
+    if (-not (Test-Path -LiteralPath $launcherMetaPath)) {
+        throw "Launcher metadata not found: $launcherMetaPath"
+    }
+    $launcherMeta = Read-JsonFile $launcherMetaPath
+}
+elseif (-not $Suffix) {
+    $latestLauncher = Get-ChildItem "logs/benchmarks" -Filter "prepublish_gate_launcher_*.json" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if ($latestLauncher) {
+        $launcherMetaPath = $latestLauncher.FullName
+        $launcherMeta = Read-JsonFile $launcherMetaPath
+    }
+}
+
+if ($launcherMeta -and $launcherMeta.project_suffix) {
+    $launcherSuffix = [string]$launcherMeta.project_suffix
+    if ($Suffix -and $Suffix -ne $launcherSuffix) {
+        throw "Suffix '$Suffix' does not match launcher metadata project_suffix '$launcherSuffix'"
+    }
+    $Suffix = $launcherSuffix
 }
 
 if (-not $Suffix) {
@@ -127,8 +169,15 @@ $gateStatus = if ($gateMeta -and $gateMeta.status) { [string]$gateMeta.status } 
 $benchmarkEvidenceVerified = if ($gateMeta -and $null -ne $gateMeta.benchmark_evidence_verified) { [bool]$gateMeta.benchmark_evidence_verified } else { $false }
 $gatePublicEvidence = if ($gateMeta -and $null -ne $gateMeta.public_performance_evidence) { [bool]$gateMeta.public_performance_evidence } else { $false }
 $publicEvidence = $gatePass -and $gatePublicEvidence -and $benchmarkEvidenceVerified -and $allCountsComplete -and $currentShaMatches
+$launcherPid = if ($launcherMeta -and $null -ne $launcherMeta.pid) { [int]$launcherMeta.pid } else { $null }
+$launcherRunning = if ($launcherPid) { [bool](Get-Process -Id $launcherPid -ErrorAction SilentlyContinue) } else { $false }
 $resumeCommand = if ($Suffix -and $Suffix -match "^prepublish_\d{8}_\d{6}$") {
-    "powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20 -ProjectSuffix $Suffix -Resume"
+    if ($launcherMeta -and $launcherMeta.resume_command) {
+        [string]$launcherMeta.resume_command
+    }
+    else {
+        "powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20 -ProjectSuffix $Suffix -Resume"
+    }
 } else {
     $null
 }
@@ -140,6 +189,9 @@ $summary = [ordered]@{
     current_sha = $currentSha
     current_sha_matches = $currentShaMatches
     worktree = $codeWorktree
+    launcher_metadata = $launcherMetaPath
+    launcher_pid = $launcherPid
+    launcher_running = $launcherRunning
     gate_status = $gateStatus
     gate_meta_present = [bool]$gateMeta
     gate_pass = $gatePass
@@ -159,6 +211,12 @@ if ($Json) {
 }
 
 Write-Output ("Project suffix: {0}" -f $Suffix)
+if ($launcherMetaPath) {
+    Write-Output ("Launcher metadata: {0}" -f $launcherMetaPath)
+    if ($launcherPid) {
+        Write-Output ("Launcher process: PID={0}; running={1}" -f $launcherPid, $launcherRunning)
+    }
+}
 if ($latestGate) {
     Write-Output ("Gate directory: {0}" -f $latestGate)
 }

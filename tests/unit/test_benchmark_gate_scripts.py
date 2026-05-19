@@ -2237,3 +2237,13 @@ def test_prepublish_gate_requires_checked_resume_suffix() -> None:
     assert "Resume requires -ProjectSuffix prepublish_yyyyMMdd_HHmmss" in launcher
     assert "Write-JsonUtf8NoBom -Data $meta -Path $launcherMeta" in launcher
     assert '$argList += "-Resume"' in launcher
+
+    progress = _read("tools/check_full_sweep_progress.ps1")
+    assert "[string]$LauncherMetadata = $env:MAPU_BENCH_LAUNCHER_METADATA" in progress
+    assert 'Get-ChildItem "logs/benchmarks" -Filter "prepublish_gate_launcher_*.json"' in progress
+    assert "project_suffix" in progress
+    assert "launcher_metadata" in progress
+    assert "launcher_pid" in progress
+    assert "launcher_running" in progress
+    assert "does not match launcher metadata project_suffix" in progress
+    assert "[string]$launcherMeta.resume_command" in progress

@@ -304,6 +304,14 @@ progress command, resume command, PID, and logs are captured immediately:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\start_prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
 ```
 
+The progress checker reads the latest launcher metadata by default, or a pinned
+metadata file when supplied:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_full_sweep_progress.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_full_sweep_progress.ps1 -LauncherMetadata logs\benchmarks\prepublish_gate_launcher_yyyyMMdd_HHmmss.json -Json
+```
+
 If a long public gate is interrupted, resume the same exact-code artifact set
 instead of starting a fresh suffix:
 

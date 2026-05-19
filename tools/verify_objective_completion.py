@@ -109,8 +109,18 @@ def _run_command(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]
 def _load_json(path: Path, label: str) -> tuple[dict[str, Any] | None, list[str]]:
     if not path.exists():
         return None, [f"{label} evidence not found: {path}"]
+    text: str | None = None
+    encoding_errors: list[str] = []
+    for encoding in ("utf-8-sig", "utf-16"):
+        try:
+            text = path.read_text(encoding=encoding)
+            break
+        except UnicodeError as exc:
+            encoding_errors.append(f"{encoding}: {exc}")
+    if text is None:
+        return None, [f"{label} evidence could not be decoded: {'; '.join(encoding_errors)}"]
     try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        data = json.loads(text)
     except json.JSONDecodeError as exc:
         return None, [f"{label} evidence is invalid JSON: {exc}"]
     if not isinstance(data, dict):

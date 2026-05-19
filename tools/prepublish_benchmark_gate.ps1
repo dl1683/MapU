@@ -4,7 +4,9 @@ param(
     [switch]$PreflightOnly,
     [int]$MaxParallel = 2,
     [int]$LaneTimeoutMinutes = 240,
-    [int]$IdleTimeoutMinutes = 20
+    [int]$IdleTimeoutMinutes = 20,
+    [string]$ProjectSuffix = "",
+    [switch]$Resume
 )
 
 Set-StrictMode -Version Latest
@@ -58,7 +60,17 @@ $logDir = Join-Path $repoRoot "logs\benchmarks"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$env:MAPU_BENCH_PROJECT_SUFFIX = "prepublish_$stamp"
+$providedProjectSuffix = $ProjectSuffix.Trim()
+if (-not [string]::IsNullOrWhiteSpace($providedProjectSuffix)) {
+    if ($providedProjectSuffix -notmatch "^prepublish_\d{8}_\d{6}$") {
+        throw "ProjectSuffix must be blank or match prepublish_yyyyMMdd_HHmmss"
+    }
+    $stamp = $providedProjectSuffix.Substring("prepublish_".Length)
+    $env:MAPU_BENCH_PROJECT_SUFFIX = $providedProjectSuffix
+}
+else {
+    $env:MAPU_BENCH_PROJECT_SUFFIX = "prepublish_$stamp"
+}
 Remove-Item Env:\MAPU_BENCH_SKIP_INGEST -ErrorAction SilentlyContinue
 $gateDir = Join-Path $logDir "prepublish_gate_$stamp"
 New-Item -ItemType Directory -Force -Path $gateDir | Out-Null
@@ -81,7 +93,27 @@ if ($LASTEXITCODE -ne 0) { $gitSha = "unknown" }
 $dirty = (& git status --porcelain 2>$null)
 if ($LASTEXITCODE -ne 0) { $dirty = "" }
 $dirtyFlag = if ([string]::IsNullOrWhiteSpace($dirty)) { "clean" } else { "dirty" }
-Write-TextUtf8NoBom -Path $codeIdentity -Text "sha=$gitSha`nworktree=$dirtyFlag`ntimestamp=$stamp`nparallel=$($Parallel.IsPresent)`nskip_service_preflight=$($SkipServicePreflight.IsPresent)`npreflight_only=$($PreflightOnly.IsPresent)`nmodel_base_url=$modelBaseUrl`nbenchmark_mem0_host_arg=$benchmarkMem0HostArg`nmax_parallel=$MaxParallel`nlane_timeout_minutes=$LaneTimeoutMinutes`nidle_timeout_minutes=$IdleTimeoutMinutes"
+if ($Resume -and [string]::IsNullOrWhiteSpace($providedProjectSuffix)) {
+    throw "Resume requires -ProjectSuffix prepublish_yyyyMMdd_HHmmss so checkpoint reuse is explicit"
+}
+if ($Resume -and -not (Test-Path -LiteralPath $codeIdentity)) {
+    throw "Resume requested, but existing code identity was not found for $($env:MAPU_BENCH_PROJECT_SUFFIX): $codeIdentity"
+}
+if (-not [string]::IsNullOrWhiteSpace($providedProjectSuffix) -and (Test-Path -LiteralPath $codeIdentity)) {
+    $existingIdentity = @{}
+    Get-Content -LiteralPath $codeIdentity | ForEach-Object {
+        if ($_ -match "^([^=]+)=(.*)$") {
+            $existingIdentity[$Matches[1]] = $Matches[2]
+        }
+    }
+    if ($existingIdentity.ContainsKey("sha") -and $existingIdentity["sha"] -ne $gitSha) {
+        throw "Refusing to reuse $($env:MAPU_BENCH_PROJECT_SUFFIX): existing code sha $($existingIdentity["sha"]) does not match current sha $gitSha"
+    }
+    if ($existingIdentity.ContainsKey("worktree") -and $existingIdentity["worktree"] -ne $dirtyFlag) {
+        throw "Refusing to reuse $($env:MAPU_BENCH_PROJECT_SUFFIX): existing worktree $($existingIdentity["worktree"]) does not match current worktree $dirtyFlag"
+    }
+}
+Write-TextUtf8NoBom -Path $codeIdentity -Text "sha=$gitSha`nworktree=$dirtyFlag`ntimestamp=$stamp`nparallel=$($Parallel.IsPresent)`nskip_service_preflight=$($SkipServicePreflight.IsPresent)`npreflight_only=$($PreflightOnly.IsPresent)`nmodel_base_url=$modelBaseUrl`nbenchmark_mem0_host_arg=$benchmarkMem0HostArg`nmax_parallel=$MaxParallel`nlane_timeout_minutes=$LaneTimeoutMinutes`nidle_timeout_minutes=$IdleTimeoutMinutes`nproject_suffix=$($env:MAPU_BENCH_PROJECT_SUFFIX)`nresume=$($Resume.IsPresent)"
 $preflightStatus = if ($SkipServicePreflight) { "skipped" } else { "not_run" }
 $preflightChecks = [ordered]@{}
 
@@ -190,6 +222,8 @@ try {
             max_parallel = $MaxParallel
             lane_timeout_minutes = $LaneTimeoutMinutes
             idle_timeout_minutes = $IdleTimeoutMinutes
+            project_suffix = $env:MAPU_BENCH_PROJECT_SUFFIX
+            resume = $Resume.IsPresent
             gate_pass = $false
             public_performance_evidence = $false
             benchmark_evidence_verified = $false
@@ -203,10 +237,10 @@ try {
     }
 
     if ($Parallel) {
-        powershell -NoProfile -ExecutionPolicy Bypass -File $runParallelSweep -MaxParallel $MaxParallel -LaneTimeoutMinutes $LaneTimeoutMinutes -IdleTimeoutMinutes $IdleTimeoutMinutes -BenchmarkMem0HostArg $benchmarkMem0HostArg 1> $sweepOut 2> $sweepErr
+        powershell -NoProfile -ExecutionPolicy Bypass -File $runParallelSweep -MaxParallel $MaxParallel -LaneTimeoutMinutes $LaneTimeoutMinutes -IdleTimeoutMinutes $IdleTimeoutMinutes -BenchmarkMem0HostArg $benchmarkMem0HostArg -Resume:$($Resume.IsPresent) 1> $sweepOut 2> $sweepErr
     }
     else {
-        powershell -NoProfile -ExecutionPolicy Bypass -File $runSweep -BenchmarkMem0HostArg $benchmarkMem0HostArg 1> $sweepOut 2> $sweepErr
+        powershell -NoProfile -ExecutionPolicy Bypass -File $runSweep -BenchmarkMem0HostArg $benchmarkMem0HostArg -Resume:$($Resume.IsPresent) 1> $sweepOut 2> $sweepErr
     }
     if ($LASTEXITCODE -ne 0) {
         throw "Sweep failed with exit code $LASTEXITCODE"
@@ -238,6 +272,8 @@ try {
         max_parallel = $MaxParallel
         lane_timeout_minutes = $LaneTimeoutMinutes
         idle_timeout_minutes = $IdleTimeoutMinutes
+        project_suffix = $env:MAPU_BENCH_PROJECT_SUFFIX
+        resume = $Resume.IsPresent
         gate_pass = $true
         public_performance_evidence = $false
         benchmark_evidence_verified = $false
@@ -289,6 +325,8 @@ catch {
         max_parallel = $MaxParallel
         lane_timeout_minutes = $LaneTimeoutMinutes
         idle_timeout_minutes = $IdleTimeoutMinutes
+        project_suffix = $env:MAPU_BENCH_PROJECT_SUFFIX
+        resume = $Resume.IsPresent
         gate_pass = $false
         public_performance_evidence = $false
         benchmark_evidence_verified = $false

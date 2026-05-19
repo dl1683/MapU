@@ -2,7 +2,8 @@ param(
     [int]$MaxParallel = 2,
     [int]$LaneTimeoutMinutes = 240,
     [int]$IdleTimeoutMinutes = 20,
-    [string]$BenchmarkMem0HostArg = "http://localhost:8000"
+    [string]$BenchmarkMem0HostArg = "http://localhost:8000",
+    [switch]$Resume
 )
 
 Set-StrictMode -Version Latest
@@ -50,6 +51,7 @@ Write-Output ("[{0}] Max parallel benchmark jobs: {1}" -f (Get-Date -Format "s")
 Write-Output ("[{0}] Lane timeout minutes: {1}" -f (Get-Date -Format "s"), $LaneTimeoutMinutes)
 Write-Output ("[{0}] Idle timeout minutes: {1}" -f (Get-Date -Format "s"), $IdleTimeoutMinutes)
 Write-Output ("[{0}] Benchmark mem0 host argument: {1}" -f (Get-Date -Format "s"), $BenchmarkMem0HostArg)
+Write-Output ("[{0}] Resume existing benchmark checkpoints: {1}" -f (Get-Date -Format "s"), $Resume.IsPresent)
 
 $logDir = Join-Path $repoRoot "logs\benchmarks\parallel_$projectSuffix"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -186,6 +188,12 @@ $jobs = @(
         )
     }
 )
+
+if ($Resume) {
+    foreach ($job in $jobs) {
+        $job.Args = @($job.Args) + "--resume"
+    }
+}
 
 $queue = [System.Collections.Queue]::new()
 foreach ($job in $jobs) {

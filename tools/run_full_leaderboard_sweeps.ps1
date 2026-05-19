@@ -1,5 +1,6 @@
 param(
-    [string]$BenchmarkMem0HostArg = "http://localhost:8000"
+    [string]$BenchmarkMem0HostArg = "http://localhost:8000",
+    [switch]$Resume
 )
 
 Set-StrictMode -Version Latest
@@ -35,6 +36,7 @@ if (-not $projectSuffix) {
 }
 Write-Output ("[{0}] Public benchmark project suffix: {1}" -f (Get-Date -Format "s"), $projectSuffix)
 Write-Output ("[{0}] Benchmark mem0 host argument: {1}" -f (Get-Date -Format "s"), $BenchmarkMem0HostArg)
+Write-Output ("[{0}] Resume existing benchmark checkpoints: {1}" -f (Get-Date -Format "s"), $Resume.IsPresent)
 
 $logDir = Join-Path $repoRoot "logs\benchmarks\sweep_$projectSuffix"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -250,6 +252,12 @@ $jobs = @(
         )
     }
 )
+
+if ($Resume) {
+    foreach ($job in $jobs) {
+        $job.Args = @($job.Args) + "--resume"
+    }
+}
 
 foreach ($job in $jobs) {
     Invoke-Benchmark -Name $job.Name -Args $job.Args

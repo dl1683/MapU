@@ -10,6 +10,7 @@ from tools.verify_objective_completion import (
     _check_benchmark_isolation,
     _format_commit_plan_markdown,
     _format_text_summary,
+    _load_json,
     _render_report,
     _resolve_latest_benchmark_gate_meta,
     audit_objective_completion,
@@ -1399,6 +1400,16 @@ def test_full_sweep_progress_verifier_rejects_incomplete_public_evidence() -> No
     assert "benchmark result counts are incomplete" in errors
 
 
+def test_objective_audit_loads_windows_powershell_redirected_json(tmp_path: Path) -> None:
+    path = tmp_path / "progress.json"
+    path.write_text('{"status": "ok"}', encoding="utf-16")
+
+    data, errors = _load_json(path, "full-sweep progress")
+
+    assert errors == []
+    assert data == {"status": "ok"}
+
+
 def test_prepublish_gate_preflights_live_benchmark_services() -> None:
     script = _read("tools/prepublish_benchmark_gate.ps1")
 
@@ -1941,3 +1952,34 @@ def test_parallel_full_sweep_writes_failure_metadata() -> None:
     assert "exited with code $exitCodeLabel" in script
     assert "exceeded idle timeout" in script
     assert "exceeded lane timeout" in script
+
+
+def test_full_sweep_runners_support_explicit_resume() -> None:
+    sequential = _read("tools/run_full_leaderboard_sweeps.ps1")
+    parallel = _read("tools/run_full_leaderboard_sweeps_parallel.ps1")
+
+    for script in (sequential, parallel):
+        assert "[switch]$Resume" in script
+        assert '"--resume"' in script
+        assert '$job.Args = @($job.Args) + "--resume"' in script
+        assert "Resume existing benchmark checkpoints" in script
+
+
+def test_prepublish_gate_requires_checked_resume_suffix() -> None:
+    script = _read("tools/prepublish_benchmark_gate.ps1")
+    launcher = _read("tools/start_prepublish_benchmark_gate.ps1")
+
+    assert "[string]$ProjectSuffix" in script
+    assert "[switch]$Resume" in script
+    assert "ProjectSuffix must be blank or match prepublish_yyyyMMdd_HHmmss" in script
+    assert "Resume requires -ProjectSuffix prepublish_yyyyMMdd_HHmmss" in script
+    assert "existing code sha" in script
+    assert "existing worktree" in script
+    assert "-Resume:$($Resume.IsPresent)" in script
+    assert "project_suffix" in script
+    assert "resume = $Resume.IsPresent" in script
+
+    assert "[string]$ProjectSuffix" in launcher
+    assert "[switch]$Resume" in launcher
+    assert '"-ProjectSuffix", $ProjectSuffix' in launcher
+    assert '$argList += "-Resume"' in launcher

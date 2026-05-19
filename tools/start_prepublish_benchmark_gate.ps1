@@ -2,7 +2,9 @@ param(
     [switch]$Parallel,
     [int]$MaxParallel = 3,
     [int]$LaneTimeoutMinutes = 240,
-    [int]$IdleTimeoutMinutes = 20
+    [int]$IdleTimeoutMinutes = 20,
+    [string]$ProjectSuffix = "",
+    [switch]$Resume
 )
 
 Set-StrictMode -Version Latest
@@ -34,6 +36,12 @@ $argList = @(
 if ($Parallel) {
     $argList += "-Parallel"
 }
+if (-not [string]::IsNullOrWhiteSpace($ProjectSuffix)) {
+    $argList += @("-ProjectSuffix", $ProjectSuffix)
+}
+if ($Resume) {
+    $argList += "-Resume"
+}
 
 $proc = Start-Process -FilePath "powershell.exe" `
     -ArgumentList $argList `
@@ -48,5 +56,7 @@ Write-Output ("parallel: {0}" -f $Parallel.IsPresent)
 Write-Output ("max_parallel: {0}" -f $MaxParallel)
 Write-Output ("lane_timeout_minutes: {0}" -f $LaneTimeoutMinutes)
 Write-Output ("idle_timeout_minutes: {0}" -f $IdleTimeoutMinutes)
+Write-Output ("project_suffix: {0}" -f $ProjectSuffix)
+Write-Output ("resume: {0}" -f $Resume.IsPresent)
 Write-Output ("stdout log: {0}" -f $stdoutLog)
 Write-Output ("stderr log: {0}" -f $stderrLog)

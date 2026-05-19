@@ -297,6 +297,18 @@ Before publishing any benchmark number, run:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20
 ```
 
+If a long public gate is interrupted, resume the same exact-code artifact set
+instead of starting a fresh suffix:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20 -ProjectSuffix prepublish_yyyyMMdd_HHmmss -Resume
+```
+
+Resume requires an explicit `-ProjectSuffix` and refuses to reuse existing gate
+artifacts when the saved code identity does not match the current commit and
+worktree state. This keeps interrupted full sweeps operationally recoverable
+without mixing evidence from different code.
+
 Then verify the gate metadata before citing it:
 
 ```powershell

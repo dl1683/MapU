@@ -20,6 +20,63 @@ class CorpusResponse(BaseModel):
     description: str | None = None
 
 
+class ResumeActionResponse(BaseModel):
+    action_type: str
+    step: str
+    rationale: str
+    target: dict[str, Any] = {}
+    expected_signal_target: dict[str, Any] = {}
+    expected_resolution: str = ""
+    expected_uncertainty_reduction: float = 0.0
+    evidence_anchors: list[dict[str, Any]] = []
+    source_contract: dict[str, Any] = {}
+    governance_tier: Literal["guaranteed", "provisional", "stale"] = "provisional"
+    uncertainty_reason: str
+    gap_ids: list[str] = []
+    activity_ids: list[str] = []
+    confidence: float = 0.0
+    conflict_priority: bool = False
+
+
+class ResumeGovernanceResponse(BaseModel):
+    guaranteed_fields: list[str] = []
+    provisional_fields: list[str] = []
+    stale_fields: list[str] = []
+
+
+class ResumeContinuityFrontierResponse(BaseModel):
+    open_gap_count: int = 0
+    critical_open_gap_count: int = 0
+    unresolved_conflict_count: int = 0
+    unresolved_gap_ids: list[str] = []
+    unresolved_conflicts: list[dict[str, Any]] = []
+    structured_gap_count: int = 0
+    missing_gap_contract_count: int = 0
+    missing_gap_contract_ids: list[str] = []
+    evidence_anchor_count: int = 0
+    frontier_completeness: str = "partial"
+    continuity_status: str = "attention_required"
+    anchor_sufficiency: str = "none"
+    readiness_reason: str = ""
+    incomplete_reasons: list[str] = []
+    action_count: int = 0
+
+
+class ResumeHandoffResponse(BaseModel):
+    protocol_version: str
+    protocol: str
+    generated_at: str
+    continuity_role: str
+    corpus_id: str
+    open_gaps: list[dict[str, Any]] = []
+    recent_activity: list[dict[str, Any]] = []
+    current_truth_candidates: list[dict[str, Any]] = []
+    avoid_or_revalidate_before_use: list[dict[str, Any]] = []
+    continuity_frontier: ResumeContinuityFrontierResponse
+    continuity_governance: ResumeGovernanceResponse
+    priority_next_actions: list[ResumeActionResponse]
+
+
 class QueryRequestDTO(BaseModel):
     question: str = Field(min_length=1)
     max_results: int = Field(default=20, ge=1, le=500)
@@ -52,9 +109,12 @@ class QueryResponse(BaseModel):
     intent: str
     tier_used: str
     epistemic_status: str = "unknown"
+    answer: str | None = None
     synthesis: str | None = None
     hits: list[HitResponse]
     gaps: list[str]
+    next_steps: list[str] = []
+    structured_next_steps: list[dict[str, Any]] = []
     chunk_hits: list[ChunkHitResponse] = []
     metadata: dict[str, Any] = {}
 
@@ -204,10 +264,34 @@ class InvestigationResponse(BaseModel):
     answer: str
     evidence: list[InvestigationEvidenceResponse]
     gaps: list[str]
+    next_steps: list[str] = []
+    structured_next_steps: list[dict[str, Any]] = []
     findings: list[DerivedFindingResponse]
     persisted_proposition_ids: list[uuid.UUID]
     termination_reason: str
     metadata: dict[str, Any] = {}
+
+
+class LearningFeedbackRequest(BaseModel):
+    question: str = Field(min_length=1)
+    step: str = Field(min_length=1)
+    outcome: Literal[
+        "helpful",
+        "partially_helpful",
+        "applied",
+        "not_helpful",
+        "stale",
+        "unknown",
+    ] = "unknown"
+    actor: str = "user"
+    source_event_type: str = "query"
+    source_event_id: uuid.UUID | None = None
+    notes: str = ""
+
+
+class LearningFeedbackResponse(BaseModel):
+    success: bool = True
+    event_id: uuid.UUID
 
 
 class ActivityResponse(BaseModel):
@@ -227,6 +311,14 @@ class GapResponse(BaseModel):
     severity: str
     status: str
     detected_by: str
+    uncertainty_reason: str = "missing_evidence"
+    evidence_hypothesis: dict[str, Any] = {}
+    next_action: dict[str, Any] = {}
+    expected_resolution: str | None = None
+    governance_tier: Literal["guaranteed", "provisional", "stale"] = "provisional"
+    priority_score: float | None = None
+    resolution_summary: str | None = None
+    last_evaluated_at: datetime | None = None
     created_at: datetime
     resolved_at: datetime | None = None
 

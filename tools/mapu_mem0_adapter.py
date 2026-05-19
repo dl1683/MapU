@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.config import Settings
 from mapu.db.engine import build_engine
@@ -44,8 +42,17 @@ class MapUMem0Client:
         event_poll_timeout: float = 300.0,
     ) -> None:
         _ = (
-            mode, host, api_key, organization_id, project_id, max_retries,
-            retry_delay, rpm, timeout, event_poll_interval, event_poll_timeout,
+            mode,
+            host,
+            api_key,
+            organization_id,
+            project_id,
+            max_retries,
+            retry_delay,
+            rpm,
+            timeout,
+            event_poll_interval,
+            event_poll_timeout,
         )
         settings = Settings()
         if (
@@ -104,7 +111,11 @@ class MapUMem0Client:
             return {"results": []}
 
         async with self._session_factory() as session:
-            chunker = self._chunker if not is_beam else SpanAwareChunker(max_tokens=256, overlap_tokens=32)
+            chunker = (
+                self._chunker
+                if not is_beam
+                else SpanAwareChunker(max_tokens=256, overlap_tokens=32)
+            )
             ingest = IngestionService(
                 session=session,
                 corpus_id=corpus_id,
@@ -133,7 +144,7 @@ class MapUMem0Client:
             for role, content in selected:
                 enriched = _enrich_with_temporal_hints(content, timestamp)
                 blob = DocumentBlob(
-                    content=f"{ts_prefix}{role}: {enriched}".encode("utf-8"),
+                    content=f"{ts_prefix}{role}: {enriched}".encode(),
                     mime_type="text/plain",
                     source_uri=f"mem0://{user_id}/{uuid.uuid4()}",
                     metadata={**meta, "speaker_role": role},
@@ -147,7 +158,7 @@ class MapUMem0Client:
                     hints = []
                 for hint in hints:
                         hint_blob = DocumentBlob(
-                            content=f"{ts_prefix}fact_hint: {hint}".encode("utf-8"),
+                            content=f"{ts_prefix}fact_hint: {hint}".encode(),
                             mime_type="text/plain",
                             source_uri=f"mem0://{user_id}/{uuid.uuid4()}",
                             metadata={**meta, "speaker_role": "fact_hint"},
@@ -221,11 +232,23 @@ class MapUMem0Client:
 
             # 2) Pull vector + lexical candidates across query rewrites for recall.
             for q in rewrites:
-                chunk_rows = await self._semantic_chunk_rows(session, corpus_id, q, top_k=top_k, apply_style=apply_style)
+                chunk_rows = await self._semantic_chunk_rows(
+                    session,
+                    corpus_id,
+                    q,
+                    top_k=top_k,
+                    apply_style=apply_style,
+                )
                 for r in chunk_rows:
                     r["score"] = float(r["score"]) * 0.96 if q != query else float(r["score"])
                 rows.extend(chunk_rows)
-                lexical_rows = await self._lexical_chunk_rows(session, corpus_id, q, top_k=top_k, apply_style=apply_style)
+                lexical_rows = await self._lexical_chunk_rows(
+                    session,
+                    corpus_id,
+                    q,
+                    top_k=top_k,
+                    apply_style=apply_style,
+                )
                 for r in lexical_rows:
                     r["score"] = float(r["score"]) * 0.96 if q != query else float(r["score"])
                 rows.extend(lexical_rows)
@@ -394,7 +417,13 @@ class MapUMem0Client:
                 entity = _entity_query_boost(query, mem)
                 task = _task_query_boost(query, mem)
                 kw = _keyword_coverage_boost(query, mem)
-                score = (0.50 * lx + 0.16 * temporal + 0.12 * entity + 0.10 * task + 0.12 * kw) * _length_penalty(mem)
+                score = (
+                    0.50 * lx
+                    + 0.16 * temporal
+                    + 0.12 * entity
+                    + 0.10 * task
+                    + 0.12 * kw
+                ) * _length_penalty(mem)
                 if apply_style:
                     score *= _query_evidence_style_multiplier(query, mem)
                 out.append({"id": str(cid), "memory": mem, "score": score})
@@ -461,15 +490,20 @@ def _should_abstain_from_retrieval(query: str, ranked: list[dict[str, Any]]) -> 
     lexical = _lexical_score(query, memory)
     temporal = _temporal_query_boost(query, memory)
     # For causal "how did X influence Y" asks, intent-only memories are weak evidence.
-    if ("how did" in q_low and "influence" in q_low) and any(
-        phrase in m_low for phrase in ("i want to", "i need to", "i'm trying to", "planning to")
+    if (
+        "how did" in q_low
+        and "influence" in q_low
+        and any(
+            phrase in m_low
+            for phrase in ("i want to", "i need to", "i'm trying to", "planning to")
+        )
+        and not any(
+            phrase in m_low for phrase in ("because", "resulted in", "led to", "therefore")
+        )
     ):
-        if not any(phrase in m_low for phrase in ("because", "resulted in", "led to", "therefore")):
-            return True
-    # If neither lexical nor temporal evidence is convincing, prefer no retrieval.
-    if score < 0.20 and lexical < 0.15 and temporal < 0.2:
         return True
-    return False
+    # If neither lexical nor temporal evidence is convincing, prefer no retrieval.
+    return score < 0.20 and lexical < 0.15 and temporal < 0.2
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -535,10 +569,16 @@ def _query_rewrites(query: str) -> list[str]:
         out.append(f"{q} requirements and instructions")
     if any(k in ql for k in ("summar", "overview", "what happened")):
         out.append(f"{q} key events outcomes decisions")
-    if any(k in ql for k in ("libraries", "library", "dependencies", "dependency", "version", "versions")):
+    if any(
+        k in ql
+        for k in ("libraries", "library", "dependencies", "dependency", "version", "versions")
+    ):
         out.append(f"{q} dependency versions version numbers")
         out.append(f"{q} flask version flask-login version")
-    if any(k in ql for k in ("columns", "transactions table", "add to the transactions table", "new columns")):
+    if any(
+        k in ql
+        for k in ("columns", "transactions table", "add to the transactions table", "new columns")
+    ):
         out.append(f"{q} add column category notes")
     if any(k in ql for k in ("have i", "did i")) and any(
         k in ql for k in ("routes", "http requests", "flask-login", "sessions")
@@ -555,17 +595,43 @@ def _query_rewrites(query: str) -> list[str]:
     return dedup[:5]
 
 
-_DATE_NUM_RE = re.compile(r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:,\s*\d{4})?\b", re.IGNORECASE)
+_DATE_NUM_RE = re.compile(
+    r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*"
+    r"\s+\d{1,2}(?:,\s*\d{4})?\b",
+    re.IGNORECASE,
+)
 _PERCENT_RE = re.compile(r"\b\d+(?:\.\d+)?\s*%\b")
 _MS_RE = re.compile(r"\b\d+(?:\.\d+)?\s*ms\b", re.IGNORECASE)
 _PORT_RE = re.compile(r"\bport\s+\d{2,5}\b", re.IGNORECASE)
-_VERSION_RE = re.compile(r"\b(?:python|flask|sqlite|postgres(?:ql)?)\s*\d+(?:\.\d+){0,2}\b", re.IGNORECASE)
+_VERSION_RE = re.compile(
+    r"\b(?:python|flask|sqlite|postgres(?:ql)?)\s*\d+(?:\.\d+){0,2}\b",
+    re.IGNORECASE,
+)
 _DEADLINE_RE = re.compile(r"\bdeadline(?: is|:)?\s+([A-Za-z0-9, ]+)", re.IGNORECASE)
-_CHANGE_RE = re.compile(r"\b(?:initially|was)\s+([^,.]{1,80})\s*(?:,?\s*now|to)\s+([^,.]{1,80})", re.IGNORECASE)
-_N_DAYS_AGO_RE = re.compile(r"\b(?:(\d+)|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\s+ago\b", re.IGNORECASE)
-_N_WEEKS_AGO_RE = re.compile(r"\b(?:(\d+)|one|two|three|four|five|six|seven|eight|nine|ten)\s+weeks?\s+ago\b", re.IGNORECASE)
-_N_MONTHS_AGO_RE = re.compile(r"\b(?:(\d+)|one|two|three|four|five|six|seven|eight|nine|ten)\s+months?\s+ago\b", re.IGNORECASE)
-_N_YEARS_AGO_RE = re.compile(r"\b(?:(\d+)|one|two|three|four|five|six|seven|eight|nine|ten)\s+years?\s+ago\b", re.IGNORECASE)
+_CHANGE_RE = re.compile(
+    r"\b(?:initially|was)\s+([^,.]{1,80})\s*(?:,?\s*now|to)\s+([^,.]{1,80})",
+    re.IGNORECASE,
+)
+_N_DAYS_AGO_RE = re.compile(
+    r"\b(?:(\d+)|one|two|three|four|five|six|seven|eight|nine|ten)"
+    r"\s+days?\s+ago\b",
+    re.IGNORECASE,
+)
+_N_WEEKS_AGO_RE = re.compile(
+    r"\b(?:(\d+)|one|two|three|four|five|six|seven|eight|nine|ten)"
+    r"\s+weeks?\s+ago\b",
+    re.IGNORECASE,
+)
+_N_MONTHS_AGO_RE = re.compile(
+    r"\b(?:(\d+)|one|two|three|four|five|six|seven|eight|nine|ten)"
+    r"\s+months?\s+ago\b",
+    re.IGNORECASE,
+)
+_N_YEARS_AGO_RE = re.compile(
+    r"\b(?:(\d+)|one|two|three|four|five|six|seven|eight|nine|ten)"
+    r"\s+years?\s+ago\b",
+    re.IGNORECASE,
+)
 _LAST_FRIDAY_RE = re.compile(r"\blast friday\b", re.IGNORECASE)
 _LAST_WEEKEND_RE = re.compile(r"\blast weekend\b", re.IGNORECASE)
 _WEARS_RE = re.compile(r"\b([A-Z][a-z]+)\s+wears\s+([^.!?\n]{4,120})")
@@ -641,22 +707,40 @@ def _derive_fact_hints(content: str, timestamp: int | None) -> list[str]:
     if timestamp is not None:
         try:
             dt = datetime.fromtimestamp(int(timestamp), tz=UTC)
-            out.append(f"session_time: {dt.date().isoformat()} ({dt.day} {dt.strftime('%B')} {dt.year})")
+            out.append(
+                f"session_time: {dt.date().isoformat()} "
+                f"({dt.day} {dt.strftime('%B')} {dt.year})"
+            )
             out.append(f"session_time_human: {dt.day} {dt.strftime('%B')} {dt.year}")
 
             # Relative-time normalization to improve temporal retrieval matching.
             if _LAST_WEEK_RE.search(c):
                 wk_start = dt - timedelta(days=7)
-                out.append(f"relative_time_fact: the week before {dt.day} {dt.strftime('%B')} {dt.year}")
-                out.append(f"relative_time_range: {wk_start.date().isoformat()} to {dt.date().isoformat()}")
+                out.append(
+                    "relative_time_fact: the week before "
+                    f"{dt.day} {dt.strftime('%B')} {dt.year}"
+                )
+                out.append(
+                    "relative_time_range: "
+                    f"{wk_start.date().isoformat()} to {dt.date().isoformat()}"
+                )
             if _LAST_MONTH_RE.search(c):
                 mo_start = dt - timedelta(days=30)
-                out.append(f"relative_time_fact: the month before {dt.day} {dt.strftime('%B')} {dt.year}")
-                out.append(f"relative_time_range: {mo_start.date().isoformat()} to {dt.date().isoformat()}")
+                out.append(
+                    "relative_time_fact: the month before "
+                    f"{dt.day} {dt.strftime('%B')} {dt.year}"
+                )
+                out.append(
+                    "relative_time_range: "
+                    f"{mo_start.date().isoformat()} to {dt.date().isoformat()}"
+                )
             if _LAST_FRIDAY_RE.search(c):
                 days_back = (dt.weekday() - 4) % 7 or 7
                 fri = dt - timedelta(days=days_back)
-                out.append(f"relative_time_fact: last Friday was {fri.day} {fri.strftime('%B')} {fri.year}")
+                out.append(
+                    "relative_time_fact: last Friday was "
+                    f"{fri.day} {fri.strftime('%B')} {fri.year}"
+                )
                 out.append(f"date_fact: {fri.day} {fri.strftime('%B')} {fri.year}")
             if _LAST_WEEKEND_RE.search(c):
                 sat_days_back = (dt.weekday() - 5) % 7 or 7
@@ -664,7 +748,8 @@ def _derive_fact_hints(content: str, timestamp: int | None) -> list[str]:
                 sun = sat + timedelta(days=1)
                 out.append(
                     "relative_time_fact: last weekend was "
-                    f"{sat.day} {sat.strftime('%B')} {sat.year} to {sun.day} {sun.strftime('%B')} {sun.year}"
+                    f"{sat.day} {sat.strftime('%B')} {sat.year} to "
+                    f"{sun.day} {sun.strftime('%B')} {sun.year}"
                 )
 
             def _append_relative(pattern: re.Pattern[str], unit: str) -> None:
@@ -681,16 +766,28 @@ def _derive_fact_hints(content: str, timestamp: int | None) -> list[str]:
                     try:
                         if unit == "day":
                             ref = dt - timedelta(days=n)
-                            out.append(f"relative_time_fact: {n} days before {dt.day} {dt.strftime('%B')} {dt.year}")
+                            out.append(
+                                "relative_time_fact: "
+                                f"{n} days before {dt.day} {dt.strftime('%B')} {dt.year}"
+                            )
                         elif unit == "week":
                             ref = dt - timedelta(days=7 * n)
-                            out.append(f"relative_time_fact: {n} weeks before {dt.day} {dt.strftime('%B')} {dt.year}")
+                            out.append(
+                                "relative_time_fact: "
+                                f"{n} weeks before {dt.day} {dt.strftime('%B')} {dt.year}"
+                            )
                         elif unit == "month":
                             ref = dt - timedelta(days=30 * n)
-                            out.append(f"relative_time_fact: {n} months before {dt.day} {dt.strftime('%B')} {dt.year}")
+                            out.append(
+                                "relative_time_fact: "
+                                f"{n} months before {dt.day} {dt.strftime('%B')} {dt.year}"
+                            )
                         else:
                             ref = dt - timedelta(days=365 * n)
-                            out.append(f"relative_time_fact: {n} years before {dt.day} {dt.strftime('%B')} {dt.year}")
+                            out.append(
+                                "relative_time_fact: "
+                                f"{n} years before {dt.day} {dt.strftime('%B')} {dt.year}"
+                            )
                     except OverflowError:
                         continue
                     out.append(f"date_fact: {ref.day} {ref.strftime('%B')} {ref.year}")
@@ -723,7 +820,23 @@ def _beam_sanitize_assistant(content: str) -> str:
     keep: list[str] = []
     for ln in lines:
         low = ln.lower()
-        if len(ln) > 280 and not any(k in low for k in ("deadline", "ms", "port", "version", "security", "login", "analytics", "transaction", "summary", "recommend", "should", "must")):
+        if len(ln) > 280 and not any(
+            k in low
+            for k in (
+                "deadline",
+                "ms",
+                "port",
+                "version",
+                "security",
+                "login",
+                "analytics",
+                "transaction",
+                "summary",
+                "recommend",
+                "should",
+                "must",
+            )
+        ):
             continue
         keep.append(ln)
     compact = " ".join(keep)
@@ -769,10 +882,15 @@ def _assistant_turn_for_memory(content: str, is_beam: bool) -> str | None:
     has_number = bool(re.search(r"\b\d{1,4}\b", normalized))
 
     # Suppress low-signal prompting turns while keeping factual assistant memories.
-    if is_question_like and len(normalized) <= 190:
-        if not (has_first_person_fact or has_info_dense_token or has_number):
-            if any(p in low for p in ("what", "which", "how", "why", "care to", "did you", "have you")):
-                return None
+    if (
+        is_question_like
+        and len(normalized) <= 190
+        and not (has_first_person_fact or has_info_dense_token or has_number)
+        and any(
+            p in low for p in ("what", "which", "how", "why", "care to", "did you", "have you")
+        )
+    ):
+        return None
 
     return normalized[:900]
 
@@ -782,7 +900,9 @@ def _query_evidence_style_multiplier(query: str, text: str) -> float:
     mem = text.strip()
     low = mem.lower()
 
-    has_fact_signal = bool(_FIRST_PERSON_FACT_RE.search(mem)) or bool(_INFO_DENSE_TOKEN_RE.search(mem))
+    has_fact_signal = bool(_FIRST_PERSON_FACT_RE.search(mem)) or bool(
+        _INFO_DENSE_TOKEN_RE.search(mem)
+    )
     has_time_or_numeric = bool(_DATE_RE.search(low)) or bool(re.search(r"\b\d{1,4}\b", low))
     is_question_like = mem.endswith("?") and not (has_fact_signal or has_time_or_numeric)
 
@@ -792,9 +912,12 @@ def _query_evidence_style_multiplier(query: str, text: str) -> float:
         if has_fact_signal or has_time_or_numeric:
             return 1.08
 
-    if any(k in q for k in ("tips", "advice", "suggest", "recommend")):
-        if is_question_like and low.startswith("assistant:"):
-            return 0.70
+    if (
+        any(k in q for k in ("tips", "advice", "suggest", "recommend"))
+        and is_question_like
+        and low.startswith("assistant:")
+    ):
+        return 0.70
 
     return 1.0
 
@@ -811,7 +934,12 @@ _BEAM_DATE_RE = re.compile(
 )
 
 
-def _parse_beam_date(month_token: str, day_token: str, year_token: str | None, fallback_year: int | None) -> datetime | None:
+def _parse_beam_date(
+    month_token: str,
+    day_token: str,
+    year_token: str | None,
+    fallback_year: int | None,
+) -> datetime | None:
     month_value: int | None = None
     for fmt in ("%B", "%b"):
         try:
@@ -857,16 +985,22 @@ def _derive_beam_precise_hints(content: str, timestamp: int | None = None) -> li
     # High-precision update hints: "initially X ... now Y".
     m = re.search(r"\binitially\s+([^,.]{1,80})[, ]+(?:but\s+)?now\s+([^,.]{1,80})", low)
     if m:
-        hints.append(f"update_state_hint: changed from {m.group(1).strip()} to {m.group(2).strip()}")
+        hints.append(
+            "update_state_hint: changed from "
+            f"{m.group(1).strip()} to {m.group(2).strip()}"
+        )
 
     # Date/timeline hints (month day forms + deadline terms), including derived durations.
     date_matches = list(_BEAM_DATE_RE.finditer(c))
     dates = [dm.group(0) for dm in date_matches]
-    if len(dates) >= 2 and any(k in low for k in ("deadline", "sprint", "timeline", "finish", "complete")):
+    deadline_terms = ("deadline", "sprint", "timeline", "finish", "complete")
+    if len(dates) >= 2 and any(k in low for k in deadline_terms):
         hints.append(f"timeline_hint: {dates[0]} -> {dates[1]}")
-    elif len(dates) == 1 and any(k in low for k in ("deadline", "sprint", "timeline", "finish", "complete")):
+    elif len(dates) == 1 and any(k in low for k in deadline_terms):
         hints.append(f"timeline_hint: {dates[0]}")
-    if len(date_matches) >= 2 and any(k in low for k in ("how many", "weeks", "days", "deadline", "sprint", "timeline", "finish", "complete")):
+    if len(date_matches) >= 2 and any(
+        k in low for k in ("how many", "weeks", "days", *deadline_terms)
+    ):
         first = _parse_beam_date(
             date_matches[0].group("month"),
             date_matches[0].group("day"),
@@ -903,7 +1037,11 @@ def _derive_beam_precise_hints(content: str, timestamp: int | None = None) -> li
     return dedup[:4]
 
 
-def _role_diverse_ranking(query: str, ranked: list[dict[str, Any]], top_k: int) -> list[dict[str, Any]]:
+def _role_diverse_ranking(
+    query: str,
+    ranked: list[dict[str, Any]],
+    top_k: int,
+) -> list[dict[str, Any]]:
     # Ensure both user and assistant evidence are represented for BEAM question mix.
     if not ranked:
         return ranked
@@ -1017,9 +1155,13 @@ def _focus_memory_snippet(query: str, text: str) -> str:
 
 
 _TS_PREFIX_RE = re.compile(r"\[ts:([^\]]+)\]")
+
+
 def _apply_update_recency_bias(query: str, ranked: list[dict[str, Any]]) -> list[dict[str, Any]]:
     q = query.lower()
-    if not any(k in q for k in ("latest", "now", "changed", "update", "updated", "before", "after")):
+    if not any(
+        k in q for k in ("latest", "now", "changed", "update", "updated", "before", "after")
+    ):
         return ranked
 
     stamped: list[tuple[dict[str, Any], datetime | None]] = []
@@ -1046,13 +1188,13 @@ def _apply_update_recency_bias(query: str, ranked: list[dict[str, Any]]) -> list
     rescored: list[dict[str, Any]] = []
     for row, dt in stamped:
         base = float(row.get("score", 0.0))
-        if dt is None:
-            rec = 0.0
-        else:
-            rec = (dt - min_ts).total_seconds() / span
+        rec = 0.0 if dt is None else (dt - min_ts).total_seconds() / span
         mem_low = str(row.get("memory", "")).lower()
         marker = 0.0
-        if any(k in mem_low for k in ("now", "latest", "updated", "changed from", "new value", "current")):
+        if any(
+            k in mem_low
+            for k in ("now", "latest", "updated", "changed from", "new value", "current")
+        ):
             marker = 0.25
         row["score"] = base + 0.20 * rec + marker
         rescored.append(row)
@@ -1077,8 +1219,10 @@ def _enrich_with_temporal_hints(content: str, timestamp: int | None) -> str:
         return content
 
     hints: list[str] = []
+
     def _fmt_day(dt: datetime) -> str:
         return f"{dt.day} {dt.strftime('%B')} {dt.year}"
+
     if _YESTERDAY_RE.search(content):
         yd = base - timedelta(days=1)
         hints.append(f"date_hint={yd.date().isoformat()}")
@@ -1115,7 +1259,9 @@ def _enrich_with_temporal_hints(content: str, timestamp: int | None) -> str:
         sat_days_back = (base.weekday() - 5) % 7 or 7
         sat = base - timedelta(days=sat_days_back)
         sun = sat + timedelta(days=1)
-        hints.append(f"date_range_hint={sat.date().isoformat()}..{sun.date().isoformat()}")
+        hints.append(
+            f"date_range_hint={sat.date().isoformat()}..{sun.date().isoformat()}"
+        )
         hints.append(f"date_range_human={_fmt_day(sat)}..{_fmt_day(sun)}")
 
     def _append_relative(pattern: re.Pattern[str], unit: str) -> None:
@@ -1195,11 +1341,17 @@ def _task_query_boost(query: str, text: str) -> float:
             boost += 0.45
         if re.search(r"\b\d+(?:\.\d+)?\s*(?:ms|weeks?|days?|hours?)\b", t):
             boost += 0.35
-    if any(k in q for k in ("update", "changed", "before", "after", "latest", "now")):
-        if any(k in t for k in ("initially", "now", "changed", "updated", "from", "to")):
-            boost += 0.45
-    if any(k in q for k in ("suggest", "steps", "what should", "what would", "libraries", "security")):
-        if any(k in t for k in ("should", "recommend", "suggest", "must", "require", "steps", "libraries")):
+    if any(k in q for k in ("update", "changed", "before", "after", "latest", "now")) and any(
+        k in t for k in ("initially", "now", "changed", "updated", "from", "to")
+    ):
+        boost += 0.45
+    if any(
+        k in q for k in ("suggest", "steps", "what should", "what would", "libraries", "security")
+    ):
+        if any(
+            k in t
+            for k in ("should", "recommend", "suggest", "must", "require", "steps", "libraries")
+        ):
             boost += 0.40
         if is_assistant:
             boost += 0.20
@@ -1209,13 +1361,18 @@ def _task_query_boost(query: str, text: str) -> float:
         if is_assistant:
             boost += 0.20
     if any(k in q for k in ("summary", "summarize", "comprehensive summary", "progressed")):
-        if any(k in t for k in ("summary", "implemented", "feature", "progress", "timeline", "milestone")):
+        if any(
+            k in t
+            for k in ("summary", "implemented", "feature", "progress", "timeline", "milestone")
+        ):
             boost += 0.40
         if is_user or is_assistant:
             boost += 0.10
-    if any(k in q for k in ("how many", "when", "what was", "what is", "did i", "i have", "my")):
-        if is_user:
-            boost += 0.15
+    if (
+        any(k in q for k in ("how many", "when", "what was", "what is", "did i", "i have", "my"))
+        and is_user
+    ):
+        boost += 0.15
     return min(boost, 1.0)
 
 

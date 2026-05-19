@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import ForeignKey, Text, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Float, ForeignKey, Text, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mapu.db.base import Base
@@ -24,6 +25,34 @@ class Gap(Base):
     severity: Mapped[str] = mapped_column(Text, nullable=False, default="moderate")
     status: Mapped[str] = mapped_column(Text, nullable=False, default="open")
     detected_by: Mapped[str] = mapped_column(Text, nullable=False)
+    uncertainty_reason: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="missing_evidence",
+        server_default=text("'missing_evidence'"),
+    )
+    evidence_hypothesis: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    next_action: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    expected_resolution: Mapped[str | None] = mapped_column(Text)
+    governance_tier: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="provisional",
+        server_default=text("'provisional'"),
+    )
+    priority_score: Mapped[float | None] = mapped_column(Float)
+    resolution_summary: Mapped[str | None] = mapped_column(Text)
+    last_evaluated_at: Mapped[datetime | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     resolved_at: Mapped[datetime | None] = mapped_column()
 

@@ -20,6 +20,14 @@ CLAUDE.md
 **/*_comparative_analysis.md
 **/DECISIONS_INTERNAL.md
 **/ASSUMPTIONS_INTERNAL.md
+# Project memory continuity artifacts (session continuity and agent memory goals)
+**/NEXT_BUILDOUT_MEMORY*.md
+NEXT_BUILDOUT_MEMORY_GOALS_LONGFORM.md
+**/SESSION_CONTINUITY*.md
+**/AGENT_MEMORY*.md
+NEXT_BUILDOUT_MEMORY_GOALS.md
+SESSION_CONTINUITY_PROTOCOL.md
+AGENT_MEMORY_VALIDATION.md
 **/*.session
 **/*.session.json
 **/sessions/
@@ -89,6 +97,7 @@ secrets.yaml
 .benchmarks/
 results/
 datasets/
+data/benchmarks/
 logs/
 dist/
 .tmp/

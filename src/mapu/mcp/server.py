@@ -1,16 +1,81 @@
-"""MapU MCP server: exposes knowledge substrate operations as MCP tools."""
+"""MapU MCP server: exposes durable context-memory operations as MCP tools."""
 
 from __future__ import annotations
 
+import contextlib
+import importlib
+import inspect
+import sys
 import threading
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from mapu.mcp.tool_contract import REQUIRED_MCP_TOOLS
+
 _engine = None
 _session_factory = None
 _init_lock = threading.Lock()
+
+_MCP_RUNTIME_PRELOAD_MODULES = (
+    "mapu.models",
+    "mapu.context_learning",
+    "mapu.evidence.chunking",
+    "mapu.evidence.ingest",
+    "mapu.evidence.parsers",
+    "mapu.evidence.types",
+    "mapu.extraction",
+    "mapu.providers.embeddings",
+    "mapu.providers.llms",
+    "mapu.query.intent",
+    "mapu.query.service",
+    "mapu.query.types",
+    "mapu.repair.service",
+    "mapu.repos.audit",
+    "mapu.repos.corpus_cleanup",
+    "mapu.repos.entity",
+    "mapu.repos.gap",
+)
+
+def _preload_mcp_runtime_modules() -> None:
+    """Load heavy runtime modules before the stdio request loop starts."""
+    for module_name in _MCP_RUNTIME_PRELOAD_MODULES:
+        importlib.import_module(module_name)
+
+
+def _redirect_tool_stdout_to_stderr() -> None:
+    """Keep third-party tool output off MCP's stdout JSON-RPC channel."""
+    for tool in server._tool_manager._tools.values():
+        if getattr(tool.fn, "_mapu_stdout_redirected", False):
+            continue
+        original = tool.fn
+
+        if inspect.iscoroutinefunction(original):
+
+            async def async_wrapped(
+                *args: Any,
+                __original: Callable[..., Any] = original,
+                **kwargs: Any,
+            ) -> Any:
+                with contextlib.redirect_stdout(sys.stderr):
+                    return await __original(*args, **kwargs)
+
+            async_wrapped._mapu_stdout_redirected = True  # type: ignore[attr-defined]
+            tool.fn = async_wrapped
+        else:
+
+            def wrapped(
+                *args: Any,
+                __original: Callable[..., Any] = original,
+                **kwargs: Any,
+            ) -> Any:
+                with contextlib.redirect_stdout(sys.stderr):
+                    return __original(*args, **kwargs)
+
+            wrapped._mapu_stdout_redirected = True  # type: ignore[attr-defined]
+            tool.fn = wrapped
 
 
 def _parse_uuid(value: str, name: str = "id") -> uuid.UUID:
@@ -40,14 +105,41 @@ def _get_session_factory():
     return _session_factory
 
 
+async def _require_corpus(session, corpus_id: uuid.UUID) -> dict[str, Any] | None:
+    from mapu.models.corpus import Corpus
+
+    corpus = await session.get(Corpus, corpus_id)
+    if corpus is None:
+        return {
+            "error": f"Corpus {corpus_id} not found",
+            "code": "corpus_not_found",
+            "corpus_id": str(corpus_id),
+        }
+    return None
+
+
 server = FastMCP(
     name="MapU",
     instructions=(
-        "MapU is a persistent knowledge substrate for document-heavy reasoning. "
-        "Use these tools to query knowledge, ingest documents, manage entities, "
-        "and perform repair operations on knowledge graphs."
+        "MapU is a durable, auditable context-memory substrate for agentic systems. "
+        "Use these tools to preserve cross-session knowledge, inspect provenance, "
+        "recover gaps/activity after context resets, follow next_steps, and repair "
+        "or supersede stale memory explicitly."
     ),
 )
+
+
+def mcp_tool_surface() -> dict[str, Any]:
+    """Return the installed MCP tool surface without starting the stdio server."""
+    tools = sorted(server._tool_manager._tools)
+    missing_required = sorted(set(REQUIRED_MCP_TOOLS).difference(tools))
+    return {
+        "tool_count": len(tools),
+        "required_tool_count": len(REQUIRED_MCP_TOOLS),
+        "required_tools_present": not missing_required,
+        "missing_required_tools": missing_required,
+        "tools": tools,
+    }
 
 
 @server.tool()
@@ -60,7 +152,8 @@ async def query(
 ) -> dict[str, Any]:
     """Ask a question against a MapU knowledge corpus.
 
-    Returns structured results with proposition hits, synthesis, and gaps.
+    Returns structured results with proposition hits, synthesis, next_steps, and
+    gaps.
     Pass as_of as an ISO 8601 datetime to get truth as of that point in time.
     """
     from mapu.query.intent import HeuristicIntentClassifier
@@ -85,10 +178,20 @@ async def query(
     async with factory() as session:
         from mapu.providers.embeddings import get_default_embedding_provider
         from mapu.providers.llms import get_default_llm_provider
+        from mapu.repos.gap import GapRepo
+
+        missing = await _require_corpus(session, cid)
+        if missing is not None:
+            return missing
 
         classifier = HeuristicIntentClassifier()
+        from mapu.repos.audit import ActivityRepo
+
         svc = QueryService(
             session, classifier,
+            activity_repo=ActivityRepo(session, cid),
+            gap_repo=GapRepo(session, cid),
+            actor="mcp",
             llm_provider=get_default_llm_provider(),
             embedding_provider=get_default_embedding_provider(),
         )
@@ -98,10 +201,12 @@ async def query(
             as_of=as_of_dt,
         )
         result = await svc.query(request)
+        await session.commit()
         return {
             "intent": result.intent.value,
             "tier_used": result.tier_used.name,
             "epistemic_status": result.epistemic_status.value,
+            "answer": result.synthesis,
             "synthesis": result.synthesis,
             "hits": [
                 {
@@ -121,6 +226,8 @@ async def query(
                 for h in result.hits
             ],
             "gaps": list(result.gaps),
+            "next_steps": list(result.next_steps),
+            "structured_next_steps": list(result.structured_next_steps),
             "chunk_hits": [
                 {
                     "chunk_id": str(ch.chunk_id),
@@ -222,6 +329,10 @@ async def lookup_entity(corpus_id: str, name: str, limit: int = 20) -> dict[str,
     limit = min(max(limit, 1), 100)
     factory = _get_session_factory()
     async with factory() as session:
+        missing = await _require_corpus(session, cid)
+        if missing is not None:
+            return missing
+
         escaped = _escape_like(name)
         stmt = select(Handle).where(
             Handle.corpus_id == cid,
@@ -621,8 +732,8 @@ async def investigate(
     """Run a multi-step investigation that reasons across documents.
 
     The investigation engine plans retrieval actions, executes them,
-    synthesizes findings, and persists derived propositions.
-    Requires an LLM provider to be configured.
+    synthesizes findings, emits next-step guidance, and persists derived
+    propositions. Requires an LLM provider to be configured.
     """
     from mapu.investigation.service import InvestigationService
     from mapu.investigation.types import InvestigationBudget
@@ -641,6 +752,8 @@ async def investigate(
     async with factory() as session:
         from mapu.providers.embeddings import get_default_embedding_provider
         from mapu.providers.llms import get_default_llm_provider
+        from mapu.repos.audit import ActivityRepo
+        from mapu.repos.gap import GapRepo
 
         llm = get_default_llm_provider()
         if llm is None:
@@ -653,7 +766,12 @@ async def investigate(
             target_coverage=target_coverage,
         )
         svc = InvestigationService(
-            session, llm, budget=budget,
+            session,
+            llm,
+            budget=budget,
+            activity_repo=ActivityRepo(session, cid),
+            gap_repo=GapRepo(session, cid),
+            actor="mcp",
             embedding_provider=get_default_embedding_provider(),
         )
         result = await svc.investigate(
@@ -693,6 +811,8 @@ async def investigate(
             ],
             "termination_reason": result.termination_reason.value,
             "metadata": result.metadata,
+            "next_steps": list(result.next_steps),
+            "structured_next_steps": list(result.structured_next_steps),
         }
 
 
@@ -718,6 +838,10 @@ async def list_gaps(
     limit = min(max(limit, 1), 500)
     factory = _get_session_factory()
     async with factory() as session:
+        missing = await _require_corpus(session, cid)
+        if missing is not None:
+            return missing
+
         repo = GapRepo(session, cid)
         gaps = await repo.list(
             status=status if status else None,
@@ -734,6 +858,18 @@ async def list_gaps(
                     "severity": g.severity,
                     "status": g.status,
                     "detected_by": g.detected_by,
+                    "uncertainty_reason": getattr(g, "uncertainty_reason", "missing_evidence"),
+                    "evidence_hypothesis": getattr(g, "evidence_hypothesis", {}) or {},
+                    "next_action": getattr(g, "next_action", {}) or {},
+                    "expected_resolution": getattr(g, "expected_resolution", None),
+                    "governance_tier": getattr(g, "governance_tier", "provisional"),
+                    "priority_score": getattr(g, "priority_score", None),
+                    "resolution_summary": getattr(g, "resolution_summary", None),
+                    "last_evaluated_at": (
+                        g.last_evaluated_at.isoformat()
+                        if getattr(g, "last_evaluated_at", None)
+                        else None
+                    ),
                     "created_at": g.created_at.isoformat(),
                     "resolved_at": g.resolved_at.isoformat() if g.resolved_at else None,
                 }
@@ -765,6 +901,10 @@ async def list_activity(
     limit = min(max(limit, 1), 500)
     factory = _get_session_factory()
     async with factory() as session:
+        missing = await _require_corpus(session, cid)
+        if missing is not None:
+            return missing
+
         repo = ActivityRepo(session, cid)
         activities = await repo.list(
             event_type=event_type,
@@ -788,8 +928,108 @@ async def list_activity(
         }
 
 
+@server.tool()
+async def handoff_context(
+    corpus_id: str,
+    max_gaps: int = 10,
+    max_activity: int = 20,
+    max_actions: int = 10,
+) -> dict[str, Any]:
+    """Produce a Claude-ready context handoff bundle for resumed sessions."""
+    from mapu.context_learning import build_handoff_bundle
+    from mapu.repos.audit import ActivityRepo
+    from mapu.repos.gap import GapRepo
+
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+    except _UUIDError as e:
+        return e.error_dict
+    max_gaps = min(max(max_gaps, 1), 50)
+    max_activity = min(max(max_activity, 1), 200)
+    max_actions = min(max(max_actions, 1), 30)
+
+    factory = _get_session_factory()
+    async with factory() as session:
+        missing = await _require_corpus(session, cid)
+        if missing is not None:
+            return missing
+
+        gap_repo = GapRepo(session, cid)
+        activity_repo = ActivityRepo(session, cid)
+        gaps = await gap_repo.list(status="open", limit=max_gaps)
+        activities = await activity_repo.list(limit=max_activity)
+
+        return build_handoff_bundle(
+            corpus_id=cid,
+            gaps=tuple(gaps),
+            activities=activities,
+            max_gaps=max_gaps,
+            max_activity=max_activity,
+            max_actions=max_actions,
+        )
+
+
+@server.tool()
+async def log_learning_feedback(
+    corpus_id: str,
+    question: str,
+    step: str,
+    outcome: str,
+    actor: str = "agent",
+    source_event_type: str = "query",
+    source_event_id: str | None = None,
+    notes: str = "",
+) -> dict[str, Any]:
+    """Record learning feedback for a suggested next step.
+
+    The feedback is used to re-rank future next-step suggestions for similar
+    questions.
+    """
+    from mapu.repos.audit import ActivityRepo
+
+    try:
+        cid = _parse_uuid(corpus_id, "corpus_id")
+        sid = _parse_uuid(source_event_id, "source_event_id") if source_event_id else None
+    except _UUIDError as e:
+        return e.error_dict
+
+    valid = {"helpful", "partially_helpful", "applied", "not_helpful", "stale", "unknown"}
+    if outcome not in valid:
+        return {"error": f"Invalid outcome '{outcome}'. Valid values: {', '.join(sorted(valid))}"}
+
+    if not question.strip() or not step.strip():
+        return {"error": "question and step must be non-empty"}
+
+    factory = _get_session_factory()
+    async with factory() as session:
+        repo = ActivityRepo(session, cid)
+        entry = await repo.log(
+            event_type="learning_feedback",
+            actor=actor,
+            entity_type="learning_feedback",
+            entity_id=sid,
+            details={
+                "question": question,
+                "step": step,
+                "outcome": outcome,
+                "source_event_type": source_event_type,
+                "source_event_id": str(sid) if sid else None,
+                "notes": notes,
+            },
+        )
+        await session.commit()
+        return {"event_id": str(entry.id), "success": True}
+
+
 def run_mcp() -> None:
     """Entry point for the MCP server."""
+    # Several MCP tools import SQLAlchemy/pgvector/query modules on first use.
+    # On Windows/Python 3.13, doing that lazily inside FastMCP's AnyIO request
+    # loop can stall stdio tool calls. Startup preloading makes request latency
+    # reflect MapU work instead of module import side effects.
+    _preload_mcp_runtime_modules()
+    # stdout is the MCP protocol stream; model/progress/log output belongs on stderr.
+    _redirect_tool_stdout_to_stderr()
     server.run(transport="stdio")
 
 
@@ -800,6 +1040,7 @@ async def delete_corpus(corpus_id: str, confirm: bool = False) -> dict[str, Any]
     Set confirm=true to execute.
     """
     from mapu.models.corpus import Corpus
+    from mapu.repos.corpus_cleanup import delete_corpus_rows
 
     if not confirm:
         return {"error": "Refusing delete without confirm=true"}
@@ -812,7 +1053,7 @@ async def delete_corpus(corpus_id: str, confirm: bool = False) -> dict[str, Any]
         corpus = await session.get(Corpus, cid)
         if corpus is None:
             return {"error": f"Corpus {corpus_id} not found"}
-        await session.delete(corpus)
+        await delete_corpus_rows(session, cid)
         await session.commit()
         return {"deleted_corpus_id": str(cid)}
 
@@ -823,15 +1064,18 @@ async def reset_all_corpora(confirm: bool = False) -> dict[str, Any]:
 
     Set confirm=true to execute.
     """
-    from sqlalchemy import delete, select
+    from sqlalchemy import select
 
     from mapu.models.corpus import Corpus
+    from mapu.repos.corpus_cleanup import delete_corpus_rows
 
     if not confirm:
         return {"error": "Refusing reset without confirm=true"}
     factory = _get_session_factory()
     async with factory() as session:
-        ids = [str(row[0]) for row in (await session.execute(select(Corpus.id))).all()]
-        await session.execute(delete(Corpus))
+        corpus_ids = [row[0] for row in (await session.execute(select(Corpus.id))).all()]
+        for cid in corpus_ids:
+            await delete_corpus_rows(session, cid)
         await session.commit()
+        ids = [str(cid) for cid in corpus_ids]
         return {"deleted_count": len(ids), "deleted_corpus_ids": ids}

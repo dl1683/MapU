@@ -1,7 +1,7 @@
 [project]
 name = "mapu"
 version = "0.1.0"
-description = "Persistent knowledge substrate for document-heavy reasoning"
+description = "Durable, auditable context-memory substrate for agentic systems"
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
 license = "AGPL-3.0-only"

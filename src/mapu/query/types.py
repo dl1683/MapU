@@ -92,6 +92,8 @@ class QueryResult:
     gaps: tuple[str, ...] = ()
     chunk_hits: tuple[ChunkHit, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
+    next_steps: tuple[str, ...] = ()
+    structured_next_steps: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)

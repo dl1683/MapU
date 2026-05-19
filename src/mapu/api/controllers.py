@@ -25,6 +25,8 @@ from mapu.api.dtos import (
     InvestigationEvidenceResponse,
     InvestigationRequestDTO,
     InvestigationResponse,
+    LearningFeedbackRequest,
+    LearningFeedbackResponse,
     QueryRequestDTO,
     QueryResponse,
     RepairApplyResponse,
@@ -32,6 +34,7 @@ from mapu.api.dtos import (
     RepairPreviewResponse,
     RepairProposeRequest,
     RepairProposeResponse,
+    ResumeHandoffResponse,
     ReviewAttestationRequest,
     ReviewAttestationResponse,
     SituationCreate,
@@ -62,7 +65,9 @@ class CorpusController(Controller):
 
     @get()
     async def list_corpora(
-        self, db_session: AsyncSession, limit: int = 100,
+        self,
+        db_session: AsyncSession,
+        limit: int = 100,
     ) -> list[CorpusResponse]:
         limit = min(max(limit, 1), 500)
         stmt = select(Corpus).order_by(Corpus.created_at.desc()).limit(limit)
@@ -74,7 +79,9 @@ class CorpusController(Controller):
 
     @post()
     async def create_corpus(
-        self, data: CorpusCreate, db_session: AsyncSession,
+        self,
+        data: CorpusCreate,
+        db_session: AsyncSession,
     ) -> CorpusResponse:
         corpus = Corpus(name=data.name, description=data.description)
         db_session.add(corpus)
@@ -83,7 +90,9 @@ class CorpusController(Controller):
 
     @get("/{corpus_id:uuid}")
     async def get_corpus(
-        self, corpus_id: uuid.UUID, db_session: AsyncSession,
+        self,
+        corpus_id: uuid.UUID,
+        db_session: AsyncSession,
     ) -> CorpusResponse:
         from litestar.exceptions import NotFoundException
 
@@ -112,10 +121,16 @@ class QueryController(Controller):
         await _require_corpus(db_session, corpus_id)
         from mapu.providers.embeddings import get_default_embedding_provider
         from mapu.providers.llms import get_default_llm_provider
+        from mapu.repos.audit import ActivityRepo
+        from mapu.repos.gap import GapRepo
 
         classifier = HeuristicIntentClassifier()
         svc = QueryService(
-            db_session, classifier,
+            db_session,
+            classifier,
+            activity_repo=ActivityRepo(db_session, corpus_id),
+            gap_repo=GapRepo(db_session, corpus_id),
+            actor="api",
             llm_provider=get_default_llm_provider(),
             embedding_provider=get_default_embedding_provider(),
         )
@@ -131,6 +146,7 @@ class QueryController(Controller):
             intent=result.intent.value,
             tier_used=result.tier_used.name,
             epistemic_status=result.epistemic_status.value,
+            answer=result.synthesis,
             synthesis=result.synthesis,
             metadata=result.metadata,
             hits=[
@@ -159,6 +175,8 @@ class QueryController(Controller):
                 )
                 for ch in result.chunk_hits
             ],
+            next_steps=list(result.next_steps),
+            structured_next_steps=list(result.structured_next_steps),
         )
 
 
@@ -184,7 +202,10 @@ class DocumentController(Controller):
         registry = ParserRegistry.create_default()
         chunker = SpanAwareChunker()
         svc = IngestionService(
-            db_session, corpus_id, registry, chunker,
+            db_session,
+            corpus_id,
+            registry,
+            chunker,
             embedding_provider=get_default_embedding_provider(),
             extractors=get_default_extractors(),
             embedding_batch_size=EmbeddingSettings().batch_size,
@@ -453,23 +474,27 @@ class ContributionController(Controller):
             await db_session.flush()
 
         if prop_created:
-            db_session.add(PropositionParticipant(
-                id=uuid.uuid4(),
-                proposition_id=prop.id,
-                handle_id=subject.id,
-                corpus_id=corpus_id,
-                role="subject",
-                ordinal=0,
-            ))
-            if object_handle is not None:
-                db_session.add(PropositionParticipant(
+            db_session.add(
+                PropositionParticipant(
                     id=uuid.uuid4(),
                     proposition_id=prop.id,
-                    handle_id=object_handle.id,
+                    handle_id=subject.id,
                     corpus_id=corpus_id,
-                    role="object",
-                    ordinal=1,
-                ))
+                    role="subject",
+                    ordinal=0,
+                )
+            )
+            if object_handle is not None:
+                db_session.add(
+                    PropositionParticipant(
+                        id=uuid.uuid4(),
+                        proposition_id=prop.id,
+                        handle_id=object_handle.id,
+                        corpus_id=corpus_id,
+                        role="object",
+                        ordinal=1,
+                    )
+                )
             await db_session.flush()
 
         att = Attestation(
@@ -490,13 +515,15 @@ class ContributionController(Controller):
 
         sit_repo = SituationRepo(db_session, corpus_id)
         default_sit = await sit_repo.get_or_create_default()
-        db_session.add(AttestationSituation(
-            attestation_id=att.id,
-            situation_id=default_sit.id,
-            corpus_id=corpus_id,
-            assignment_confidence=1.0,
-            assignment_basis="manual_contribution",
-        ))
+        db_session.add(
+            AttestationSituation(
+                attestation_id=att.id,
+                situation_id=default_sit.id,
+                corpus_id=corpus_id,
+                assignment_confidence=1.0,
+                assignment_basis="manual_contribution",
+            )
+        )
         await db_session.flush()
 
         return ContributePropositionResponse(
@@ -552,18 +579,20 @@ class ContributionController(Controller):
         db_session.add(changeset)
         await db_session.flush()
 
-        db_session.add(ChangesetOperation(
-            changeset_id=changeset.id,
-            corpus_id=corpus_id,
-            ordinal=0,
-            operation_type="attestation_review",
-            payload={
-                "attestation_id": str(data.attestation_id),
-                "decision": data.decision,
-                "reason": data.reason,
-            },
-            executed_at=now,
-        ))
+        db_session.add(
+            ChangesetOperation(
+                changeset_id=changeset.id,
+                corpus_id=corpus_id,
+                ordinal=0,
+                operation_type="attestation_review",
+                payload={
+                    "attestation_id": str(data.attestation_id),
+                    "decision": data.decision,
+                    "reason": data.reason,
+                },
+                executed_at=now,
+            )
+        )
 
         repo = AttestationRepo(db_session, corpus_id)
         if data.decision == "accepted":
@@ -614,6 +643,9 @@ class InvestigationController(Controller):
         from mapu.providers.llms import get_default_llm_provider
 
         await _require_corpus(db_session, corpus_id)
+        from mapu.repos.audit import ActivityRepo
+        from mapu.repos.gap import GapRepo
+
         llm = get_default_llm_provider()
         if llm is None:
             from litestar.exceptions import ClientException
@@ -629,7 +661,12 @@ class InvestigationController(Controller):
             target_coverage=data.budget.target_coverage,
         )
         svc = InvestigationService(
-            db_session, llm, budget=budget,
+            db_session,
+            llm,
+            budget=budget,
+            activity_repo=ActivityRepo(db_session, corpus_id),
+            gap_repo=GapRepo(db_session, corpus_id),
+            actor="api",
             embedding_provider=get_default_embedding_provider(),
         )
         result = await svc.investigate(
@@ -666,6 +703,8 @@ class InvestigationController(Controller):
             persisted_proposition_ids=list(result.persisted_proposition_ids),
             termination_reason=result.termination_reason.value,
             metadata=result.metadata,
+            next_steps=list(result.next_steps),
+            structured_next_steps=list(result.structured_next_steps),
         )
 
 
@@ -705,6 +744,75 @@ class ActivityController(Controller):
             for a in activities
         ]
 
+    @post("/feedback")
+    async def submit_learning_feedback(
+        self,
+        corpus_id: uuid.UUID,
+        data: LearningFeedbackRequest,
+        db_session: AsyncSession,
+    ) -> LearningFeedbackResponse:
+        from mapu.repos.audit import ActivityRepo
+
+        await _require_corpus(db_session, corpus_id)
+        repo = ActivityRepo(db_session, corpus_id)
+        entry = await repo.log(
+            event_type="learning_feedback",
+            actor=data.actor,
+            entity_type="learning_feedback",
+            details={
+                "question": data.question,
+                "step": data.step,
+                "outcome": data.outcome,
+                "source_event_type": data.source_event_type,
+                "source_event_id": str(data.source_event_id) if data.source_event_id else None,
+                "notes": data.notes,
+            },
+        )
+        await db_session.commit()
+        return LearningFeedbackResponse(
+            success=True,
+            event_id=entry.id,
+        )
+
+
+class ResumeController(Controller):
+    path = "/corpora/{corpus_id:uuid}/resume"
+
+    @get()
+    async def resume(
+        self,
+        corpus_id: uuid.UUID,
+        db_session: AsyncSession,
+        max_gaps: int = 10,
+        max_activity: int = 20,
+        max_actions: int = 10,
+    ) -> ResumeHandoffResponse:
+        from mapu.context_learning import build_handoff_bundle
+        from mapu.repos.audit import ActivityRepo
+        from mapu.repos.gap import GapRepo
+
+        await _require_corpus(db_session, corpus_id)
+
+        max_gaps = min(max(max_gaps, 1), 50)
+        max_activity = min(max(max_activity, 1), 200)
+        max_actions = min(max(max_actions, 1), 30)
+
+        gap_repo = GapRepo(db_session, corpus_id)
+        activity_repo = ActivityRepo(db_session, corpus_id)
+        gaps = await gap_repo.list(status="open", limit=max_gaps)
+        activities = await activity_repo.list(limit=max_activity)
+
+        return ResumeHandoffResponse.model_validate(
+            build_handoff_bundle(
+                corpus_id=corpus_id,
+                gaps=tuple(gaps),
+                activities=activities,
+                max_gaps=max_gaps,
+                max_activity=max_activity,
+                max_actions=max_actions,
+            ),
+        )
+
 
 class GapController(Controller):
     path = "/corpora/{corpus_id:uuid}/gaps"
@@ -737,6 +845,14 @@ class GapController(Controller):
                 severity=g.severity,
                 status=g.status,
                 detected_by=g.detected_by,
+                uncertainty_reason=g.uncertainty_reason,
+                evidence_hypothesis=g.evidence_hypothesis,
+                next_action=g.next_action,
+                expected_resolution=g.expected_resolution,
+                governance_tier=g.governance_tier,
+                priority_score=g.priority_score,
+                resolution_summary=g.resolution_summary,
+                last_evaluated_at=g.last_evaluated_at,
                 created_at=g.created_at,
                 resolved_at=g.resolved_at,
             )
@@ -761,9 +877,13 @@ class SituationController(Controller):
         situations = await repo.list(limit=min(max(limit, 1), 500))
         return [
             SituationResponse(
-                id=s.id, name=s.name, kind=s.kind,
-                parent_id=s.parent_id, document_id=s.document_id,
-                assumptions=s.assumptions, created_at=s.created_at,
+                id=s.id,
+                name=s.name,
+                kind=s.kind,
+                parent_id=s.parent_id,
+                document_id=s.document_id,
+                assumptions=s.assumptions,
+                created_at=s.created_at,
             )
             for s in situations
         ]
@@ -814,9 +934,13 @@ class SituationController(Controller):
         db_session.add(situation)
         await db_session.flush()
         return SituationResponse(
-            id=situation.id, name=situation.name, kind=situation.kind,
-            parent_id=situation.parent_id, document_id=situation.document_id,
-            assumptions=situation.assumptions, created_at=situation.created_at,
+            id=situation.id,
+            name=situation.name,
+            kind=situation.kind,
+            parent_id=situation.parent_id,
+            document_id=situation.document_id,
+            assumptions=situation.assumptions,
+            created_at=situation.created_at,
         )
 
     @get("/{situation_id:uuid}")
@@ -838,9 +962,13 @@ class SituationController(Controller):
                 detail=f"Situation {situation_id} not found in corpus {corpus_id}",
             )
         return SituationResponse(
-            id=situation.id, name=situation.name, kind=situation.kind,
-            parent_id=situation.parent_id, document_id=situation.document_id,
-            assumptions=situation.assumptions, created_at=situation.created_at,
+            id=situation.id,
+            name=situation.name,
+            kind=situation.kind,
+            parent_id=situation.parent_id,
+            document_id=situation.document_id,
+            assumptions=situation.assumptions,
+            created_at=situation.created_at,
         )
 
 
@@ -855,6 +983,7 @@ def all_controllers() -> list[type[Controller]]:
         ContributionController,
         InvestigationController,
         ActivityController,
+        ResumeController,
         GapController,
         SituationController,
     ]

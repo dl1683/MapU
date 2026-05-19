@@ -8,7 +8,6 @@ from typing import Any
 
 from mapu.mcp import server as mcp_server
 
-
 DOCS: list[dict[str, str]] = [
     {
         "source_uri": "memory://msa-v1",

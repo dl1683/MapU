@@ -16,6 +16,9 @@ Current hard benchmark evidence in this repository is concentrated on long-memor
 - `GLOBAL_MEMORY_BENCHMARK_STATUS.md`
 - `results/` artifacts referenced there
 
+Primary design constraint for the current branch: these domains are being treated as
+stress tests for durable context memory, not one-off extraction benchmarks.
+
 Domain-specific quality claims (legal, finance, biomedical, etc.) should only be made when paired with explicit domain-run artifacts.
 
 ## Cross-Domain Invariants
@@ -26,6 +29,12 @@ Across domains, the same core abstractions are used:
 - provenance/attestations
 - temporal context
 - gaps and repair operations
+
+Across resumes, all domains are expected to preserve:
+- relation graph continuity (including cross-reference links)
+- uncertainty/conflict state
+- versioned supersession and evidence lineage
+- explicit provenance for all retained facts
 
 ## Example Domain Profiles (Research Targets)
 
@@ -55,3 +64,6 @@ If a domain claim is published, include:
 1. exact run artifact paths
 2. metric definitions
 3. known limitations
+
+For every claimed domain claim, include at least one evidence route that demonstrates
+cross-session continuity behavior (e.g., reuse of prior corpus state versus re-ingest-only baseline).

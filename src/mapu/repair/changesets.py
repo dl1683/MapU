@@ -124,7 +124,7 @@ async def execute_changeset(
                 raise ValueError(f"Unknown operation type: {op.operation_type}")
 
             op_result = await _dispatch_operation(
-                session, corpus_id, op.operation_type, op.payload,
+                session, corpus_id, op.operation_type, op.payload, changeset_id,
             )
             await repo.record_operation_result(op.id, op_result)
             result.operations_executed += 1
@@ -149,6 +149,7 @@ async def _dispatch_operation(
     corpus_id: uuid.UUID,
     operation_type: str,
     payload: dict[str, Any],
+    changeset_id: uuid.UUID,
 ) -> dict[str, Any]:
     if operation_type == "retract_proposition":
         raw_retraction_id = payload.get("retraction_proposition_id")
@@ -165,6 +166,7 @@ async def _dispatch_operation(
             affected_ids=tuple(uuid.UUID(x) for x in payload.get("affected_ids", [])),
             reason=payload.get("reason", ""),
             actor=payload.get("actor", "system"),
+            changeset_id=changeset_id,
             recompute_only_ids=tuple(
                 uuid.UUID(x) for x in payload.get("recompute_only_ids", [])
             ),
@@ -177,6 +179,7 @@ async def _dispatch_operation(
             new_proposition_id=uuid.UUID(payload["new_proposition_id"]),
             affected_ids=tuple(uuid.UUID(x) for x in payload.get("affected_ids", [])),
             actor=payload.get("actor", "system"),
+            changeset_id=changeset_id,
             recompute_only_ids=tuple(
                 uuid.UUID(x) for x in payload.get("recompute_only_ids", [])
             ),
@@ -188,6 +191,7 @@ async def _dispatch_operation(
             attestation_id=uuid.UUID(payload["attestation_id"]),
             actor=payload.get("actor", "system"),
             reason=payload.get("reason", ""),
+            changeset_id=changeset_id,
         )
     if operation_type == "merge_handles":
         return await merge_handles(

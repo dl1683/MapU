@@ -5,10 +5,10 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class BenchmarkDomain(str, Enum):
+class BenchmarkDomain(StrEnum):
     CODE = "code"
     LEGAL = "legal"
     FINANCE = "finance"
@@ -17,7 +17,7 @@ class BenchmarkDomain(str, Enum):
     ACADEMIC = "academic"
 
 
-class EvalPhase(str, Enum):
+class EvalPhase(StrEnum):
     EXTRACTION = "extraction"
     GROUNDING = "grounding"
     TRUTH = "truth"

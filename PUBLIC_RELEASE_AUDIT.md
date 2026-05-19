@@ -6,6 +6,11 @@ Last updated: 2026-05-15
 
 Prepare this repository for open-source release with claim-backed documentation, reproducible performance evidence, and working user-facing surfaces.
 
+Release-readiness now inherits one top-level constraint: MapU is only considered
+ready for external consumption when its durable memory-substrate behavior is
+explicitly consistent across context-reset conditions and the evidence trail is
+auditable.
+
 ## Evidence Model
 
 Audit entries below are tied to the exact commit SHA recorded in each entry.
@@ -15,6 +20,16 @@ install audit, Docker startup check, and full prepublish benchmark gate on the
 final release commit.
 
 ## Checklist: Requirement -> Evidence -> Status
+
+15. Continuity replay is verified before claiming memory-substrate guarantees
+- Evidence:
+  - `SESSION_CONTINUITY_PROTOCOL.md`
+  - `INTEGRATIONS.md` session handoff section
+  - `GLOBAL_MEMORY_BENCHMARK_EXECUTION_PLAN.md`
+  - Reused-corpus replay artifacts showing gap reduction and reduced rediscovery
+- Status: PARTIAL
+- Required fix:
+  - Produce a two-pass replay artifact against a real repository task before any release claim that says MapU avoids agent rediscovery.
 
 1. Performance claims are backed by fresh, reproducible artifacts
 - Evidence:
@@ -61,17 +76,23 @@ final release commit.
   - 2026-05-13 lightweight verification: `python -m mapu.cli corpus reset --help`, `python -m mapu.cli corpus delete --help`
   - 2026-05-15 focused destructive-guard tests cover CLI refusal without
     `--yes` and MCP refusal without `confirm=true`.
+  - 2026-05-19 CLI e2e smoke added:
+    `uv run python tools/cli_e2e_smoke.py --command uv --arg run --arg mapu --json`
+    creates a disposable corpus, ingests a source note, runs resume/query/activity,
+    verifies nonblank query output and audit activity, and deletes the corpus.
 - Status: PASS
 
 7. MCP integration works end-to-end in real run
 - Evidence:
   - Repeated execution of `python tools/mcp_relex_smoke.py` on 2026-05-13
   - Operational path PASS: create corpus -> ingest -> query
-  - 2026-05-15 process-level stdio smoke added:
+  - 2026-05-15 process-level stdio smoke added and 2026-05-19 strengthened:
     `tools/mcp_stdio_smoke.py` launches `mapu mcp`, initializes an MCP client
-    session, and verifies required tools are present.
-  - The fresh-clone release audit now runs that installed MCP stdio smoke after
-    checking `mapu mcp --help`.
+    session, verifies required tools are present, and can execute a DB-backed
+    create -> ingest -> contribute -> review -> query -> activity -> delete workflow.
+  - The fresh-clone release audit runs the installed MCP stdio smoke in
+    `--list-only` mode after checking `mapu mcp --help`; DB-backed release
+    audits can add `-RunMcpE2E`.
   - Quality hardening applied and verified:
     - modality normalization (`shall/must/may`)
     - obligation-priority rerank
@@ -113,15 +134,34 @@ final release commit.
 - Evidence:
   - `tools/benchmark_smoke_gate.ps1` runs tiny LoCoMo, LongMemEval, and BEAM
     slices through the same MapU benchmark wrapper and local model endpoint.
+  - `mapu eval memory-benchmark-smoke` runs MemoryArena and AMA-Bench
+    export/predict/score/gate through the installed CLI with benchmark-agnostic
+    predictors by default.
+  - `mapu eval memory-benchmark-smoke` prints one top-level JSON summary by
+    default, writes adapter stdout into `smoke_report.json`, and exposes
+    `--verbose-steps` for debugging only.
+  - `smoke_report.json` records actual scenario inputs under `inputs`,
+    generated artifacts under `paths`, and gate metrics under `score_summary`;
+    non-exact metric gates expose `threshold_metric` and `threshold`.
+  - MemoryArena and AMA-Bench score reports include `item_scores` and
+    `worst_items` for local failure analysis without changing aggregate gate
+    semantics.
   - The smoke gate writes metadata with `smoke_only=true` and
     `public_performance_evidence=false`.
+  - The MemoryArena/AMA aggregate gate rejects diagnostic/template prediction
+    methods by default and passes them only with explicit
+    `--allow-diagnostic-methods` debug opt-in.
+  - MemoryArena `web_grounded` predictions preserve web-source metadata under
+    `evidence.web`; the current tiny-slice lane clears the local non-diagnostic
+    smoke gate but still needs broader evidence before it can support claims.
 - Status: PASS for harness smoke coverage; still not benchmark evidence
 - Exact-SHA use:
   - Run the smoke gate on the same commit being audited and inspect its
     `gate_meta.json`.
   - A passing smoke gate proves only that the benchmark wrapper/local-endpoint
-    path can execute tiny LoCoMo, LongMemEval, and BEAM slices. It is not
-    leaderboard or public performance evidence.
+    path can execute tiny LoCoMo, LongMemEval, and BEAM slices, and that the
+    MemoryArena/AMA installed CLI smoke path can execute. It is not leaderboard
+    or public performance evidence.
 - Required fix:
   - Keep this separate from the full prepublish benchmark gate; smoke output is
     not public performance evidence.
@@ -130,10 +170,24 @@ final release commit.
 - Evidence:
   - `tools/release_surface_audit.ps1` checks clean git state, tracked file size,
     license/package metadata consistency, tracked Markdown local links, obvious
-    private secret patterns, dummy-only benchmark API key usage, Docker
-    availability, checked-in compose/env consistency, fresh-clone
+    private secret patterns, dummy-only benchmark API key usage,
+    `tools/verify_benchmark_isolation.py` benchmark source isolation from
+    general runtime modules, Docker availability, checked-in compose/env
+    consistency, fresh-clone
     install/import/CLI metadata surfaces, and installed MCP stdio startup/tool
     listing.
+  - For local development shells only, the audit supports `-AllowDirtyWorktree`
+    and `-SkipDocker`. Those switches record `allow_dirty_worktree=true` and
+    `skip_docker=true` in JSON, list skipped checks under `checks_skipped`, set
+    `release_ready_evidence=false` with `evidence_scope=scoped`, and must not be
+    used as public release evidence.
+  - `tools/verify_release_audit_evidence.py` validates audit JSON in
+    `--mode release` before public use: it rejects skipped checks, failed
+    checks, local-only switches, `release_ready_evidence=false`, scoped
+    evidence, missing CLI/MCP smoke evidence, and stale audit JSON that lacks
+    the benchmark-isolation check under `checks_passed`. Required CLI/MCP smoke
+    entries must include command provenance, corpus id, MapU version, git SHA,
+    and passing required checks; `{kind,status}` stubs are not evidence.
   - 2026-05-15 fast run with `-SkipFreshInstall` correctly failed while this
     script was uncommitted and Docker was unavailable; Docker remains the real
     unresolved external-startup blocker on this host.
@@ -204,7 +258,9 @@ final release commit.
     `tools/public_github_install_audit.ps1` against public `main` after the
     final commit is pushed. A passing run covers public clone, venv creation,
     `pip install`, import/metadata checks, CLI help checks, and installed MCP
-    stdio smoke.
+    stdio smoke. Its JSON embeds installed CLI help command evidence and the
+    MCP list-only smoke report; `tools/verify_public_install_audit_evidence.py`
+    rejects check-name-only summaries.
   - Earlier one-off and pre-fix public-install checks also passed, but the
     repeatable script above is the relevant path for final release evidence.
   - 2026-05-15 release audit can now write `-OutputJson <path>` summaries
@@ -274,22 +330,30 @@ Current handoff state:
 - Branch note: local branch is `master` tracking remote default branch
   `origin/main`; use `git push origin HEAD:main` unless the local branch is
   renamed.
-- Current release-surface fast audit command:
-  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1 -SkipFreshInstall -OutputJson .tmp\release_surface_audit_summary.json`
+- Current release-surface audit command with DB-backed CLI and DB-backed MCP stdio e2e smoke:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1 -RunCliE2E -RunMcpE2E -OutputJson .tmp\release_surface_audit_summary.json`
+- Local development CLI/MCP plus working-tree install audit for dirty or no-Docker shells:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1 -SkipDocker -AllowDirtyWorktree -InstallFromWorkingTree -RunCliE2E -RunMcpE2E -OutputJson .tmp\release_surface_audit_summary.json`
 - Current public-install audit command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\public_github_install_audit.ps1 -OutputJson .tmp\public_github_install_audit_summary.json`
+- Current public-install audit verifier:
+  `uv run python tools\verify_public_install_audit_evidence.py .tmp\public_github_install_audit_summary.json`
 - Docker blocker command to rerun on a Docker-enabled host:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release_surface_audit.ps1 -OutputJson .tmp\release_surface_audit_summary.json`
 - Full benchmark blocker command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
+- Full benchmark evidence verifier:
+  `uv run python tools\verify_prepublish_benchmark_evidence.py logs\benchmarks\<gate>\gate_meta.json --require-public-evidence-labels`
 - Detached full benchmark blocker command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\start_prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`
 - Full benchmark progress command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_full_sweep_progress.ps1`
   This command reports code identity, gate metadata status, active/dead worker
   state, completion counts, and a verdict. Use `-Json` for machine-readable
-  status. Any stale, incomplete, or running verdict is a monitoring/debug aid,
-  not public benchmark evidence.
+  status, then validate captured JSON with
+  `uv run python tools\verify_full_sweep_progress.py <progress.json>`. Only a
+  passing `--require-public-evidence` verifier result can support public
+  benchmark evidence; stale, incomplete, or running status is a monitoring aid.
 - Smoke-only benchmark command:
   `powershell -NoProfile -ExecutionPolicy Bypass -File tools\benchmark_smoke_gate.ps1 -TimeoutMinutes 45`
 - Smoke-only evidence note:

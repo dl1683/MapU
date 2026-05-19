@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -51,10 +50,14 @@ def _print_pair(label: str, ours: float | None, baseline: float | None) -> None:
 def main() -> None:
     suffix = os.getenv("MAPU_BENCH_PROJECT_SUFFIX", "v2")
     ours_locomo_path = _latest_result(
-        ROOT / "results" / "locomo", "locomo_results", f"mapu_fullsweep_qwen06_locomo_{suffix}"
+        ROOT / "results" / "locomo",
+        "locomo_results",
+        f"mapu_fullsweep_qwen06_locomo_{suffix}",
     )
     ours_longmem_path = _latest_result(
-        ROOT / "results" / "longmemeval", "longmemeval_results", f"mapu_fullsweep_qwen06_longmemeval_{suffix}"
+        ROOT / "results" / "longmemeval",
+        "longmemeval_results",
+        f"mapu_fullsweep_qwen06_longmemeval_{suffix}",
     )
     ours_beam_100k_path = _latest_result(
         ROOT / "results" / "beam", "beam_results", f"mapu_fullsweep_qwen06_beam_100k_{suffix}"
@@ -102,7 +105,12 @@ def main() -> None:
         print("LongMemEval ours file: MISSING")
     print()
 
-    def beam_section(name: str, ours_path: Path | None, b50: dict[str, Any], b200: dict[str, Any]) -> None:
+    def beam_section(
+        name: str,
+        ours_path: Path | None,
+        b50: dict[str, Any],
+        b200: dict[str, Any],
+    ) -> None:
         if not ours_path:
             print(f"BEAM {name} ours file: MISSING")
             print()

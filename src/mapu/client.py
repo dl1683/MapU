@@ -259,12 +259,54 @@ class AsyncMapUClient:
             "GET", f"/corpora/{corpus_id}/activity", params=params,
         )
 
+    async def resume(
+        self,
+        corpus_id: uuid.UUID,
+        max_gaps: int = 10,
+        max_activity: int = 20,
+        max_actions: int = 10,
+    ) -> dict[str, Any]:
+        return await self._request(
+            "GET",
+            f"/corpora/{corpus_id}/resume",
+            params={
+                "max_gaps": max_gaps,
+                "max_activity": max_activity,
+                "max_actions": max_actions,
+            },
+        )
+
     async def list_situations(
         self, corpus_id: uuid.UUID, limit: int = 100,
     ) -> list[dict[str, Any]]:
         return await self._request(
             "GET", f"/corpora/{corpus_id}/situations",
             params={"limit": limit},
+        )
+
+    async def log_learning_feedback(
+        self,
+        corpus_id: uuid.UUID,
+        question: str,
+        step: str,
+        outcome: str,
+        actor: str = "sdk",
+        source_event_type: str = "query",
+        source_event_id: uuid.UUID | None = None,
+        notes: str = "",
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "question": question,
+            "step": step,
+            "outcome": outcome,
+            "actor": actor,
+            "source_event_type": source_event_type,
+            "notes": notes,
+        }
+        if source_event_id:
+            body["source_event_id"] = str(source_event_id)
+        return await self._request(
+            "POST", f"/corpora/{corpus_id}/activity/feedback", json=body,
         )
 
     async def create_situation(
@@ -495,11 +537,53 @@ class MapUClient:
             params={"limit": limit, **kwargs},
         )
 
+    def resume(
+        self,
+        corpus_id: uuid.UUID,
+        max_gaps: int = 10,
+        max_activity: int = 20,
+        max_actions: int = 10,
+    ) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            f"/corpora/{corpus_id}/resume",
+            params={
+                "max_gaps": max_gaps,
+                "max_activity": max_activity,
+                "max_actions": max_actions,
+            },
+        )
+
     def list_situations(
         self, corpus_id: uuid.UUID, limit: int = 100,
     ) -> list[dict[str, Any]]:
         return self._request(
             "GET", f"/corpora/{corpus_id}/situations", params={"limit": limit},
+        )
+
+    def log_learning_feedback(
+        self,
+        corpus_id: uuid.UUID,
+        question: str,
+        step: str,
+        outcome: str,
+        actor: str = "sdk",
+        source_event_type: str = "query",
+        source_event_id: uuid.UUID | None = None,
+        notes: str = "",
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "question": question,
+            "step": step,
+            "outcome": outcome,
+            "actor": actor,
+            "source_event_type": source_event_type,
+            "notes": notes,
+        }
+        if source_event_id:
+            body["source_event_id"] = str(source_event_id)
+        return self._request(
+            "POST", f"/corpora/{corpus_id}/activity/feedback", json=body,
         )
 
     def create_situation(

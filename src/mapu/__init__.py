@@ -1,3 +1,3 @@
-"""MapU — persistent knowledge substrate for document-heavy reasoning."""
+"""MapU: durable, auditable context memory for agentic systems."""
 
 __version__ = "0.1.0"

@@ -86,6 +86,8 @@ async def _rollback_retraction(
         if gap is not None:
             gap.status = "resolved"
             gap.resolved_at = datetime.now(UTC)
+            gap.resolution_summary = "Rollback restored the retracted proposition state."
+            gap.last_evaluated_at = gap.resolved_at
 
     truth_svc = TruthComputeService(session, corpus_id)
     recomputed = await truth_svc.recompute_for_proposition(proposition_id)

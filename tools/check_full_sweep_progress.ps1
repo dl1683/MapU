@@ -110,6 +110,12 @@ if ($gateMetaPath -and (Test-Path -LiteralPath $gateMetaPath)) {
 $codeSha = if ($codeIdentityPath) { Get-FirstRegexMatch $codeIdentityPath "^sha=(.+)$" } else { $null }
 $codeWorktree = if ($codeIdentityPath) { Get-FirstRegexMatch $codeIdentityPath "^worktree=(.+)$" } else { $null }
 $workerPids = if ($latestOut) { Get-WorkerPids $latestOut.FullName } else { @() }
+if ($null -eq $workerPids) {
+    $workerPids = @()
+}
+else {
+    $workerPids = @($workerPids)
+}
 $activeWorkerCount = @($workerPids | Where-Object { $_.running }).Count
 $allBeamComplete = @($beamStatus | Where-Object { $_.completed -lt $_.total }).Count -eq 0
 $allCountsComplete = ($locomoDone -ge $locomoTotal) -and ($longmemDone -ge $longmemTotal) -and $allBeamComplete
@@ -128,7 +134,7 @@ $summary = [ordered]@{
     locomo = [ordered]@{ completed = $locomoDone; total = $locomoTotal }
     longmemeval = [ordered]@{ completed = $longmemDone; total = $longmemTotal }
     beam = $beamStatus
-    workers = $workerPids
+    workers = @($workerPids)
 }
 
 if ($Json) {

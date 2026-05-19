@@ -16,14 +16,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mapu.models.attestation import Attestation
+from mapu.models.audit import Activity
 from mapu.models.authority import SourcePolicyEval
 from mapu.models.context import Situation
 from mapu.models.corpus import Corpus
 from mapu.models.entity import Handle
-from mapu.models.evidence import DocumentExpression, DocumentWork, TextSpan
+from mapu.models.evidence import Chunk, DocumentExpression, DocumentWork, TextSpan
 from mapu.models.gap import Gap, GapTarget
 from mapu.models.lineage import DerivationEdge, SupersessionEdge
 from mapu.models.proposition import Proposition
+from mapu.models.review import Changeset
 
 pytestmark = pytest.mark.integration
 
@@ -411,6 +413,43 @@ class TestDAGAcyclicity:
 
 
 class TestGapTargetTrigger:
+    async def test_gap_continuity_contract_fields_persist(
+        self, session: AsyncSession, corpus_a: Corpus
+    ) -> None:
+        gap = Gap(
+            id=uuid.uuid4(),
+            corpus_id=corpus_a.id,
+            kind="query_gap",
+            description="Need source-backed evidence before resume",
+            severity="critical",
+            detected_by="test",
+            uncertainty_reason="missing_evidence",
+            evidence_hypothesis={
+                "source": "query",
+                "question": "Where is the source?",
+            },
+            next_action={
+                "action_type": "investigate",
+                "question": "Find source-backed evidence",
+            },
+            expected_resolution="Close with provenance or dismiss explicitly.",
+            governance_tier="provisional",
+            priority_score=4.0,
+            last_evaluated_at=NOW,
+            created_at=NOW,
+        )
+        session.add(gap)
+        await session.flush()
+
+        loaded = await session.get(Gap, gap.id)
+        assert loaded is not None
+        assert loaded.uncertainty_reason == "missing_evidence"
+        assert loaded.evidence_hypothesis["source"] == "query"
+        assert loaded.next_action["action_type"] == "investigate"
+        assert loaded.expected_resolution == "Close with provenance or dismiss explicitly."
+        assert loaded.governance_tier == "provisional"
+        assert loaded.priority_score == 4.0
+
     async def test_gap_target_proposition_ok(
         self, session: AsyncSession, corpus_a: Corpus
     ) -> None:
@@ -467,6 +506,80 @@ class TestGapTargetTrigger:
             target_id=h.id,
         )
         session.add(gt)
+        await session.flush()
+
+    async def test_gap_target_rich_continuity_targets_ok(
+        self, session: AsyncSession, corpus_a: Corpus
+    ) -> None:
+        doc = _make_doc_work(corpus_a.id)
+        session.add(doc)
+        await session.flush()
+
+        expr = _make_expression(corpus_a.id, doc.id)
+        session.add(expr)
+        await session.flush()
+
+        span = _make_span(corpus_a.id, expr.id)
+        session.add(span)
+        await session.flush()
+
+        chunk = Chunk(
+            id=uuid.uuid4(),
+            expression_id=expr.id,
+            corpus_id=corpus_a.id,
+            text="chunk text",
+            start_span_id=span.id,
+            end_span_id=span.id,
+            token_count=2,
+        )
+        activity = Activity(
+            id=uuid.uuid4(),
+            corpus_id=corpus_a.id,
+            event_type="query",
+            entity_type="query",
+            entity_id=None,
+            details={"question": "q"},
+            actor="test",
+            created_at=NOW,
+        )
+        changeset = Changeset(
+            id=uuid.uuid4(),
+            corpus_id=corpus_a.id,
+            actor="test",
+            actor_type="human",
+            description="test",
+            status="proposed",
+            risk_level="low",
+            created_at=NOW,
+        )
+        session.add_all([chunk, activity, changeset])
+        await session.flush()
+
+        gap = Gap(
+            id=uuid.uuid4(),
+            corpus_id=corpus_a.id,
+            kind="missing_evidence",
+            description="rich target gap",
+            detected_by="test",
+            created_at=NOW,
+        )
+        session.add(gap)
+        await session.flush()
+
+        targets = [
+            ("document", doc.id),
+            ("span", span.id),
+            ("chunk", chunk.id),
+            ("activity", activity.id),
+            ("changeset", changeset.id),
+        ]
+        for target_type, target_id in targets:
+            session.add(GapTarget(
+                gap_id=gap.id,
+                corpus_id=corpus_a.id,
+                target_type=target_type,
+                target_id=target_id,
+            ))
         await session.flush()
 
     async def test_gap_target_nonexistent_rejected(

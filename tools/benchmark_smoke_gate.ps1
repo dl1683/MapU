@@ -20,6 +20,32 @@ if (-not (Test-Path -LiteralPath (Join-Path $repoRoot ".tmp\memory-benchmarks"))
     throw "Missing .tmp\memory-benchmarks; clone https://github.com/mem0ai/memory-benchmarks first."
 }
 
+function Write-TextUtf8NoBom {
+    param(
+        [string]$Text,
+        [string]$Path
+    )
+
+    $absolutePath = [System.IO.Path]::GetFullPath($Path)
+    $parent = [System.IO.Path]::GetDirectoryName($absolutePath)
+    if (-not [string]::IsNullOrWhiteSpace($parent)) {
+        [System.IO.Directory]::CreateDirectory($parent) | Out-Null
+    }
+    $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText($absolutePath, ($Text + [Environment]::NewLine), $encoding)
+}
+
+function Write-JsonUtf8NoBom {
+    param(
+        [object]$Data,
+        [string]$Path,
+        [int]$Depth = 5
+    )
+
+    $json = $Data | ConvertTo-Json -Depth $Depth
+    Write-TextUtf8NoBom -Text $json -Path $Path
+}
+
 $logRoot = Join-Path $repoRoot "logs\benchmarks"
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 
@@ -48,8 +74,7 @@ $dirtyFlag = if ([string]::IsNullOrWhiteSpace($dirty)) { "clean" } else { "dirty
 
 $metaPath = Join-Path $gateDir "gate_meta.json"
 $codeIdentity = Join-Path $gateDir "code_identity.txt"
-"sha=$gitSha`nworktree=$dirtyFlag`ntimestamp=$stamp`nsmoke_only=true`ntimeout_minutes=$TimeoutMinutes" |
-    Set-Content -LiteralPath $codeIdentity -Encoding UTF8
+Write-TextUtf8NoBom -Path $codeIdentity -Text "sha=$gitSha`nworktree=$dirtyFlag`ntimestamp=$stamp`nsmoke_only=true`ntimeout_minutes=$TimeoutMinutes"
 
 $jobs = @(
     @{
@@ -156,9 +181,9 @@ $meta = [ordered]@{
     timeout_minutes = $TimeoutMinutes
     gate_dir = $gateDir
     gate_pass = $passed
-    failures = $failures
+    failures = @($failures)
 }
-($meta | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $metaPath -Encoding UTF8
+Write-JsonUtf8NoBom -Data $meta -Path $metaPath -Depth 4
 
 if (-not $passed) {
     Write-Error "BENCHMARK SMOKE GATE: FAIL - $($failures -join ', ')"

@@ -529,9 +529,13 @@ def _unpack_relex_output(raw: Any) -> tuple[list[dict[str, Any]], list[dict[str,
 def _entity_span(text: str, entity: dict[str, Any], fallback_text: str) -> tuple[int, int]:
     start = entity.get("start")
     end = entity.get("end")
-    if isinstance(start, int) and not isinstance(start, bool) and isinstance(end, int):
-        if 0 <= start < end <= len(text):
-            return start, end
+    if (
+        isinstance(start, int)
+        and not isinstance(start, bool)
+        and isinstance(end, int)
+        and 0 <= start < end <= len(text)
+    ):
+        return start, end
     return _find_span(text, fallback_text)
 
 
@@ -593,10 +597,9 @@ def _normalize_relation_label(relation: str, head: str, tail: str, full_text: st
         return "may request"
     if any(r.startswith(m.strip()) for m in _OBLIGATION_MODAL_RE):
         return r
-    if r == "reports":
+    if r == "reports" and ("shall" in text or "must" in text or "obligation" in text):
         # Avoid misclassifying contractual delivery statements as measurement reports.
-        if "shall" in text or "must" in text or "obligation" in text:
-            return "shall deliver"
+        return "shall deliver"
     return r
 
 
@@ -613,12 +616,14 @@ def _reject_malformed_obligation_object(relation_norm: str, obj: EntityMention) 
         return False
     obj_text = obj.text.lower()
     obj_kind = (obj.kind or "").lower()
-    # Contractual obligations usually target deliverables/artifacts/events, not counterparty entities.
+    # Contractual obligations usually target deliverables/artifacts/events,
+    # not counterparty entities.
     # Keep organization objects only when there is explicit recipient phrasing in the object itself.
     if obj_kind in {"organization", "person"}:
-        if any(tok in obj_text for tok in ("report", "statement", "notice", "document", "payment", "deliverable")):
+        if any(
+            tok in obj_text
+            for tok in ("report", "statement", "notice", "document", "payment", "deliverable")
+        ):
             return False
-        if any(tok in obj_text for tok in (" to ", "for ", "within ", "by ")):
-            return False
-        return True
+        return not any(tok in obj_text for tok in (" to ", "for ", "within ", "by "))
     return False

@@ -48,7 +48,7 @@ def create_app(settings: Settings | None = None) -> Litestar:
         openapi_config=OpenAPIConfig(
             title="MapU API",
             version="0.1.0",
-            description="Persistent knowledge substrate for document-heavy reasoning",
+            description="Durable, auditable context-memory substrate for agentic systems",
         ),
         cors_config=cors_config,
         guards=[_api_key_guard],

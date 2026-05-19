@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,6 +19,8 @@ from mapu.query.intent import HeuristicIntentClassifier
 from mapu.query.service import QueryService
 from mapu.query.synthesis import TemplateSynthesizer
 from mapu.query.types import (
+    ChunkHit,
+    EpistemicStatus,
     PropositionHit,
     QueryIntent,
     QueryRequest,
@@ -143,9 +147,7 @@ class TestHeuristicIntentClassifier:
     @pytest.mark.asyncio
     async def test_cross_doc(self) -> None:
         c = HeuristicIntentClassifier()
-        intent, _ = await c.classify(
-            "Does the amendment affect the original agreement?"
-        )
+        intent, _ = await c.classify("Does the amendment affect the original agreement?")
         assert intent == QueryIntent.CROSS_DOC
 
     @pytest.mark.asyncio
@@ -211,9 +213,7 @@ class TestCascadeGovernor:
     async def test_cross_doc_routes_to_investigation(self) -> None:
         classifier = HeuristicIntentClassifier()
         governor = CascadeGovernor(classifier)
-        request = _make_request(
-            "Does the amendment affect the original agreement?"
-        )
+        request = _make_request("Does the amendment affect the original agreement?")
         plan = await governor.plan(request)
         assert plan.intent == QueryIntent.CROSS_DOC
         assert plan.selected_tier == Tier.INVESTIGATION
@@ -388,6 +388,262 @@ class TestQueryService:
         assert result.metadata.get("llm_fallback") == "structured_investigation"
 
     @pytest.mark.asyncio
+    async def test_investigation_returns_next_steps(self) -> None:
+        svc = self._make_service()
+        mock_result = SimpleNamespace(
+            answer="Investigation summary",
+            evidence=(),
+            gaps=("missing entity",),
+            findings=(),
+            metadata={},
+            termination_reason=SimpleNamespace(value="coverage_met"),
+            persisted_proposition_ids=(),
+            next_steps=("Look at ACME repository", "Check recent docs"),
+        )
+        svc._investigation = AsyncMock()
+        svc._investigation.investigate = AsyncMock(return_value=mock_result)
+
+        result = await svc.query(_make_request("Why did the price drop?"))
+
+        assert result.next_steps == ("Look at ACME repository", "Check recent docs")
+        assert len(result.structured_next_steps) == 2
+        assert result.structured_next_steps[0]["action_type"] == "query"
+
+    @pytest.mark.asyncio
+    async def test_query_logs_activity_when_repo_present(self, monkeypatch) -> None:
+        repo = AsyncMock()
+        repo.list = AsyncMock(return_value=[])
+        repo.log = AsyncMock()
+        svc = self._make_service(direct_hits=())
+        svc._activity_repo = repo
+
+        result = await svc.query(_make_request("Who is Acme?"))
+        assert result.next_steps
+        repo.list.assert_awaited_once()
+        repo.log.assert_awaited_once()
+        logged_details = repo.log.await_args.kwargs["details"]
+        assert "structured_next_steps" in logged_details
+
+    @pytest.mark.asyncio
+    async def test_query_uses_persistent_feedback_for_ranking(self, monkeypatch) -> None:
+        repo = AsyncMock()
+        repo.list = AsyncMock(return_value=[])
+        repo.log = AsyncMock()
+
+        from mapu.query import service as query_service
+
+        async def fake_prioritize(steps, question, activities, max_events=200):
+            return tuple(reversed(steps))
+
+        monkeypatch.setattr(query_service, "prioritize_next_steps", fake_prioritize)
+
+        svc = self._make_service(direct_hits=())
+        svc._activity_repo = repo
+        svc._build_next_steps = lambda **_: ("first", "second")
+
+        result = await svc.query(_make_request("What is X?"))
+        assert result.next_steps == ("second", "first")
+        assert [a["rationale"] for a in result.structured_next_steps] == ["second", "first"]
+
+    @pytest.mark.asyncio
+    async def test_replay_feedback_reshuffles_next_steps(self) -> None:
+        from types import SimpleNamespace
+
+        class ReplayActivityRepo:
+            def __init__(self) -> None:
+                self.events: list[SimpleNamespace] = []
+
+            async def list(self, limit: int = 240) -> list[SimpleNamespace]:
+                return list(reversed(self.events))[:limit]
+
+            async def log(
+                self,
+                *,
+                event_type: str,
+                actor: str,
+                entity_type: str | None = None,
+                entity_id: object | None = None,
+                details: dict[str, object] | None = None,
+            ) -> SimpleNamespace:
+                entry = SimpleNamespace(
+                    event_type=event_type,
+                    actor=actor,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    details=details or {},
+                )
+                self.events.append(entry)
+                return entry
+
+        class ReplayGapRepo:
+            def __init__(self) -> None:
+                self.gaps = [
+                    SimpleNamespace(
+                        kind="knowledge",
+                        description="Need evidence of clause lineage before amending",
+                        severity="critical",
+                        status="open",
+                        created_at=datetime(2025, 12, 25, tzinfo=UTC),
+                    ),
+                ]
+
+            async def open_gaps(self, *, limit: int = 100) -> list[SimpleNamespace]:
+                return list(self.gaps[:limit])
+
+        replay_activity = ReplayActivityRepo()
+        replay_gap = ReplayGapRepo()
+
+        first_service = self._make_service(direct_hits=(), structured_hits=())
+        first_service._activity_repo = replay_activity
+        first_service._gap_repo = replay_gap
+        first_service._build_next_steps = lambda **_kwargs: (
+            "Inspect amendment text first",
+            "Inspect original clause lineage",
+        )
+
+        first = await first_service.query(_make_request("How does clause 10 change clause 5?"))
+        assert first.next_steps
+        assert "Inspect amendment text first" in first.next_steps
+        assert len(first.next_steps) == 3
+
+        await replay_activity.log(
+            event_type="learning_feedback",
+            actor="human",
+            entity_type="query",
+            details={
+                "step": first.next_steps[0],
+                "question": "How does clause 10 change clause 5?",
+                "outcome": "not_helpful",
+            },
+        )
+
+        second_service = self._make_service(direct_hits=(), structured_hits=())
+        second_service._activity_repo = replay_activity
+        second_service._gap_repo = replay_gap
+        second_service._build_next_steps = lambda **_kwargs: (
+            "Inspect amendment text first",
+            "Inspect original clause lineage",
+        )
+
+        second = await second_service.query(_make_request("How does clause 10 change clause 5?"))
+        assert second.next_steps
+        assert second.next_steps != first.next_steps
+        assert second.next_steps[0] != "Inspect amendment text first"
+        assert any("Inspect original clause lineage" in step for step in second.next_steps)
+
+    @pytest.mark.asyncio
+    async def test_query_appends_gap_based_next_steps(self, monkeypatch) -> None:
+        gap_repo = AsyncMock()
+        gap_repo.open_gaps = AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    kind="knowledge",
+                    description="Open gap to confirm assumptions",
+                    severity="critical",
+                    status="open",
+                ),
+            ]
+        )
+        svc = self._make_service(direct_hits=())
+        svc._gap_repo = gap_repo
+        svc._build_next_steps = lambda **_: ("From query pipeline",)
+
+        from mapu.query import service as query_service
+
+        monkeypatch.setattr(
+            query_service,
+            "suggest_gap_based_next_steps",
+            lambda *_args, **_kwargs: ("Open a related gap study.",),
+        )
+
+        result = await svc.query(_make_request("What is the gap in the system?"))
+        assert result.next_steps == ("From query pipeline", "Open a related gap study.")
+        assert len(result.structured_next_steps) == 2
+        assert result.structured_next_steps[1]["uncertainty_reason"] == "missing_evidence"
+
+    @pytest.mark.asyncio
+    async def test_query_persists_insufficient_evidence_gap(self) -> None:
+        class CaptureGapRepo:
+            def __init__(self) -> None:
+                self.recorded: list[dict] = []
+                self.gaps: list[SimpleNamespace] = []
+
+            async def record_open_gap(self, **kwargs):
+                self.recorded.append(kwargs)
+                gap = SimpleNamespace(
+                    id=uuid.uuid4(),
+                    kind=kwargs["kind"],
+                    description=kwargs["description"],
+                    severity=kwargs["severity"],
+                    status="open",
+                    detected_by=kwargs["detected_by"],
+                    uncertainty_reason=kwargs["uncertainty_reason"],
+                    evidence_hypothesis=kwargs["evidence_hypothesis"],
+                    next_action=kwargs["next_action"],
+                    expected_resolution=kwargs["expected_resolution"],
+                    governance_tier=kwargs["governance_tier"],
+                    priority_score=kwargs["priority_score"],
+                    resolution_summary=None,
+                    last_evaluated_at=datetime(2026, 1, 1, tzinfo=UTC),
+                    created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                    resolved_at=None,
+                )
+                self.gaps.append(gap)
+                return gap
+
+            async def open_gaps(self, *, limit: int = 100) -> list:
+                return []
+
+        gap_repo = CaptureGapRepo()
+        svc = self._make_service(direct_hits=(), structured_hits=())
+        svc._gap_repo = gap_repo
+
+        result = await svc.query(_make_request("Where is the evidence?"))
+
+        assert gap_repo.recorded
+        recorded = gap_repo.recorded[0]
+        assert recorded["kind"] == "query_gap"
+        assert recorded["uncertainty_reason"] == "missing_evidence"
+        assert recorded["next_action"]["action_type"] == "investigate"
+        assert result.metadata["persisted_gap_ids"]
+
+        from mapu.context_learning import build_handoff_bundle
+
+        handoff = build_handoff_bundle(
+            request_id := result.request.corpus_id,
+            tuple(gap_repo.gaps),
+            [],
+            max_gaps=10,
+            max_activity=20,
+            max_actions=5,
+        )
+        assert handoff["corpus_id"] == str(request_id)
+        assert handoff["continuity_frontier"]["open_gap_count"] == 1
+        assert handoff["continuity_frontier"]["frontier_completeness"] == "partial"
+        assert handoff["continuity_frontier"]["missing_gap_contract_count"] == 0
+        assert handoff["continuity_frontier"]["evidence_anchor_count"] == 0
+        assert (
+            "open_gaps_lack_evidence_anchors"
+            in handoff["continuity_frontier"]["incomplete_reasons"]
+        )
+        assert (
+            handoff["priority_next_actions"][0]["source_contract"]["gap_contract_status"]
+            == "complete"
+        )
+        assert handoff["priority_next_actions"][0]["action_type"] == "investigate"
+
+    @pytest.mark.asyncio
+    async def test_query_gap_lookup_fallback_keeps_base_steps(self) -> None:
+        gap_repo = AsyncMock()
+        gap_repo.open_gaps = AsyncMock(side_effect=RuntimeError("db is unavailable"))
+        svc = self._make_service(direct_hits=())
+        svc._gap_repo = gap_repo
+        svc._build_next_steps = lambda **_: ("Base next step",)
+
+        result = await svc.query(_make_request("What is a covenant?"))
+        assert result.next_steps == ("Base next step",)
+
+    @pytest.mark.asyncio
     async def test_synthesis_returned_for_hits(self) -> None:
         hits = [_make_hit(text="Acme is a corporation", subject="Acme")]
         svc = self._make_service(direct_hits=hits)
@@ -401,6 +657,28 @@ class TestQueryService:
         svc._structured.execute = AsyncMock(return_value=[])
         result = await svc.query(_make_request("Who is Nobody?"))
         assert result.synthesis is None
+
+    @pytest.mark.asyncio
+    async def test_chunk_fallback_produces_non_blank_evidence_answer(self) -> None:
+        svc = self._make_service(direct_hits=[])
+        svc._structured.execute = AsyncMock(return_value=[])
+        svc._chunk_fallback = AsyncMock(
+            return_value=[
+                ChunkHit(
+                    chunk_id=uuid.uuid4(),
+                    text="The current owner is Maya Chen.",
+                    score=0.91,
+                    expression_id=uuid.uuid4(),
+                )
+            ]
+        )
+
+        result = await svc.query(_make_request("Who owns Project Atlas?"))
+
+        assert result.synthesis is not None
+        assert "No structured proposition answer was found" in result.synthesis
+        assert "Maya Chen" in result.synthesis
+        assert result.epistemic_status == EpistemicStatus.INSUFFICIENT
 
     @pytest.mark.asyncio
     async def test_synthesis_tier_uses_structured_executor(self) -> None:

@@ -1,13 +1,15 @@
+import importlib
 import sys
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
-from mapu_mem0_adapter import _enrich_with_temporal_hints
+_enrich_with_temporal_hints = importlib.import_module(
+    "mapu_mem0_adapter"
+)._enrich_with_temporal_hints
 
 
 def test_temporal_hints_skip_out_of_range_relative_years() -> None:

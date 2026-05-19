@@ -1,8 +1,21 @@
 # MapU Priorities
 
+## No. 0 (Primary): Persistent Context Map for Agentic Systems
+
+This is the top-level objective for MapU execution and all roadmap decisions:
+
+- Preserve cross-session learning so context resets do not erase useful discoveries.
+- Store factual learning as structured, provenance-bound objects with explicit relations.
+- Track revision intent explicitly (`overrides`, `supersedes`, `uncertainty`, `evidence`) with versioned lineage.
+- Enforce a continuity handoff step at session boundaries: load persisted uncertainty/conflict state before collecting more evidence.
+- Make retrieval gaps actionable by pointing to the highest-likelihood evidence locations.
+- Provide auditable trails that show what is known, what changed, what is uncertain, and why it changed.
+
+Everything else is secondary to this memory substrate objective until memory continuity is explicit, versioned, and measurable in resumed sessions.
+
 ## Release Principle
 
-MapU should publish only what it can demonstrate. Roadmap items are useful, but public claims must distinguish implemented capability from design intent.
+MapU should publish only what it can demonstrate. Roadmap items are useful, but public claims must distinguish implemented capability from design intent and include continuity replay evidence where memory behavior is claimed.
 
 ## Priority 0: Release Integrity
 
@@ -26,6 +39,7 @@ Memory benchmark validation currently centers on:
 - LoCoMo
 - LongMemEval
 - BEAM
+- MemoryArena and AMA-Bench as installed CLI smoke/diagnostic lanes
 
 Claim-grade release numbers require a fresh prepublish gate run.
 
@@ -52,6 +66,14 @@ Near-term validation artifacts should include:
 - agent-with-memory versus agent-without-memory task comparisons
 - storage and latency curves after repeated ingest/update cycles
 
+External agent validation is mandatory for this lane. When available, use
+Gemini through the terminal and Claude Code subagents through the terminal as
+independent reviewers of MapU's durable-memory handoff. These trials should ask
+whether a resumed agent can recover prior learning, inspect provenance,
+uncertainty, conflicts, supersession, activity, and gaps, follow `next_steps`,
+and avoid rediscovering the project from scratch. Treat this as primary product
+validation, not as a benchmark side quest.
+
 ## Priority 3: Domain Expansion
 
 Code, legal, finance, and biomedical workflows are high-value validation targets. They should be treated as benchmark targets until domain-specific artifacts exist.
@@ -62,7 +84,7 @@ MapU's two-year validation target is not only memory benchmark performance. It s
 
 Required validation lanes:
 - Repository compatibility: run MapU against existing codebases with real file trees, issue history, docs, tests, and agent workflows.
-- Agent integration compatibility: test MCP usage from coding agents and IDE assistants, including Codex-like and Claude Code-like workflows.
+- Agent integration compatibility: test MCP usage from coding agents and IDE assistants, including Codex-like, terminal Gemini, and Claude Code subagent workflows.
 - Memory efficiency: measure ingest cost, storage growth, retrieval latency, update cost, and reset/repair cost as repositories evolve.
 - Stored data quality: audit extracted entities, claims, relations, temporal facts, provenance links, and stale/incorrect memory over time.
 - Workflow lift: compare agent outcomes with and without MapU memory on repo tasks such as bug diagnosis, refactor planning, documentation, benchmark triage, and release audits.

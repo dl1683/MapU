@@ -1,7 +1,8 @@
 param(
     [int]$MaxParallel = 2,
     [int]$LaneTimeoutMinutes = 240,
-    [int]$IdleTimeoutMinutes = 20
+    [int]$IdleTimeoutMinutes = 20,
+    [string]$BenchmarkMem0HostArg = "http://localhost:8000"
 )
 
 Set-StrictMode -Version Latest
@@ -15,6 +16,9 @@ if ($LaneTimeoutMinutes -lt 1) {
 }
 if ($IdleTimeoutMinutes -lt 1) {
     throw "IdleTimeoutMinutes must be >= 1"
+}
+if ([string]::IsNullOrWhiteSpace($BenchmarkMem0HostArg)) {
+    throw "BenchmarkMem0HostArg must not be blank"
 }
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
@@ -45,9 +49,27 @@ Write-Output ("[{0}] Public benchmark project suffix: {1}" -f (Get-Date -Format 
 Write-Output ("[{0}] Max parallel benchmark jobs: {1}" -f (Get-Date -Format "s"), $MaxParallel)
 Write-Output ("[{0}] Lane timeout minutes: {1}" -f (Get-Date -Format "s"), $LaneTimeoutMinutes)
 Write-Output ("[{0}] Idle timeout minutes: {1}" -f (Get-Date -Format "s"), $IdleTimeoutMinutes)
+Write-Output ("[{0}] Benchmark mem0 host argument: {1}" -f (Get-Date -Format "s"), $BenchmarkMem0HostArg)
 
 $logDir = Join-Path $repoRoot "logs\benchmarks\parallel_$projectSuffix"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+function Write-JsonUtf8NoBom {
+    param(
+        [object]$Data,
+        [string]$Path,
+        [int]$Depth = 6
+    )
+
+    $absolutePath = [System.IO.Path]::GetFullPath($Path)
+    $parent = [System.IO.Path]::GetDirectoryName($absolutePath)
+    if (-not [string]::IsNullOrWhiteSpace($parent)) {
+        [System.IO.Directory]::CreateDirectory($parent) | Out-Null
+    }
+    $json = $Data | ConvertTo-Json -Depth $Depth
+    $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText($absolutePath, ($json + [Environment]::NewLine), $encoding)
+}
 
 $jobs = @(
     @{
@@ -60,7 +82,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--conversations", "0,1,2,3,4,5,6,7,8,9",
             "--categories", "1,2,3,4",
             "--top-k", "200",
@@ -79,7 +101,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--all-questions",
             "--top-k", "200",
             "--top-k-cutoffs", "10,50,200",
@@ -97,7 +119,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "100K",
             "--conversations", "0-99",
             "--top-k", "200",
@@ -116,7 +138,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "500K",
             "--conversations", "0-99",
             "--top-k", "200",
@@ -135,7 +157,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "1M",
             "--conversations", "0-99",
             "--top-k", "200",
@@ -154,7 +176,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "10M",
             "--conversations", "0-99",
             "--top-k", "200",
@@ -204,6 +226,34 @@ function Get-ProcessCpuSeconds {
     return $cpuSeconds
 }
 
+function Write-LaneMetadata {
+    param(
+        [pscustomobject]$Entry,
+        [datetime]$FinishedAt,
+        [object]$ExitCode,
+        [string]$FailureReason = ""
+    )
+
+    $meta = [ordered]@{
+        name = $Entry.Name
+        args = @($Entry.Args)
+        stdout_log = $Entry.StdoutLog
+        stderr_log = $Entry.StderrLog
+        started_at = $Entry.StartedAt.ToString("o")
+        finished_at = $FinishedAt.ToString("o")
+        elapsed_seconds = [math]::Round(($FinishedAt - $Entry.StartedAt).TotalSeconds, 3)
+        exit_code = $ExitCode
+        failure_reason = $FailureReason
+        last_progress_at = $Entry.LastProgressAt.ToString("o")
+        last_cpu_seconds = [math]::Round($Entry.LastCpuSeconds, 3)
+        stdout_bytes = Get-FileLength -Path $Entry.StdoutLog
+        stderr_bytes = Get-FileLength -Path $Entry.StderrLog
+    }
+    $metaPath = Join-Path $logDir ("{0}.meta.json" -f $Entry.Name)
+    Write-JsonUtf8NoBom -Data $meta -Path $metaPath -Depth 6
+    Write-Output ("[{0}] {1} metadata: {2}" -f (Get-Date -Format "s"), $Entry.Name, $metaPath)
+}
+
 function Stop-RunningBenchmarks {
     param([array]$Entries)
 
@@ -249,6 +299,7 @@ function Start-BenchmarkProcess {
     [Console]::Out.WriteLine(("[{0}] Started {1} PID={2}" -f (Get-Date -Format "s"), $Job.Name, $process.Id))
     return [pscustomobject]@{
         Name = $Job.Name
+        Args = @($Job.Args)
         Process = $process
         StdoutLog = $stdoutLog
         StderrLog = $stderrLog
@@ -273,7 +324,14 @@ while (($queue.Count -gt 0) -or ($running.Count -gt 0)) {
             $entry.Process.WaitForExit()
             $exitCode = $entry.Process.ExitCode
             $exitCodeLabel = if ($null -eq $exitCode) { "<null>" } else { [string]$exitCode }
-            Write-Output ("[{0}] {1} exited with code {2}" -f (Get-Date -Format "s"), $entry.Name, $exitCodeLabel)
+            $failureReason = if (($null -eq $exitCode) -or ($exitCode -ne 0)) {
+                "exited with code $exitCodeLabel"
+            }
+            else {
+                ""
+            }
+            Write-LaneMetadata -Entry $entry -FinishedAt (Get-Date) -ExitCode $exitCode -FailureReason $failureReason
+            Write-Output ("[{0}] {1} exited with code {2}; stdout={3}; stderr={4}" -f (Get-Date -Format "s"), $entry.Name, $exitCodeLabel, $entry.StdoutLog, $entry.StderrLog)
             if (($null -eq $exitCode) -or ($exitCode -ne 0)) {
                 $failures += $entry
                 if (Test-Path -LiteralPath $entry.StderrLog) {
@@ -306,13 +364,17 @@ while (($queue.Count -gt 0) -or ($running.Count -gt 0)) {
             $elapsedMinutes = ($now - $entry.StartedAt).TotalMinutes
             $idleMinutes = ($now - $entry.LastProgressAt).TotalMinutes
             if ($elapsedMinutes -gt $LaneTimeoutMinutes) {
-                Write-Output ("[{0}] {1} exceeded lane timeout after {2:N1} minutes" -f (Get-Date -Format "s"), $entry.Name, $elapsedMinutes)
+                $reason = "exceeded lane timeout after {0:N1} minutes" -f $elapsedMinutes
+                Write-LaneMetadata -Entry $entry -FinishedAt $now -ExitCode $null -FailureReason $reason
+                Write-Output ("[{0}] {1} {2}; stdout={3}; stderr={4}" -f (Get-Date -Format "s"), $entry.Name, $reason, $entry.StdoutLog, $entry.StderrLog)
                 $failures += $entry
                 Stop-RunningBenchmarks -Entries $running
                 break
             }
             if ($idleMinutes -gt $IdleTimeoutMinutes) {
-                Write-Output ("[{0}] {1} exceeded idle timeout after {2:N1} minutes without CPU or log progress" -f (Get-Date -Format "s"), $entry.Name, $idleMinutes)
+                $reason = "exceeded idle timeout after {0:N1} minutes without CPU or log progress" -f $idleMinutes
+                Write-LaneMetadata -Entry $entry -FinishedAt $now -ExitCode $null -FailureReason $reason
+                Write-Output ("[{0}] {1} {2}; stdout={3}; stderr={4}" -f (Get-Date -Format "s"), $entry.Name, $reason, $entry.StdoutLog, $entry.StderrLog)
                 $failures += $entry
                 Stop-RunningBenchmarks -Entries $running
                 break

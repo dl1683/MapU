@@ -146,6 +146,11 @@ class GapStatus(StrEnum):
 class GapTargetType(StrEnum):
     PROPOSITION = "proposition"
     HANDLE = "handle"
+    DOCUMENT = "document"
+    SPAN = "span"
+    CHUNK = "chunk"
+    ACTIVITY = "activity"
+    CHANGESET = "changeset"
 
 
 class ComputationSpecStatus(StrEnum):

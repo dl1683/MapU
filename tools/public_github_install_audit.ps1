@@ -42,12 +42,32 @@ function Get-PythonCommand {
     throw "no Python launcher found; install Python 3.12-3.14 or pass -Python <path>"
 }
 
+function Write-JsonUtf8NoBom {
+    param(
+        [object]$Data,
+        [string]$Path,
+        [int]$Depth = 5
+    )
+
+    $absolutePath = [System.IO.Path]::GetFullPath($Path)
+    $parent = [System.IO.Path]::GetDirectoryName($absolutePath)
+    if (-not [string]::IsNullOrWhiteSpace($parent)) {
+        [System.IO.Directory]::CreateDirectory($parent) | Out-Null
+    }
+    $json = $Data | ConvertTo-Json -Depth $Depth
+    $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText($absolutePath, ($json + [Environment]::NewLine), $encoding)
+}
+
 function Write-Summary {
     param(
         [bool]$Passed,
         [string]$Sha,
         [string[]]$ChecksPassed,
-        [string[]]$ChecksFailed
+        [string[]]$ChecksFailed,
+        [object[]]$CliHelpEvidence = @(),
+        [object]$DoctorEvidence = $null,
+        [object]$McpSmokeEvidence = $null
     )
     if ([string]::IsNullOrWhiteSpace($OutputJson)) {
         return
@@ -57,14 +77,20 @@ function Write-Summary {
         ref = $Ref
         sha = $Sha
         passed = $Passed
+        cli_help_evidence = @($CliHelpEvidence)
+        doctor_evidence = $DoctorEvidence
+        mcp_stdio_smoke = $McpSmokeEvidence
         checks_passed = $ChecksPassed
         checks_failed = $ChecksFailed
     }
-    ($summary | ConvertTo-Json -Depth 5) | Set-Content -LiteralPath $OutputJson -Encoding UTF8
+    Write-JsonUtf8NoBom -Data $summary -Path $OutputJson -Depth 5
 }
 
 $checksPassed = New-Object System.Collections.Generic.List[string]
 $checksFailed = New-Object System.Collections.Generic.List[string]
+$cliHelpEvidence = New-Object System.Collections.Generic.List[object]
+$doctorEvidence = $null
+$mcpSmokeEvidence = $null
 $remoteSha = "unknown"
 
 Write-Output "MapU public GitHub install audit"
@@ -137,27 +163,145 @@ try {
     }
     $checksPassed.Add("installed import and metadata checks completed")
 
-    & $mapu --help | Out-Null
-    & $mapu corpus --help | Out-Null
-    & $mapu serve --help | Out-Null
-    & $mapu mcp --help | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "installed CLI help check failed"
+    $helpFailureCount = $checksFailed.Count
+    foreach ($helpArgs in @(
+            @("--help"),
+            @("corpus", "--help"),
+            @("serve", "--help"),
+            @("doctor", "--help"),
+            @("mcp", "--help")
+        )) {
+        & $mapu @helpArgs | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            $checksFailed.Add("installed CLI help check failed: mapu $($helpArgs -join ' ')")
+            $cliHelpEvidence.Add([ordered]@{
+                command = [string[]](@($mapu) + @($helpArgs))
+                status = "fail"
+                exit_code = $LASTEXITCODE
+            })
+            continue
+        }
+        $cliHelpEvidence.Add([ordered]@{
+            command = [string[]](@($mapu) + @($helpArgs))
+            status = "ok"
+            exit_code = 0
+        })
     }
-    $checksPassed.Add("installed CLI help checks completed")
-
-    & $pythonExe (Join-Path $checkout "tools\mcp_stdio_smoke.py") --command $mapu --arg mcp | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "installed MCP stdio smoke failed"
+    if ($checksFailed.Count -eq $helpFailureCount) {
+        $checksPassed.Add("installed CLI help checks completed")
     }
-    $checksPassed.Add("installed MCP stdio smoke completed")
 
-    Write-Summary -Passed $true -Sha $remoteSha -ChecksPassed @($checksPassed) -ChecksFailed @()
+    $doctorJsonPath = Join-Path $auditRoot "mapu_doctor.json"
+    & $mapu doctor --json > $doctorJsonPath
+    if ($LASTEXITCODE -ne 0) {
+        $checksFailed.Add("installed doctor check failed")
+    } else {
+        $doctorEvidence = Get-Content -LiteralPath $doctorJsonPath -Raw | ConvertFrom-Json
+        if ($doctorEvidence.status -ne "ok") {
+            $checksFailed.Add("installed doctor status is not ok")
+        } else {
+            $checksPassed.Add("installed doctor check completed")
+        }
+    }
+
+    Push-Location -LiteralPath $checkout
+    try {
+        $localMcpSmoke = Join-Path $repoRoot "tools\mcp_stdio_smoke.py"
+        $mcpSmokePath = Join-Path $checkout "logs\mcp_stdio_smoke_last.json"
+        $mcpSmokeStdout = Join-Path $auditRoot "mcp_stdio_smoke.stdout.log"
+        $mcpSmokeStderr = Join-Path $auditRoot "mcp_stdio_smoke.stderr.log"
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            & $pythonExe $localMcpSmoke `
+                --command $mapu `
+                --arg mcp `
+                --cwd $checkout `
+                --list-only `
+                --out $mcpSmokePath `
+                --json 1> $mcpSmokeStdout 2> $mcpSmokeStderr
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        $mcpSmokeStdoutText = if (Test-Path -LiteralPath $mcpSmokeStdout) {
+            Get-Content -LiteralPath $mcpSmokeStdout -Raw
+        } else {
+            ""
+        }
+        $mcpSmokeStderrText = if (Test-Path -LiteralPath $mcpSmokeStderr) {
+            Get-Content -LiteralPath $mcpSmokeStderr -Raw
+        } else {
+            ""
+        }
+        $mcpSmokeText = (($mcpSmokeStdoutText, $mcpSmokeStderrText) -join "`n").Trim()
+        if (Test-Path -LiteralPath $mcpSmokePath) {
+            $mcpSmokeEvidence = Get-Content -LiteralPath $mcpSmokePath -Raw | ConvertFrom-Json
+        } elseif (-not [string]::IsNullOrWhiteSpace($mcpSmokeStdoutText)) {
+            $jsonStart = $mcpSmokeStdoutText.IndexOf("{")
+            if ($jsonStart -ge 0) {
+                $jsonText = $mcpSmokeStdoutText.Substring($jsonStart)
+                try {
+                    $mcpSmokeEvidence = $jsonText | ConvertFrom-Json
+                } catch {
+                    $mcpSmokeEvidence = $null
+                }
+            }
+        }
+        if ($LASTEXITCODE -ne 0) {
+            if ($null -ne $mcpSmokeEvidence -and $mcpSmokeEvidence.missing_required_tools) {
+                $checksFailed.Add(
+                    "installed MCP stdio smoke failed: missing required tools: {0}" -f
+                    (($mcpSmokeEvidence.missing_required_tools | ForEach-Object { $_.ToString() }) -join ", ")
+                )
+            } elseif ([string]::IsNullOrWhiteSpace($mcpSmokeText)) {
+                $checksFailed.Add("installed MCP stdio smoke failed")
+            } else {
+                $checksFailed.Add("installed MCP stdio smoke failed: {0}" -f $mcpSmokeText)
+            }
+        } elseif (-not (Test-Path -LiteralPath $mcpSmokePath)) {
+            $checksFailed.Add("installed MCP stdio smoke evidence not found: $mcpSmokePath")
+        } else {
+            $checksPassed.Add("installed MCP stdio smoke completed")
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    if ($checksFailed.Count -gt 0) {
+        Write-Summary `
+            -Passed $false `
+            -Sha $remoteSha `
+            -ChecksPassed @($checksPassed) `
+            -ChecksFailed @($checksFailed) `
+            -CliHelpEvidence @($cliHelpEvidence.ToArray()) `
+            -DoctorEvidence $doctorEvidence `
+            -McpSmokeEvidence $mcpSmokeEvidence
+        [Console]::Error.WriteLine("Public GitHub install audit failed: {0}" -f ($checksFailed -join "; "))
+        exit 1
+    }
+
+    Write-Summary `
+        -Passed $true `
+        -Sha $remoteSha `
+        -ChecksPassed @($checksPassed) `
+        -ChecksFailed @() `
+        -CliHelpEvidence @($cliHelpEvidence.ToArray()) `
+        -DoctorEvidence $doctorEvidence `
+        -McpSmokeEvidence $mcpSmokeEvidence
     Write-Output "Public GitHub install audit passed."
 }
 catch {
     $checksFailed.Add($_.Exception.Message)
-    Write-Summary -Passed $false -Sha $remoteSha -ChecksPassed @($checksPassed) -ChecksFailed @($checksFailed)
+    Write-Summary `
+        -Passed $false `
+        -Sha $remoteSha `
+        -ChecksPassed @($checksPassed) `
+        -ChecksFailed @($checksFailed) `
+        -CliHelpEvidence @($cliHelpEvidence.ToArray()) `
+        -DoctorEvidence $doctorEvidence `
+        -McpSmokeEvidence $mcpSmokeEvidence
     Write-Error ("Public GitHub install audit failed: {0}" -f $_.Exception.Message)
     exit 1
 }

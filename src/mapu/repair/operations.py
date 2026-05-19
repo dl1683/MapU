@@ -29,6 +29,7 @@ async def retract_proposition(
     reason: str,
     actor: str,
     recompute_only_ids: tuple[uuid.UUID, ...] = (),
+    changeset_id: str | uuid.UUID | None = None,
 ) -> dict[str, Any]:
     if retraction_proposition_id is not None and retraction_proposition_id != proposition_id:
         supersession_repo = SupersessionEdgeRepo(session, corpus_id)
@@ -41,8 +42,7 @@ async def retract_proposition(
 
     now = datetime.now(UTC)
     active_atts = await session.execute(
-        select(Attestation.id)
-        .where(
+        select(Attestation.id).where(
             Attestation.proposition_id == proposition_id,
             Attestation.corpus_id == corpus_id,
             Attestation.system_invalidated.is_(None),
@@ -67,15 +67,37 @@ async def retract_proposition(
         await truth_svc.recompute_for_proposition(aid)
 
     gap_repo = GapRepo(session, corpus_id)
-    from mapu.models.gap import Gap
-    gap = Gap(
-        corpus_id=corpus_id,
+    gap = await gap_repo.create_gap(
         kind="retraction",
         description=f"Proposition retracted: {reason}",
         severity="moderate",
         detected_by=actor,
+        uncertainty_reason="stale_or_conflicted_memory",
+        evidence_hypothesis={
+            "source": "proposition",
+            "proposition_id": str(proposition_id),
+            "retraction_proposition_id": (
+                str(retraction_proposition_id) if retraction_proposition_id else None
+            ),
+            "changeset_id": str(changeset_id) if changeset_id else None,
+            "reason": reason,
+        },
+        next_action={
+            "action_type": "investigate",
+            "question": (
+                f"Confirm replacement or rollback path for retracted proposition {proposition_id}"
+            ),
+            "target": {"proposition_id": str(proposition_id)},
+            "rationale": "Retraction made prior memory unsafe until lineage is reviewed.",
+            "expected_uncertainty_reduction": 0.75,
+        },
+        expected_resolution=(
+            "Confirm whether downstream claims should use a replacement proposition, "
+            "stay retracted, or be rolled back."
+        ),
+        governance_tier="stale",
+        priority_score=4.0,
     )
-    gap = await gap_repo.add(gap)
     await gap_repo.add_target(gap.id, "proposition", proposition_id)
 
     activity_repo = ActivityRepo(session, corpus_id)
@@ -90,6 +112,7 @@ async def retract_proposition(
                 str(retraction_proposition_id) if retraction_proposition_id else None
             ),
             "affected_count": len(affected_ids),
+            "changeset_id": str(changeset_id) if changeset_id else None,
         },
     )
 
@@ -109,6 +132,7 @@ async def supersede_proposition(
     affected_ids: tuple[uuid.UUID, ...],
     actor: str,
     recompute_only_ids: tuple[uuid.UUID, ...] = (),
+    changeset_id: str | uuid.UUID | None = None,
 ) -> dict[str, Any]:
     supersession_repo = SupersessionEdgeRepo(session, corpus_id)
     await supersession_repo.add_supersession(
@@ -133,6 +157,7 @@ async def supersede_proposition(
         details={
             "new_proposition_id": str(new_proposition_id),
             "affected_count": len(affected_ids),
+            "changeset_id": str(changeset_id) if changeset_id else None,
         },
     )
 
@@ -149,6 +174,7 @@ async def reject_attestation(
     attestation_id: uuid.UUID,
     actor: str,
     reason: str = "",
+    changeset_id: str | uuid.UUID | None = None,
 ) -> dict[str, Any]:
     stmt = select(Attestation).where(
         Attestation.id == attestation_id,
@@ -177,6 +203,7 @@ async def reject_attestation(
         details={
             "proposition_id": str(att.proposition_id),
             "reason": reason,
+            "changeset_id": str(changeset_id) if changeset_id else None,
         },
     )
 
@@ -269,7 +296,8 @@ async def merge_handles(
         raise ValueError("Cannot merge a handle with itself")
 
     stmt = select(Handle).where(
-        Handle.id == merged_handle_id, Handle.corpus_id == corpus_id,
+        Handle.id == merged_handle_id,
+        Handle.corpus_id == corpus_id,
     )
     result = await session.execute(stmt)
     merged = result.scalar_one_or_none()
@@ -283,7 +311,9 @@ async def merge_handles(
         raise ValueError(f"Handle {canonical_handle_id} not found")
 
     moved_stmt = select(
-        Proposition.id, Proposition.subject_handle_id, Proposition.object_handle_id,
+        Proposition.id,
+        Proposition.subject_handle_id,
+        Proposition.object_handle_id,
     ).where(
         Proposition.corpus_id == corpus_id,
         (Proposition.subject_handle_id == merged_handle_id)
@@ -316,8 +346,7 @@ async def merge_handles(
     )
     part_result = await session.execute(participant_stmt)
     participant_snapshots = [
-        {"id": str(row[0]), "prior_handle": str(row[1])}
-        for row in part_result
+        {"id": str(row[0]), "prior_handle": str(row[1])} for row in part_result
     ]
 
     prior_canonical_aliases = list(canonical.aliases or [])
@@ -433,7 +462,9 @@ async def split_handle(
     await session.flush()
 
     await _recompute_semantic_keys(
-        session, corpus_id, proposition_ids_to_move,
+        session,
+        corpus_id,
+        proposition_ids_to_move,
     )
 
     identity = IdentityDecisionModel(

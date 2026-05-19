@@ -35,7 +35,11 @@ def _nugget_class(s: str) -> str:
     if re.search(r"\b\d+(?:\.\d+)?\b", t):
         if re.search(r"\b(ms|week|day|month|year|commit|port)\b", t):
             return "numeric_metric"
-        if re.search(r"\b(january|february|march|april|may|june|july|august|september|october|november|december|\d{4})\b", t):
+        if re.search(
+            r"\b(january|february|march|april|may|june|july|august|september|"
+            r"october|november|december|\d{4})\b",
+            t,
+        ):
             return "date_time"
         return "numeric"
     if any(k in t for k in ("changed", "updated", "from", "to", "latest", "current", "now")):
@@ -77,7 +81,10 @@ def analyze(dir_path: pathlib.Path) -> dict[str, Any]:
         qtype = str(obj.get("question_type", "unknown"))
         per_type[qtype] += 1
         gt = str(obj.get("ground_truth_answer", ""))
-        memories = [str(r.get("memory", "")) for r in (obj.get("retrieval", {}).get("search_results") or [])]
+        memories = [
+            str(r.get("memory", ""))
+            for r in (obj.get("retrieval", {}).get("search_results") or [])
+        ]
         nuggets = _expected_nuggets(gt)
         nug_hits = 0
         for nug in nuggets:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -15,11 +16,14 @@ from mapu.api.dtos import (
     HitResponse,
     IngestRequestDTO,
     IngestResponse,
+    LearningFeedbackRequest,
+    LearningFeedbackResponse,
     QueryRequestDTO,
     QueryResponse,
     RepairApplyResponse,
     RepairPreviewResponse,
     RepairProposeRequest,
+    ResumeHandoffResponse,
 )
 from mapu.config import ServerSettings, Settings
 
@@ -86,26 +90,55 @@ class TestDTOSerialization:
         resp = QueryResponse(
             intent="factual",
             tier_used="DIRECT",
+            answer="Answer",
             synthesis="Answer",
             hits=[],
             gaps=["missing"],
+            next_steps=["Investigate with focused entity query"],
         )
         data = resp.model_dump()
+        assert data["answer"] == "Answer"
+        assert data["synthesis"] == "Answer"
         assert data["intent"] == "factual"
         assert data["gaps"] == ["missing"]
         assert data["hits"] == []
+        assert data["next_steps"] == ["Investigate with focused entity query"]
 
     def test_ingest_request_defaults(self) -> None:
         dto = IngestRequestDTO(content="Hello world")
         assert dto.mime_type == "text/plain"
         assert dto.source_uri == ""
 
+    def test_learning_feedback_request(self) -> None:
+        event_id = uuid.uuid4()
+        req = LearningFeedbackRequest(
+            question="What is X?",
+            step="Run entity deep-dive",
+            outcome="helpful",
+            actor="agent",
+            source_event_type="query",
+            source_event_id=event_id,
+        )
+        data = req.model_dump()
+        assert data["question"] == "What is X?"
+        assert data["outcome"] == "helpful"
+        assert data["step"] == "Run entity deep-dive"
+        assert data["source_event_id"] == event_id
+
+    def test_learning_feedback_response(self) -> None:
+        resp = LearningFeedbackResponse(success=True, event_id=uuid.uuid4())
+        assert resp.success is True
+        assert isinstance(resp.event_id, uuid.UUID)
+
     def test_ingest_response(self) -> None:
         doc_id = uuid.uuid4()
         expr_id = uuid.uuid4()
         resp = IngestResponse(
-            document_id=doc_id, expression_id=expr_id,
-            spans=5, chunks=3, embeddings=3,
+            document_id=doc_id,
+            expression_id=expr_id,
+            spans=5,
+            chunks=3,
+            embeddings=3,
         )
         assert resp.spans == 5
         assert resp.chunks == 3
@@ -114,7 +147,10 @@ class TestDTOSerialization:
     def test_handle_response(self) -> None:
         hid = uuid.uuid4()
         resp = HandleResponse(
-            id=hid, canonical_name="Entity", kind="org", aliases=["E", "Ent"],
+            id=hid,
+            canonical_name="Entity",
+            kind="org",
+            aliases=["E", "Ent"],
         )
         assert resp.canonical_name == "Entity"
         assert len(resp.aliases) == 2
@@ -216,6 +252,14 @@ class TestDTOValidation:
         with pytest.raises(ValueError):
             RepairProposeRequest(proposition_id=uuid.uuid4(), operation="delete")
 
+    def test_learning_feedback_outcome_validation(self) -> None:
+        with pytest.raises(ValueError):
+            LearningFeedbackRequest(
+                question="What is X?",
+                step="Test",
+                outcome="bad",
+            )
+
 
 class TestAppConfiguration:
     def test_api_key_is_stored_for_guard(self) -> None:
@@ -229,9 +273,13 @@ class TestAppConfiguration:
         assert app.cors_config is None
 
     def test_cors_origins_are_parsed_from_settings(self) -> None:
-        app = create_app(Settings(server=ServerSettings(
-            cors_origins="https://one.example, https://two.example",
-        )))
+        app = create_app(
+            Settings(
+                server=ServerSettings(
+                    cors_origins="https://one.example, https://two.example",
+                )
+            )
+        )
 
         assert app.cors_config is not None
         assert app.cors_config.allow_origins == [
@@ -271,3 +319,136 @@ class TestAppConfiguration:
 
         assert response.status_code == 200
         assert response.json() == {"status": "ok", "version": "0.1.0"}
+
+    def test_resume_route_is_registered(self) -> None:
+        app = create_app(Settings())
+        paths = [route.path for route in app.routes]
+        assert "/corpora/{corpus_id:uuid}/resume" in paths
+
+
+class TestResumeEndpoint:
+    @pytest.mark.asyncio
+    async def test_resume_controller_returns_structured_handoff_bundle(self) -> None:
+        from datetime import UTC, datetime
+        from types import SimpleNamespace
+
+        from mapu.api.controllers import ResumeController
+
+        corpus_id = uuid.uuid4()
+        gap = SimpleNamespace(
+            id=uuid.uuid4(),
+            kind="dependency",
+            description="Missing source lineage for ACME claims",
+            severity="critical",
+            status="open",
+            detected_by="query",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            resolved_at=None,
+        )
+        activity = SimpleNamespace(
+            id=uuid.uuid4(),
+            event_type="supersession",
+            actor="agent",
+            entity_type="proposition",
+            entity_id=uuid.uuid4(),
+            details={"proposition_id": "old-1", "new_proposition_id": "new-1"},
+            created_at=datetime(2026, 1, 2, tzinfo=UTC),
+        )
+
+        mock_gap_repo = AsyncMock()
+        mock_gap_repo.list = AsyncMock(return_value=[gap])
+        mock_activity_repo = AsyncMock()
+        mock_activity_repo.list = AsyncMock(return_value=[activity])
+
+        with (
+            patch("mapu.api.controllers._require_corpus", return_value=None),
+            patch("mapu.repos.gap.GapRepo", return_value=mock_gap_repo),
+            patch("mapu.repos.audit.ActivityRepo", return_value=mock_activity_repo),
+        ):
+            result = await ResumeController.__dict__["resume"].fn(
+                ResumeController(owner=object()),
+                corpus_id=corpus_id,
+                db_session=AsyncMock(),
+                max_gaps=10,
+                max_activity=20,
+                max_actions=12,
+            )
+
+        handoff = ResumeHandoffResponse.model_validate(result)
+        assert handoff.protocol_version == "1.1.0"
+        assert handoff.protocol == "mapu-resume-handoff"
+        assert handoff.corpus_id == str(corpus_id)
+        assert handoff.continuity_frontier.open_gap_count == 1
+        assert handoff.continuity_frontier.unresolved_conflict_count == 1
+        assert len(handoff.open_gaps) == 1
+        assert handoff.priority_next_actions
+        assert len(handoff.continuity_governance.guaranteed_fields) >= 1
+        assert isinstance(handoff.continuity_governance.provisional_fields, list)
+        assert isinstance(handoff.continuity_governance.stale_fields, list)
+
+    @pytest.mark.asyncio
+    async def test_resume_controller_clamps_max_actions(self) -> None:
+        from mapu.api.controllers import ResumeController
+
+        mock_gap_repo = AsyncMock()
+        mock_gap_repo.list = AsyncMock(return_value=[])
+        mock_activity_repo = AsyncMock()
+        mock_activity_repo.list = AsyncMock(return_value=[])
+
+        corpus_id = uuid.uuid4()
+        with (
+            patch("mapu.api.controllers._require_corpus", return_value=None),
+            patch(
+                "mapu.context_learning.build_handoff_bundle",
+                return_value={
+                    "protocol_version": "1.1.0",
+                    "protocol": "mapu-resume-handoff",
+                    "generated_at": "2026-01-01T00:00:00+00:00",
+                    "continuity_role": "claude-style handoff",
+                    "corpus_id": str(corpus_id),
+                    "open_gaps": [],
+                    "recent_activity": [],
+                    "continuity_frontier": {
+                        "open_gap_count": 0,
+                        "critical_open_gap_count": 0,
+                        "unresolved_conflict_count": 0,
+                        "unresolved_gap_ids": [],
+                        "unresolved_conflicts": [],
+                        "action_count": 1,
+                    },
+                    "continuity_governance": {
+                        "guaranteed_fields": ["protocol_version", "protocol"],
+                        "provisional_fields": ["query(corpus_id='...')"],
+                        "stale_fields": [],
+                    },
+                    "priority_next_actions": [
+                        {
+                            "action_type": "query",
+                            "step": "query(...)",
+                            "rationale": "fallback",
+                            "target": {},
+                            "expected_signal_target": {},
+                            "uncertainty_reason": "no_open_gaps",
+                            "gap_ids": [],
+                            "activity_ids": [],
+                            "confidence": 0.1,
+                        }
+                    ],
+                },
+            ) as mock_build_bundle,
+            patch("mapu.repos.gap.GapRepo", return_value=mock_gap_repo),
+            patch("mapu.repos.audit.ActivityRepo", return_value=mock_activity_repo),
+        ):
+            await ResumeController.__dict__["resume"].fn(
+                ResumeController(owner=object()),
+                corpus_id=corpus_id,
+                db_session=AsyncMock(),
+                max_gaps=10,
+                max_activity=20,
+                max_actions=999,
+            )
+
+        call_kwargs = mock_build_bundle.call_args[1]
+        assert call_kwargs["max_actions"] == 30
+        assert call_kwargs["max_gaps"] == 10
+        assert call_kwargs["max_activity"] == 20

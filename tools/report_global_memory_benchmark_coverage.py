@@ -6,7 +6,6 @@ import pathlib
 from datetime import UTC, datetime
 from typing import Any
 
-
 BENCHMARKS: list[dict[str, Any]] = [
     {
         "id": "locomo",
@@ -93,7 +92,10 @@ BENCHMARKS: list[dict[str, Any]] = [
         "id": "memsim",
         "name": "MemSim",
         "primary_source": "https://github.com/vectorize-io/agent-memory-benchmark/blob/main/catalog.json",
-        "scope_note": "Memory simulation benchmark with diverse QA types (including noisy conditions).",
+        "scope_note": (
+            "Memory simulation benchmark with diverse QA types "
+            "(including noisy conditions)."
+        ),
         "publicly_used_by": [
             {
                 "system": "Agent Memory Benchmark (Hindsight/Vectorize)",
@@ -202,14 +204,15 @@ def _render_markdown(rows: list[dict[str, Any]], proxy_path: str) -> str:
         f"- Proxy summary source: `{proxy_path}`",
         f"- Runnable now: **{runnable}/{total}**",
         "",
-        "| Benchmark | Public Adopters (from public sources) | MapU Runnable Now | Latest MapU Proxy |",
+        "| Benchmark | Public Adopters | MapU Runnable Now | Latest MapU Proxy |",
         "|---|---|---:|---|",
     ]
     for row in rows:
         adopters = ", ".join(row["adopted_by"]) if row["adopted_by"] else "n/a"
         runnable_text = "yes" if row["mapu_runnable_now"] else "no"
         lines.append(
-            f"| {row['benchmark_name']} | {adopters} | {runnable_text} | {row['mapu_latest_proxy']} |"
+            f"| {row['benchmark_name']} | {adopters} | "
+            f"{runnable_text} | {row['mapu_latest_proxy']} |"
         )
 
     lines.extend(

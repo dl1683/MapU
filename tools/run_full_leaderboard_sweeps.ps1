@@ -1,5 +1,13 @@
+param(
+    [string]$BenchmarkMem0HostArg = "http://localhost:8000"
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($BenchmarkMem0HostArg)) {
+    throw "BenchmarkMem0HostArg must not be blank"
+}
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location -LiteralPath $repoRoot
@@ -26,6 +34,56 @@ if (-not $projectSuffix) {
     $env:MAPU_BENCH_PROJECT_SUFFIX = $projectSuffix
 }
 Write-Output ("[{0}] Public benchmark project suffix: {1}" -f (Get-Date -Format "s"), $projectSuffix)
+Write-Output ("[{0}] Benchmark mem0 host argument: {1}" -f (Get-Date -Format "s"), $BenchmarkMem0HostArg)
+
+$logDir = Join-Path $repoRoot "logs\benchmarks\sweep_$projectSuffix"
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+Write-Output ("[{0}] Lane artifact directory: {1}" -f (Get-Date -Format "s"), $logDir)
+
+function Write-JsonUtf8NoBom {
+    param(
+        [object]$Data,
+        [string]$Path,
+        [int]$Depth = 6
+    )
+
+    $absolutePath = [System.IO.Path]::GetFullPath($Path)
+    $parent = [System.IO.Path]::GetDirectoryName($absolutePath)
+    if (-not [string]::IsNullOrWhiteSpace($parent)) {
+        [System.IO.Directory]::CreateDirectory($parent) | Out-Null
+    }
+    $json = $Data | ConvertTo-Json -Depth $Depth
+    $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText($absolutePath, ($json + [Environment]::NewLine), $encoding)
+}
+
+function Write-LaneMetadata {
+    param(
+        [string]$Name,
+        [string[]]$Args,
+        [string]$StdoutLog,
+        [string]$StderrLog,
+        [datetime]$StartedAt,
+        [datetime]$FinishedAt,
+        [object]$ExitCode,
+        [string]$FailureReason = ""
+    )
+
+    $meta = [ordered]@{
+        name = $Name
+        args = @($Args)
+        stdout_log = $StdoutLog
+        stderr_log = $StderrLog
+        started_at = $StartedAt.ToString("o")
+        finished_at = $FinishedAt.ToString("o")
+        elapsed_seconds = [math]::Round(($FinishedAt - $StartedAt).TotalSeconds, 3)
+        exit_code = $ExitCode
+        failure_reason = $FailureReason
+    }
+    $metaPath = Join-Path $logDir ("{0}.meta.json" -f $Name)
+    Write-JsonUtf8NoBom -Data $meta -Path $metaPath -Depth 6
+    Write-Output ("[{0}] {1} metadata: {2}" -f (Get-Date -Format "s"), $Name, $metaPath)
+}
 
 function Invoke-Benchmark {
     param(
@@ -33,8 +91,11 @@ function Invoke-Benchmark {
         [Parameter(Mandatory = $true)][string[]]$Args
     )
     Write-Output ("[{0}] Starting {1}" -f (Get-Date -Format "s"), $Name)
-    $tmpOut = [System.IO.Path]::GetTempFileName()
-    $tmpErr = [System.IO.Path]::GetTempFileName()
+    $stdoutLog = Join-Path $logDir ("{0}.out.log" -f $Name)
+    $stderrLog = Join-Path $logDir ("{0}.err.log" -f $Name)
+    $startedAt = Get-Date
+    $exitCode = $null
+    $failureReason = ""
     try {
         $process = Start-Process `
             -FilePath $python `
@@ -42,22 +103,35 @@ function Invoke-Benchmark {
             -NoNewWindow `
             -Wait `
             -PassThru `
-            -RedirectStandardOutput $tmpOut `
-            -RedirectStandardError $tmpErr
-        if (Test-Path -LiteralPath $tmpOut) {
-            Get-Content -LiteralPath $tmpOut | ForEach-Object { Write-Output $_ }
+            -RedirectStandardOutput $stdoutLog `
+            -RedirectStandardError $stderrLog
+        if (Test-Path -LiteralPath $stdoutLog) {
+            Get-Content -LiteralPath $stdoutLog | ForEach-Object { Write-Output $_ }
         }
-        if (Test-Path -LiteralPath $tmpErr) {
-            Get-Content -LiteralPath $tmpErr | ForEach-Object { Write-Output ("[stderr] {0}" -f $_) }
+        if (Test-Path -LiteralPath $stderrLog) {
+            Get-Content -LiteralPath $stderrLog | ForEach-Object { Write-Output ("[stderr] {0}" -f $_) }
         }
         $exitCode = $process.ExitCode
     }
-    finally {
-        Remove-Item -LiteralPath $tmpOut, $tmpErr -Force -ErrorAction SilentlyContinue
+    catch {
+        $failureReason = $_.Exception.Message
+        throw
     }
-    Write-Output ("[{0}] {1} exited with code {2}" -f (Get-Date -Format "s"), $Name, $exitCode)
+    finally {
+        $finishedAt = Get-Date
+        Write-LaneMetadata `
+            -Name $Name `
+            -Args $Args `
+            -StdoutLog $stdoutLog `
+            -StderrLog $stderrLog `
+            -StartedAt $startedAt `
+            -FinishedAt $finishedAt `
+            -ExitCode $exitCode `
+            -FailureReason $failureReason
+    }
+    Write-Output ("[{0}] {1} exited with code {2}; stdout={3}; stderr={4}" -f (Get-Date -Format "s"), $Name, $exitCode, $stdoutLog, $stderrLog)
     if ($exitCode -ne 0) {
-        throw "$Name failed with exit code $exitCode"
+        throw "$Name failed with exit code $exitCode; stdout=$stdoutLog; stderr=$stderrLog"
     }
 }
 
@@ -72,7 +146,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--conversations", "0,1,2,3,4,5,6,7,8,9",
             "--categories", "1,2,3,4",
             "--top-k", "200",
@@ -91,7 +165,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--all-questions",
             "--top-k", "200",
             "--top-k-cutoffs", "10,50,200",
@@ -109,7 +183,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "100K",
             "--conversations", "0-99",
             "--top-k", "200",
@@ -128,7 +202,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "500K",
             "--conversations", "0-99",
             "--top-k", "200",
@@ -147,7 +221,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "1M",
             "--conversations", "0-99",
             "--top-k", "200",
@@ -166,7 +240,7 @@ $jobs = @(
             "--provider", "openai",
             "--judge-provider", "openai",
             "--backend", "oss",
-            "--mem0-host", "http://localhost:8000",
+            "--mem0-host", $BenchmarkMem0HostArg,
             "--chat-sizes", "10M",
             "--conversations", "0-99",
             "--top-k", "200",

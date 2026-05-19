@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from dataclasses import asdict
 from typing import Any
 
 from mapu.config import Settings
@@ -115,9 +114,18 @@ def _compare(on: SuiteResult, off: SuiteResult) -> dict[str, Any]:
                 "on": _case_summary(c_on),
                 "off": _case_summary(c_off),
                 "delta": {
-                    "query_f1": c_on.metrics.get("query.query_f1", 0.0) - c_off.metrics.get("query.query_f1", 0.0),
-                    "extraction_entity_f1": c_on.metrics.get("extraction.entity_f1", 0.0) - c_off.metrics.get("extraction.entity_f1", 0.0),
-                    "extraction_proposition_f1": c_on.metrics.get("extraction.proposition_f1", 0.0) - c_off.metrics.get("extraction.proposition_f1", 0.0),
+                    "query_f1": (
+                        c_on.metrics.get("query.query_f1", 0.0)
+                        - c_off.metrics.get("query.query_f1", 0.0)
+                    ),
+                    "extraction_entity_f1": (
+                        c_on.metrics.get("extraction.entity_f1", 0.0)
+                        - c_off.metrics.get("extraction.entity_f1", 0.0)
+                    ),
+                    "extraction_proposition_f1": (
+                        c_on.metrics.get("extraction.proposition_f1", 0.0)
+                        - c_off.metrics.get("extraction.proposition_f1", 0.0)
+                    ),
                 },
             }
         )

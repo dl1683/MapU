@@ -65,7 +65,9 @@ def _score_file(path: pathlib.Path) -> dict[str, Any]:
     retrieval = obj.get("retrieval") or {}
     rows = retrieval.get("search_results") or []
     memories = [str(r.get("memory", "")) for r in rows]
-    abstention = bool(obj.get("is_abstention", False)) or ("no information related" in _normalize(gt))
+    abstention = bool(obj.get("is_abstention", False)) or (
+        "no information related" in _normalize(gt)
+    )
     if abstention:
         # abstention is good when retrieval is empty or weak.
         if not memories:

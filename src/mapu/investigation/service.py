@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mapu.context_learning import build_structured_next_steps, prioritize_next_steps
 from mapu.investigation.evaluator import InvestigationEvaluator
 from mapu.investigation.executor import InvestigationExecutor
 from mapu.investigation.planner import LLMInvestigationPlanner
@@ -31,6 +33,10 @@ from mapu.models.proposition import Proposition, PropositionParticipant
 from mapu.providers.embeddings import EmbeddingProvider
 from mapu.providers.llms import LLMProvider, LLMRequest
 from mapu.query.types import PropositionHit
+from mapu.repos.audit import ActivityRepo
+
+if TYPE_CHECKING:
+    from mapu.repos.gap import GapRepo
 
 SYNTHESIS_SYSTEM_PROMPT = """\
 You are a knowledge synthesis engine. Given a question and evidence from \
@@ -51,6 +57,9 @@ class InvestigationService:
         llm: LLMProvider,
         budget: InvestigationBudget | None = None,
         embedding_provider: EmbeddingProvider | None = None,
+        activity_repo: ActivityRepo | None = None,
+        gap_repo: GapRepo | None = None,
+        actor: str = "system",
     ) -> None:
         self._session = session
         self._llm = llm
@@ -58,6 +67,10 @@ class InvestigationService:
         self._executor = InvestigationExecutor(session, embedding_provider)
         self._evaluator = InvestigationEvaluator()
         self._budget = budget or InvestigationBudget()
+        self._activity_repo = activity_repo
+        self._gap_repo = gap_repo
+        self._actor = actor
+        self._logger = logging.getLogger(__name__)
 
     async def investigate(
         self,
@@ -77,7 +90,10 @@ class InvestigationService:
 
         while termination is None:
             plan = await self._planner.plan(
-                question, state, initial_entities, initial_predicates,
+                question,
+                state,
+                initial_entities,
+                initial_predicates,
             )
 
             if not plan.actions:
@@ -86,12 +102,16 @@ class InvestigationService:
 
             for action in plan.actions:
                 obs = await self._executor.execute_action(
-                    action, corpus_id, state,
+                    action,
+                    corpus_id,
+                    state,
                 )
                 state.observations.append(obs)
 
                 self._evaluator.update_coverage(
-                    state, initial_entities, initial_predicates,
+                    state,
+                    initial_entities,
+                    initial_predicates,
                 )
 
                 termination = self._evaluator.should_terminate(state)
@@ -100,7 +120,21 @@ class InvestigationService:
 
         evidence = self._collect_evidence(state, initial_hits)
         gaps = self._identify_gaps(
-            state, initial_entities, initial_predicates,
+            state,
+            initial_entities,
+            initial_predicates,
+        )
+        persisted_gap_ids = await self._persist_gaps(
+            question=question,
+            corpus_id=corpus_id,
+            gaps=gaps,
+            termination=termination,
+        )
+        next_steps = self._build_next_steps(
+            question=question,
+            state=state,
+            gaps=gaps,
+            termination=termination,
         )
 
         answer = await self._synthesize(question, evidence, gaps, state)
@@ -108,14 +142,185 @@ class InvestigationService:
 
         persisted_ids = await self._persist_findings(findings, corpus_id, situation_id)
 
-        return InvestigationResult(
+        result = InvestigationResult(
             answer=answer,
             evidence=evidence,
             gaps=gaps,
             findings=findings,
-            metadata=self._build_metadata(state, termination),
+            metadata={
+                **self._build_metadata(state, termination),
+                "persisted_gap_ids": persisted_gap_ids,
+            },
             termination_reason=termination or TerminationReason.PLANNER_STOP,
             persisted_proposition_ids=tuple(persisted_ids),
+            next_steps=next_steps,
+            structured_next_steps=build_structured_next_steps(
+                corpus_id,
+                next_steps,
+                question=question,
+                gaps=gaps,
+                source="investigation",
+            ),
+        )
+
+        if self._activity_repo is None:
+            return result
+
+        return await self._enrich_and_log(
+            question=question,
+            result=result,
+            evidence_count=len(evidence),
+            findings_count=len(findings),
+            corpus_id=corpus_id,
+        )
+
+    async def _persist_gaps(
+        self,
+        *,
+        question: str,
+        corpus_id: uuid.UUID,
+        gaps: tuple[str, ...],
+        termination: TerminationReason | None,
+    ) -> list[str]:
+        gap_repo = self._gap_repo
+        if gap_repo is None or not hasattr(gap_repo, "record_open_gap"):
+            return []
+
+        descriptions = list(gaps)
+        if not descriptions and termination in {
+            TerminationReason.BUDGET_EXHAUSTED,
+            TerminationReason.DIMINISHING_RETURNS,
+            TerminationReason.CONTRADICTION_FOUND,
+        }:
+            descriptions.append(
+                f"Investigation stopped before clean coverage for: {question[:240]}"
+            )
+
+        persisted: list[str] = []
+        for description in descriptions[:8]:
+            desc = " ".join(str(description).strip().split())
+            if not desc:
+                continue
+            is_conflict = termination == TerminationReason.CONTRADICTION_FOUND
+            try:
+                gap = await gap_repo.record_open_gap(
+                    kind="investigation_gap",
+                    description=desc,
+                    detected_by=self._actor,
+                    severity=(
+                        "critical"
+                        if is_conflict or termination == TerminationReason.BUDGET_EXHAUSTED
+                        else "moderate"
+                    ),
+                    uncertainty_reason=(
+                        "contradiction_or_supersession" if is_conflict else "missing_evidence"
+                    ),
+                    evidence_hypothesis={
+                        "source": "investigation",
+                        "question": question,
+                        "termination_reason": (termination.value if termination else "unknown"),
+                    },
+                    next_action={
+                        "action_type": "investigate",
+                        "question": desc,
+                        "rationale": (
+                            "Persisted investigation gap needs targeted follow-up "
+                            "before the next resumed session."
+                        ),
+                        "expected_uncertainty_reduction": 0.65,
+                    },
+                    expected_resolution=(
+                        "Close this gap with source-backed evidence, explicit "
+                        "dismissal, or repair/supersession."
+                    ),
+                    governance_tier="stale" if is_conflict else "provisional",
+                    priority_score=5.0 if is_conflict else 3.5,
+                )
+            except Exception:
+                self._logger.exception("Failed to persist investigation gap")
+                continue
+            persisted.append(str(gap.id))
+        return persisted
+
+    async def _enrich_and_log(
+        self,
+        question: str,
+        result: InvestigationResult,
+        evidence_count: int,
+        findings_count: int,
+        corpus_id: uuid.UUID,
+    ) -> InvestigationResult:
+        ranked = await self._enrich_next_steps_with_history(
+            question=question,
+            next_steps=result.next_steps,
+        )
+        next_result = InvestigationResult(
+            answer=result.answer,
+            evidence=result.evidence,
+            gaps=result.gaps,
+            findings=result.findings,
+            metadata=result.metadata,
+            termination_reason=result.termination_reason,
+            persisted_proposition_ids=result.persisted_proposition_ids,
+            next_steps=ranked,
+            structured_next_steps=build_structured_next_steps(
+                corpus_id,
+                ranked,
+                question=question,
+                gaps=result.gaps,
+                source="investigation",
+            ),
+        )
+
+        try:
+            await self._log_investigation_activity(
+                question=question,
+                result=next_result,
+                evidence_count=evidence_count,
+                findings_count=findings_count,
+            )
+        except Exception:
+            self._logger.exception("Failed to persist investigation activity")
+        return next_result
+
+    async def _enrich_next_steps_with_history(
+        self,
+        question: str,
+        next_steps: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        if not next_steps:
+            return next_steps
+        try:
+            activities = await self._activity_repo.list(limit=240)
+        except Exception:
+            self._logger.exception(
+                "Failed to load historical investigation activity for next-step ranking",
+            )
+            return next_steps
+
+        return await prioritize_next_steps(next_steps, question, activities)
+
+    async def _log_investigation_activity(
+        self,
+        question: str,
+        result: InvestigationResult,
+        evidence_count: int,
+        findings_count: int,
+    ) -> None:
+        await self._activity_repo.log(
+            event_type="investigation",
+            actor=self._actor,
+            entity_type="investigation",
+            details={
+                "question": question,
+                "termination_reason": result.termination_reason.value,
+                "evidence_count": evidence_count,
+                "findings_count": findings_count,
+                "next_steps": list(result.next_steps),
+                "structured_next_steps": list(result.structured_next_steps),
+                "gaps": list(result.gaps),
+                "metadata": result.metadata,
+            },
         )
 
     def _collect_evidence(
@@ -129,13 +334,15 @@ class InvestigationService:
         for hit in initial_hits:
             if hit.proposition_id not in seen:
                 seen.add(hit.proposition_id)
-                evidence.append(InvestigationEvidence(
-                    proposition_id=hit.proposition_id,
-                    normalized_text=hit.normalized_text,
-                    source_span=hit.source_span_text,
-                    authority_score=hit.authority_score,
-                    document_id=hit.document_id,
-                ))
+                evidence.append(
+                    InvestigationEvidence(
+                        proposition_id=hit.proposition_id,
+                        normalized_text=hit.normalized_text,
+                        source_span=hit.source_span_text,
+                        authority_score=hit.authority_score,
+                        document_id=hit.document_id,
+                    )
+                )
 
         for obs in state.observations:
             for ev in obs.evidence:
@@ -223,9 +430,7 @@ class InvestigationService:
         evidence: tuple[InvestigationEvidence, ...],
         state: InvestigationState,
     ) -> tuple[DerivedPropositionDraft, ...]:
-        doc_ids = {
-            e.document_id for e in evidence if e.document_id is not None
-        }
+        doc_ids = {e.document_id for e in evidence if e.document_id is not None}
         doc_ids.update(state.seen_document_ids)
 
         if len(doc_ids) < 2:
@@ -239,9 +444,7 @@ class InvestigationService:
 
         capped = evidence[:50]
         evidence_text = "\n".join(
-            f"[{i}] {e.normalized_text}"
-            for i, e in enumerate(capped)
-            if e.normalized_text
+            f"[{i}] {e.normalized_text}" for i, e in enumerate(capped) if e.normalized_text
         )
 
         request = LLMRequest(
@@ -276,13 +479,58 @@ class InvestigationService:
             "documents_read": state.documents_read,
             "propositions_found": len(state.seen_proposition_ids),
             "coverage": state.coverage,
-            "termination_reason": (
-                termination.value if termination else "unknown"
-            ),
+            "termination_reason": (termination.value if termination else "unknown"),
             "steps": len(state.observations),
             "cross_document": state.documents_read >= 2,
             "document_ids": [str(d) for d in state.seen_document_ids],
         }
+
+    def _build_next_steps(
+        self,
+        question: str,
+        state: InvestigationState,
+        gaps: tuple[str, ...],
+        termination: TerminationReason | None,
+    ) -> tuple[str, ...]:
+        next_steps: list[str] = []
+
+        for gap in gaps:
+            if gap.startswith("No evidence found for entity: "):
+                entity = gap.removeprefix("No evidence found for entity: ").strip()
+                if entity:
+                    next_steps.append(
+                        f"Open an entity-focused pass for {entity!r}: "
+                        f'query "What is known about {entity}?"',
+                    )
+            if gap.startswith("No evidence found for predicate: "):
+                predicate = gap.removeprefix("No evidence found for predicate: ").strip()
+                if predicate:
+                    next_steps.append(
+                        f"Expand predicate coverage: inspect sources for {predicate!r} "
+                        f"relationships around this query.",
+                    )
+
+        if not gaps and state.known_entity_coverage >= 0.5 and state.seen_document_ids:
+            doc_ids = ", ".join(str(d) for d in list(state.seen_document_ids)[:3])
+            next_steps.append(
+                f"If you need deeper evidence, load full documents: {doc_ids}",
+            )
+
+        if not next_steps:
+            next_steps.append(
+                f"Resume with a fresh query constrained to the current topic: {question[:120]}",
+            )
+
+        if termination in (
+            TerminationReason.BUDGET_EXHAUSTED,
+            TerminationReason.DIMINISHING_RETURNS,
+        ):
+            next_steps.append(
+                "Coverage stalled before convergence; increase budget and re-run "
+                "the investigation with higher action/LLM limits.",
+            )
+
+        return tuple(dict.fromkeys(next_steps))
 
     async def _persist_findings(
         self,
@@ -303,12 +551,16 @@ class InvestigationService:
                 continue
 
             subject_handle = await self._resolve_or_create_handle(
-                draft.subject_name, "entity", corpus_id,
+                draft.subject_name,
+                "entity",
+                corpus_id,
             )
             object_handle: Handle | None = None
             if draft.object_name:
                 object_handle = await self._resolve_or_create_handle(
-                    draft.object_name, "entity", corpus_id,
+                    draft.object_name,
+                    "entity",
+                    corpus_id,
                 )
 
             semantic_key = _compute_finding_key(
@@ -328,7 +580,8 @@ class InvestigationService:
                 continue
 
             derived_range = await self._compute_derived_valid_range(
-                draft.derivation_basis, corpus_id,
+                draft.derivation_basis,
+                corpus_id,
             )
 
             prop_id = uuid.uuid4()
@@ -351,34 +604,40 @@ class InvestigationService:
                         system_created=now,
                     )
                     self._session.add(prop)
-                    self._session.add(PropositionParticipant(
-                        id=uuid.uuid4(),
-                        proposition_id=prop_id,
-                        handle_id=subject_handle.id,
-                        corpus_id=corpus_id,
-                        role="subject",
-                        ordinal=0,
-                    ))
-                    if object_handle is not None:
-                        self._session.add(PropositionParticipant(
+                    self._session.add(
+                        PropositionParticipant(
                             id=uuid.uuid4(),
                             proposition_id=prop_id,
-                            handle_id=object_handle.id,
+                            handle_id=subject_handle.id,
                             corpus_id=corpus_id,
-                            role="object",
-                            ordinal=1,
-                        ))
+                            role="subject",
+                            ordinal=0,
+                        )
+                    )
+                    if object_handle is not None:
+                        self._session.add(
+                            PropositionParticipant(
+                                id=uuid.uuid4(),
+                                proposition_id=prop_id,
+                                handle_id=object_handle.id,
+                                corpus_id=corpus_id,
+                                role="object",
+                                ordinal=1,
+                            )
+                        )
                     for basis_id in draft.derivation_basis:
-                        self._session.add(DerivationEdge(
-                            id=uuid.uuid4(),
-                            corpus_id=corpus_id,
-                            parent_proposition_id=basis_id,
-                            child_proposition_id=prop_id,
-                            derivation_type="cross_document",
-                            derivation_method="investigation",
-                            confidence=draft.confidence,
-                            created_at=now,
-                        ))
+                        self._session.add(
+                            DerivationEdge(
+                                id=uuid.uuid4(),
+                                corpus_id=corpus_id,
+                                parent_proposition_id=basis_id,
+                                child_proposition_id=prop_id,
+                                derivation_type="cross_document",
+                                derivation_method="investigation",
+                                confidence=draft.confidence,
+                                created_at=now,
+                            )
+                        )
                     spe = SourcePolicyEval(
                         id=uuid.uuid4(),
                         document_id=prop_id,
@@ -392,27 +651,31 @@ class InvestigationService:
                     )
                     self._session.add(spe)
                     att_id = uuid.uuid4()
-                    self._session.add(Attestation(
-                        id=att_id,
-                        span_id=None,
-                        proposition_id=prop_id,
-                        corpus_id=corpus_id,
-                        source_policy_eval_id=spe.id,
-                        stance="derived",
-                        extraction_method="investigation",
-                        extraction_confidence=draft.confidence,
-                        status="accepted",
-                        system_created=now,
-                    ))
+                    self._session.add(
+                        Attestation(
+                            id=att_id,
+                            span_id=None,
+                            proposition_id=prop_id,
+                            corpus_id=corpus_id,
+                            source_policy_eval_id=spe.id,
+                            stance="derived",
+                            extraction_method="investigation",
+                            extraction_confidence=draft.confidence,
+                            status="accepted",
+                            system_created=now,
+                        )
+                    )
                     await self._session.flush()
                     if situation_id is not None:
-                        self._session.add(AttestationSituation(
-                            attestation_id=att_id,
-                            situation_id=situation_id,
-                            corpus_id=corpus_id,
-                            assignment_confidence=1.0,
-                            assignment_basis="investigation_derived",
-                        ))
+                        self._session.add(
+                            AttestationSituation(
+                                attestation_id=att_id,
+                                situation_id=situation_id,
+                                corpus_id=corpus_id,
+                                assignment_confidence=1.0,
+                                assignment_basis="investigation_derived",
+                            )
+                        )
                         await self._session.flush()
             except IntegrityError:
                 continue
@@ -522,33 +785,30 @@ def _parse_findings(
         if not isinstance(indices, list) or len(indices) < 2:
             continue
 
-        valid_indices = list(dict.fromkeys(
-            i for i in indices
-            if isinstance(i, int) and not isinstance(i, bool)
-            and 0 <= i < len(evidence)
-        ))
+        valid_indices = list(
+            dict.fromkeys(
+                i
+                for i in indices
+                if isinstance(i, int) and not isinstance(i, bool) and 0 <= i < len(evidence)
+            )
+        )
         if len(valid_indices) < 2:
             continue
 
         doc_ids = {
-            evidence[i].document_id for i in valid_indices
-            if evidence[i].document_id is not None
+            evidence[i].document_id for i in valid_indices if evidence[i].document_id is not None
         }
         if len(doc_ids) < 2:
             continue
 
-        prop_indices = [
-            i for i in valid_indices if evidence[i].is_proposition
-        ]
-        basis = tuple(
-            evidence[i].proposition_id for i in prop_indices
-        ) if prop_indices else tuple(
-            evidence[i].proposition_id for i in valid_indices
+        prop_indices = [i for i in valid_indices if evidence[i].is_proposition]
+        basis = (
+            tuple(evidence[i].proposition_id for i in prop_indices)
+            if prop_indices
+            else tuple(evidence[i].proposition_id for i in valid_indices)
         )
 
-        has_chunk_evidence = any(
-            not evidence[i].is_proposition for i in valid_indices
-        )
+        has_chunk_evidence = any(not evidence[i].is_proposition for i in valid_indices)
         chunk_only = len(prop_indices) == 0
         raw_confidence = f.get("confidence")
         if not isinstance(raw_confidence, (int, float)) or isinstance(raw_confidence, bool):
@@ -561,14 +821,16 @@ def _parse_findings(
         elif has_chunk_evidence and len(prop_indices) < len(valid_indices):
             confidence *= 0.85
 
-        drafts.append(DerivedPropositionDraft(
-            normalized_text=str(text),
-            frame_type="finding",
-            predicate=str(predicate),
-            subject_name=str(subject),
-            object_name=f.get("object_name"),
-            derivation_basis=basis,
-            confidence=confidence,
-        ))
+        drafts.append(
+            DerivedPropositionDraft(
+                normalized_text=str(text),
+                frame_type="finding",
+                predicate=str(predicate),
+                subject_name=str(subject),
+                object_name=f.get("object_name"),
+                derivation_basis=basis,
+                confidence=confidence,
+            )
+        )
 
     return tuple(drafts)

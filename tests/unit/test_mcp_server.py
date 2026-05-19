@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mapu.mcp import server as mcp_server
+
 
 def _mock_session():
     """Create a mock async session that works as an async context manager."""
@@ -24,6 +26,24 @@ def _patch_factory(session):
     """Patch _get_session_factory to return a callable that yields our mock session."""
     factory = MagicMock(return_value=session)
     return patch("mapu.mcp.server._get_session_factory", return_value=factory)
+
+
+class TestMCPRuntimePreload:
+    def test_preload_imports_runtime_modules(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        imported: list[str] = []
+
+        def fake_import_module(name: str) -> object:
+            imported.append(name)
+            return object()
+
+        monkeypatch.setattr(mcp_server.importlib, "import_module", fake_import_module)
+
+        mcp_server._preload_mcp_runtime_modules()
+
+        assert imported == list(mcp_server._MCP_RUNTIME_PRELOAD_MODULES)
+        assert "mapu.models" in imported
+        assert "mapu.query.service" in imported
+        assert "mapu.evidence.ingest" in imported
 
 
 class TestQueryTool:
@@ -74,10 +94,12 @@ class TestQueryTool:
             )
 
         assert result["intent"] == "identity"
+        assert result["answer"] == "X defines Y"
         assert result["synthesis"] == "X defines Y"
         assert len(result["hits"]) == 1
         assert result["hits"][0]["predicate"] == "defines"
         assert result["hits"][0]["confidence"] == 0.95
+        assert result["next_steps"] == []
 
     @pytest.mark.asyncio
     async def test_query_with_empty_results(self) -> None:
@@ -113,6 +135,7 @@ class TestQueryTool:
         assert result["synthesis"] is None
         assert result["gaps"] == ["no data"]
         assert result["hits"] == []
+        assert result["next_steps"] == []
 
 
 class TestIngestDocumentTool:
@@ -242,6 +265,51 @@ class TestDestructiveCorpusToolGuards:
 
         assert result == {"error": "Refusing reset without confirm=true"}
         mock_factory.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_delete_corpus_uses_dependency_aware_cleanup(self) -> None:
+        from mapu.mcp.server import delete_corpus
+
+        cid = uuid.uuid4()
+        session = _mock_session()
+        session.get = AsyncMock(return_value=object())
+        cleanup = AsyncMock()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.repos.corpus_cleanup.delete_corpus_rows", cleanup),
+        ):
+            result = await delete_corpus(corpus_id=str(cid), confirm=True)
+
+        assert result == {"deleted_corpus_id": str(cid)}
+        cleanup.assert_awaited_once_with(session, cid)
+        session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_reset_all_corpora_uses_dependency_aware_cleanup(self) -> None:
+        from mapu.mcp.server import reset_all_corpora
+
+        cid1 = uuid.uuid4()
+        cid2 = uuid.uuid4()
+        result_mock = MagicMock()
+        result_mock.all.return_value = [(cid1,), (cid2,)]
+        session = _mock_session()
+        session.execute = AsyncMock(return_value=result_mock)
+        cleanup = AsyncMock()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.repos.corpus_cleanup.delete_corpus_rows", cleanup),
+        ):
+            result = await reset_all_corpora(confirm=True)
+
+        assert result == {
+            "deleted_count": 2,
+            "deleted_corpus_ids": [str(cid1), str(cid2)],
+        }
+        assert cleanup.await_args_list[0].args == (session, cid1)
+        assert cleanup.await_args_list[1].args == (session, cid2)
+        session.commit.assert_awaited_once()
 
 
 class TestIngestContentLimit:
@@ -514,6 +582,7 @@ class TestInvestigateTool:
         assert len(result["evidence"]) == 1
         assert result["gaps"] == ["missing context"]
         assert result["termination_reason"] == "coverage_met"
+        assert "next_steps" in result
 
     @pytest.mark.asyncio
     async def test_investigate_without_llm_returns_error(self) -> None:
@@ -636,6 +705,164 @@ class TestListActivityTool:
         assert result["activities"][0]["actor"] == "system"
 
 
+class TestHandoffContextTool:
+    @pytest.mark.asyncio
+    async def test_handoff_context_returns_structured_bundle(self) -> None:
+        from datetime import UTC, datetime
+
+        gap = MagicMock()
+        gap.id = uuid.uuid4()
+        gap.kind = "dependency"
+        gap.description = "Missing dependency mapping for ACME"
+        gap.severity = "critical"
+        gap.status = "open"
+        gap.detected_by = "investigation"
+        gap.created_at = datetime(2026, 1, 1, tzinfo=UTC)
+        gap.resolved_at = None
+
+        activity = MagicMock()
+        activity.id = uuid.uuid4()
+        activity.event_type = "supersession"
+        activity.actor = "agent"
+        activity.entity_type = "proposition"
+        activity.entity_id = uuid.uuid4()
+        activity.details = {"proposition_id": "old-1", "new_proposition_id": "new-1"}
+        activity.created_at = datetime(2026, 1, 2, tzinfo=UTC)
+
+        mock_gap_repo = MagicMock()
+        mock_gap_repo.list = AsyncMock(return_value=[gap])
+        mock_activity_repo = MagicMock()
+        mock_activity_repo.list = AsyncMock(return_value=[activity])
+
+        session = _mock_session()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.repos.gap.GapRepo", return_value=mock_gap_repo),
+            patch("mapu.repos.audit.ActivityRepo", return_value=mock_activity_repo),
+        ):
+            from mapu.mcp.server import handoff_context
+
+            corpus_id = str(uuid.uuid4())
+            result = await handoff_context(
+                corpus_id=corpus_id,
+                max_gaps=10,
+                max_activity=20,
+            )
+
+        assert result["protocol_version"] == "1.1.0"
+        assert result["protocol"] == "mapu-resume-handoff"
+        assert result["corpus_id"] == corpus_id
+        assert len(result["open_gaps"]) == 1
+        assert result["continuity_frontier"]["open_gap_count"] == 1
+        assert result["continuity_frontier"]["unresolved_conflict_count"] == 1
+        assert result["priority_next_actions"]
+        assert "continuity_governance" in result
+        assert set(result["continuity_governance"].keys()) == {
+            "guaranteed_fields",
+            "provisional_fields",
+            "stale_fields",
+        }
+        assert any(
+            action["action_type"] == "list_activity" for action in result["priority_next_actions"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_handoff_context_clamps_max_actions(self) -> None:
+        from datetime import UTC, datetime
+
+        gap = MagicMock()
+        gap.id = uuid.uuid4()
+        gap.kind = "knowledge"
+        gap.description = "Missing context"
+        gap.severity = "minor"
+        gap.status = "open"
+        gap.detected_by = "query"
+        gap.created_at = datetime(2026, 1, 1, tzinfo=UTC)
+        gap.resolved_at = None
+
+        mock_gap_repo = MagicMock()
+        mock_gap_repo.list = AsyncMock(return_value=[gap])
+        mock_activity_repo = MagicMock()
+        mock_activity_repo.list = AsyncMock(return_value=[])
+
+        session = _mock_session()
+        with (
+            _patch_factory(session),
+            patch("mapu.repos.gap.GapRepo", return_value=mock_gap_repo),
+            patch("mapu.repos.audit.ActivityRepo", return_value=mock_activity_repo),
+            patch(
+                "mapu.context_learning.build_handoff_bundle",
+                return_value={
+                    "protocol_version": "1.1.0",
+                    "protocol": "mapu-resume-handoff",
+                    "continuity_governance": {
+                        "guaranteed_fields": ["protocol_version", "protocol"],
+                        "provisional_fields": ["query(corpus_id='...')"],
+                        "stale_fields": [],
+                    },
+                },
+            ) as mock_build_bundle,
+        ):
+            from mapu.mcp.server import handoff_context
+
+            await handoff_context(
+                corpus_id=str(uuid.uuid4()),
+                max_gaps=6,
+                max_activity=8,
+                max_actions=999,
+            )
+
+        call_kwargs = mock_build_bundle.call_args[1]
+        assert call_kwargs["max_actions"] == 30
+        assert call_kwargs["max_gaps"] == 6
+        assert call_kwargs["max_activity"] == 8
+
+
+class TestLearningFeedbackTool:
+    @pytest.mark.asyncio
+    async def test_log_learning_feedback_records_event(self) -> None:
+        activity = MagicMock()
+        activity.id = uuid.uuid4()
+        mock_repo = AsyncMock()
+        mock_repo.log = AsyncMock(return_value=activity)
+        session = _mock_session()
+
+        with (
+            _patch_factory(session),
+            patch("mapu.repos.audit.ActivityRepo", return_value=mock_repo),
+        ):
+            from mapu.mcp.server import log_learning_feedback
+
+            result = await log_learning_feedback(
+                corpus_id=str(uuid.uuid4()),
+                question="What is X?",
+                step="Open a focused query",
+                outcome="helpful",
+            )
+
+        assert result["success"] is True
+        assert result["event_id"] == str(activity.id)
+
+    @pytest.mark.asyncio
+    async def test_log_learning_feedback_validates_outcome(self) -> None:
+        with (
+            _patch_factory(_mock_session()),
+            patch("mapu.repos.audit.ActivityRepo"),
+        ):
+            from mapu.mcp.server import log_learning_feedback
+
+            result = await log_learning_feedback(
+                corpus_id=str(uuid.uuid4()),
+                question="What is X?",
+                step="Open a focused query",
+                outcome="invalid",
+            )
+
+        assert "error" in result
+        assert "outcome" in result["error"]
+
+
 class TestBadUUIDHandling:
     @pytest.mark.asyncio
     async def test_investigate_bad_corpus_id(self) -> None:
@@ -650,7 +877,9 @@ class TestBadUUIDHandling:
         from mapu.mcp.server import investigate
 
         result = await investigate(
-            corpus_id=str(uuid.uuid4()), question="Why?", situation_id="bad",
+            corpus_id=str(uuid.uuid4()),
+            question="Why?",
+            situation_id="bad",
         )
         assert "error" in result
         assert "situation_id" in result["error"]
@@ -676,7 +905,54 @@ class TestBadUUIDHandling:
         from mapu.mcp.server import list_activity
 
         result = await list_activity(
-            corpus_id=str(uuid.uuid4()), entity_id="bad",
+            corpus_id=str(uuid.uuid4()),
+            entity_id="bad",
         )
         assert "error" in result
         assert "entity_id" in result["error"]
+
+
+class TestAgentSurfaceContracts:
+    @pytest.mark.asyncio
+    async def test_query_commits_learned_gaps_and_activity(self) -> None:
+        from mapu.query.types import QueryIntent, QueryRequest, QueryResult, Tier
+
+        cid = uuid.uuid4()
+        mock_result = QueryResult(
+            request=QueryRequest(corpus_id=cid, question="What changed?"),
+            intent=QueryIntent.IDENTITY,
+            tier_used=Tier.DIRECT,
+            synthesis="Answer",
+            hits=(),
+            gaps=(),
+            metadata={},
+        )
+        mock_svc = AsyncMock()
+        mock_svc.query = AsyncMock(return_value=mock_result)
+        session = _mock_session()
+        session.get = AsyncMock(return_value=object())
+
+        with (
+            _patch_factory(session),
+            patch("mapu.query.intent.HeuristicIntentClassifier"),
+            patch("mapu.query.service.QueryService", return_value=mock_svc),
+        ):
+            from mapu.mcp.server import query
+
+            result = await query(corpus_id=str(cid), question="What changed?")
+
+        assert result["synthesis"] == "Answer"
+        session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_handoff_context_rejects_missing_corpus(self) -> None:
+        session = _mock_session()
+        session.get = AsyncMock(return_value=None)
+
+        with _patch_factory(session):
+            from mapu.mcp.server import handoff_context
+
+            result = await handoff_context(corpus_id=str(uuid.uuid4()))
+
+        assert result["code"] == "corpus_not_found"
+        assert "not found" in result["error"]

@@ -8,6 +8,7 @@ license = "AGPL-3.0-only"
 dependencies = [
   "alembic>=1.18,<2",
   "asyncpg>=0.31,<1",
+  "gliner>=0.2,<1",
   "litestar[standard]>=2.21,<3",
   "mcp[cli]>=1.27,<2",
   "orjson>=3.11,<4",
@@ -25,7 +26,6 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
-  "gliner>=0.2,<1",
   "setfit>=1.1,<2",
   "transformers>=4.40,<5",
   "torch>=2.0",

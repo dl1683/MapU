@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import tomllib
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -159,6 +161,13 @@ class TestIngestionService:
     def test_gliner_entity_extraction_is_default_enabled(self) -> None:
         assert ExtractionSettings.model_fields["gliner_enabled"].default is True
         assert ExtractionSettings.model_fields["gliner_relex_enabled"].default is False
+
+    def test_default_gliner_dependency_is_in_base_package(self) -> None:
+        pyproject = tomllib.loads(
+            (Path(__file__).parents[2] / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        dependencies = pyproject["project"]["dependencies"]
+        assert any(dep.startswith("gliner>=") for dep in dependencies)
 
     async def test_ingest_without_extractors_skips_extraction(
         self,

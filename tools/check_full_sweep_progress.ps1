@@ -115,18 +115,30 @@ $locomoDone = Get-JsonCount "results/locomo/predicted_mapu_fullsweep_${modelLabe
 $longmemTotal = 500
 $longmemDone = Get-JsonCount "results/longmemeval/predicted_mapu_fullsweep_${modelLabel}_longmemeval_$Suffix"
 
-$beamDirs = @(
-    "predicted_mapu_fullsweep_${modelLabel}_beam_100k_$Suffix",
-    "predicted_mapu_fullsweep_${modelLabel}_beam_500k_$Suffix",
-    "predicted_mapu_fullsweep_${modelLabel}_beam_1m_$Suffix",
-    "predicted_mapu_fullsweep_${modelLabel}_beam_10m_$Suffix"
+$beamExpected = @(
+    [pscustomobject]@{
+        project = "predicted_mapu_fullsweep_${modelLabel}_beam_100k_$Suffix"
+        total = 400
+    },
+    [pscustomobject]@{
+        project = "predicted_mapu_fullsweep_${modelLabel}_beam_500k_$Suffix"
+        total = 700
+    },
+    [pscustomobject]@{
+        project = "predicted_mapu_fullsweep_${modelLabel}_beam_1m_$Suffix"
+        total = 700
+    },
+    [pscustomobject]@{
+        project = "predicted_mapu_fullsweep_${modelLabel}_beam_10m_$Suffix"
+        total = 200
+    }
 )
 $beamStatus = @()
-foreach ($d in $beamDirs) {
+foreach ($beam in $beamExpected) {
     $beamStatus += [pscustomobject]@{
-        project = $d
-        completed = Get-JsonCount ("results/beam/{0}" -f $d)
-        total = 500
+        project = $beam.project
+        completed = Get-JsonCount ("results/beam/{0}" -f $beam.project)
+        total = $beam.total
     }
 }
 

@@ -384,6 +384,8 @@ def test_prepublish_gate_records_lane_artifact_directory() -> None:
     assert "New-Object System.Text.UTF8Encoding -ArgumentList $false" in script
     assert "Write-TextUtf8NoBom -Path $codeIdentity" in script
     assert "Write-JsonUtf8NoBom -Data $meta -Path $gateMeta" in script
+    assert "Write-TextUtf8NoBom -Path $leaderboardOut" in script
+    assert "& $python $report 1> $leaderboardOut" not in script
     assert "Set-Content -LiteralPath $gateMeta -Encoding UTF8" not in script
     assert "Set-Content -LiteralPath $codeIdentity -Encoding UTF8" not in script
     assert "public_performance_evidence = $PublicPerformanceEvidence" in script
@@ -1561,6 +1563,14 @@ def test_full_sweep_progress_json_preserves_empty_worker_array() -> None:
     script = _read("tools/check_full_sweep_progress.ps1")
 
     assert "workers = @($workerPids)" in script
+    assert "beam_100k_$Suffix" in script
+    assert "total = 400" in script
+    assert "beam_500k_$Suffix" in script
+    assert "total = 700" in script
+    assert "beam_1m_$Suffix" in script
+    assert "beam_10m_$Suffix" in script
+    assert "total = 200" in script
+    assert "total = 500" not in script
     assert "if ($null -eq $workerPids)" in script
     assert "$summary | ConvertTo-Json -Depth 6" in script
     assert "current_sha_matches = $currentShaMatches" in script

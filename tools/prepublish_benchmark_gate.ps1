@@ -353,10 +353,11 @@ try {
         throw "Sweep failed with exit code $LASTEXITCODE"
     }
 
-    & $python $report 1> $leaderboardOut
+    $leaderboardText = & $python $report
     if ($LASTEXITCODE -ne 0) {
         throw "Leaderboard report failed with exit code $LASTEXITCODE"
     }
+    Write-TextUtf8NoBom -Path $leaderboardOut -Text (($leaderboardText | Out-String).TrimEnd())
 
     $meta = New-GateMetadata `
         -Status "sweep_complete_unverified" `

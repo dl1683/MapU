@@ -1,6 +1,6 @@
 # Global Memory Benchmark Status
 
-Last updated: 2026-05-19 (America/New_York)
+Last updated: 2026-05-20 (America/New_York)
 
 ## Public-claim integrity note (critical)
 
@@ -47,6 +47,12 @@ reruns the verifier with `--require-public-evidence-labels`.
 ## Current prepublish gate status
 
 Latest gate attempts:
+- Directory: `logs/benchmarks/prepublish_gate_20260519_222636`
+  - Code identity: `8b098145059554f90bb2468c031467fbba1126b7`, clean worktree
+  - Command: `tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20 -LaneTimeoutMinutes 240 -AnswererModel gemini-3.1-flash-lite -JudgeModel gemini-3.1-flash-lite -ModelBaseUrl https://generativelanguage.googleapis.com/v1beta/openai/ -ModelLabel gemini31_flash_lite`
+  - Outcome: verified public benchmark evidence after mechanical artifact repair for PowerShell leaderboard encoding; `gate_pass=true`, `public_performance_evidence=true`, `benchmark_evidence_verified=true`
+  - Leaderboard: LoCoMo top_200 `86.169`; LongMemEval top_200 `75.800`; BEAM top_200 `50.500` at 100K, `49.714` at 500K, `49.286` at 1M, `37.000` at 10M
+  - Diagnosis: all six lanes exited `0` with same-directory lane metadata. BEAM remains weakest on contradiction resolution, event ordering, summarization, temporal reasoning, and multi-session reasoning; information extraction/preference/abstention are the relative strengths.
 - Directory: `logs/benchmarks/prepublish_gate_20260516_001848`
   - Code identity: `083786b0227077e5cc3ae41dd1518a1b260b9dcd`, dirty worktree
   - Command: `tools/prepublish_benchmark_gate.ps1 -Parallel -MaxParallel 3 -IdleTimeoutMinutes 20`

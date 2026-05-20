@@ -237,7 +237,7 @@ uv run python tools\verify_release_audit_evidence.py .tmp\release_surface_audit_
 ```
 
 Known limitations before making stronger public claims:
-- full exact-code prepublish benchmark gate still failed on the most recent run (`locomo_full_qwen06` exited `-1` during the full run on `2026-05-16_001848`)
+- full exact-code prepublish benchmark evidence exists for `logs/benchmarks/prepublish_gate_20260519_222636` on commit `8b098145059554f90bb2468c031467fbba1126b7`; newer tool/doc changes need their own release bundle before they are part of the exact-code claim
 - Docker was not available in the last active shell, so the documented `docker compose` path needs to be reverified on a host with Docker installed
 - LoCoMo, LongMemEval, and BEAM remain the long-running public-evidence harnesses; MemoryArena and AMA-Bench are now installed CLI smoke/diagnostic lanes, not public performance evidence
 - smoke gate has recently passed on a health-check run for this checkout; this is not public performance evidence and does not replace full benchmark gate.

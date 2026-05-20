@@ -66,6 +66,12 @@ mapu corpus delete <corpus_uuid> --yes
 mapu corpus reset --yes
 ```
 
+Run `alembic upgrade head` before relying on delete/reset latency in a large
+agent corpus. The current schema includes direct `corpus_id` cleanup indexes for
+dependent memory tables so disposable smoke corpora, benchmark corpora, and MCP
+test corpora can be removed with set-based SQL instead of slow row-by-row
+cleanup.
+
 For repeatable automation, prefer JSON output and store the command, corpus id,
 MapU version, and git SHA next to downstream artifacts. For release evidence,
 use the audited scripts in the README instead of ad hoc terminal transcripts.

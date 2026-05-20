@@ -52,8 +52,9 @@ def test_cli_e2e_smoke_runs_full_workflow_and_cleans_up(
                 args,
                 json.dumps(
                     {
-                        "answer": "No structured proposition answer was found. Maya Chen.",
-                        "epistemic_status": "insufficient",
+                        "answer": "Project Atlas is owned by Maya Chen.",
+                        "epistemic_status": "sufficient",
+                        "hits": [{"normalized_text": "Project Atlas is owned by Maya Chen."}],
                         "chunk_hits": [{"text": "Maya Chen"}],
                         "next_steps": ["Inspect source chunk."],
                     }
@@ -81,6 +82,7 @@ def test_cli_e2e_smoke_runs_full_workflow_and_cleans_up(
     assert report["required_checks"]["doctor_required_tools_present"] is True
     assert report["doctor_tool_count"] == 18
     assert report["required_checks"]["delete_ok"] is True
+    assert report["required_checks"]["query_has_structured_hit"] is True
     assert report["query_answer_nonempty"] is True
     assert not (tmp_path / "cli_e2e_source.md").exists()
     assert calls[-1][-4:] == ["corpus", "delete", corpus_id, "--yes"]
@@ -166,6 +168,7 @@ def test_cli_e2e_smoke_reports_delete_timeout_as_failure(
                     {
                         "answer": "Maya Chen.",
                         "epistemic_status": "insufficient",
+                        "hits": [{"normalized_text": "Project Atlas is owned by Maya Chen."}],
                         "chunk_hits": [{"text": "Maya Chen"}],
                         "next_steps": ["Inspect source chunk."],
                     }

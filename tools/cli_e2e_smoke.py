@@ -19,6 +19,7 @@ UUID_RE = re.compile(
 
 DEFAULT_SOURCE_TEXT = """Project Atlas handoff
 
+Project Atlas is owned by Maya Chen.
 The current owner is Maya Chen.
 The launch codename is Northstar.
 The next action is to audit the CLI continuity workflow before changing benchmark logic.
@@ -181,6 +182,7 @@ def run_smoke(
             "query_answer_nonempty": bool(answer.strip()),
             "query_answer_preview": answer[:240],
             "query_epistemic_status": query_payload.get("epistemic_status"),
+            "query_hits": len(query_payload.get("hits") or []),
             "query_chunk_hits": len(query_payload.get("chunk_hits") or []),
             "query_next_steps": len(query_payload.get("next_steps") or []),
             "activity_count": len(activity_payload) if isinstance(activity_payload, list) else 0,
@@ -211,6 +213,7 @@ def run_smoke(
         "ingest_ok": bool(outputs.get("ingest_ok")),
         "resume_has_priority_next_actions": bool(outputs.get("resume_has_priority_next_actions")),
         "query_answer_nonempty": bool(outputs.get("query_answer_nonempty")),
+        "query_has_structured_hit": int(outputs.get("query_hits") or 0) > 0,
         "query_has_next_steps": int(outputs.get("query_next_steps") or 0) > 0,
         "activity_written": int(outputs.get("activity_count") or 0) > 0,
         "delete_ok": delete_ok,

@@ -298,6 +298,10 @@ class TestPredicateExtraction:
         predicates = _extract_query_predicates("What does MapU use?")
         assert "uses" in predicates
 
+    def test_ownership_query_phrase(self) -> None:
+        predicates = _extract_query_predicates("Who owns Project Atlas?")
+        assert "owned_by" in predicates
+
     def test_no_predicates(self) -> None:
         predicates = _extract_query_predicates("Hello world")
         assert len(predicates) == 0

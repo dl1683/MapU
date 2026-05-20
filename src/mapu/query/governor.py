@@ -107,7 +107,7 @@ _PREDICATE_PHRASES: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "sits_in_front_of",
     ),
-    (re.compile(r"\bowned\s+by\b", re.IGNORECASE), "owned_by"),
+    (re.compile(r"\b(?:own|owns|owner|owned\s+by)\b", re.IGNORECASE), "owned_by"),
     (re.compile(r"\b(?:use|uses|using)\b", re.IGNORECASE), "uses"),
     (re.compile(r"\bdepends\s+on\b", re.IGNORECASE), "depends_on"),
     (re.compile(r"\b(?:store|stores|stored|storing)\b", re.IGNORECASE), "stores"),

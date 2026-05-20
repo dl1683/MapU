@@ -264,6 +264,8 @@ class MapUMem0Client:
             ranked = sorted(dedup.values(), key=lambda x: float(x.get("score", 0.0)), reverse=True)
             ranked = _apply_update_recency_bias(query, ranked)
             ranked = _deduplicate_near_duplicates(query, ranked, cap=max(top_k * 2, 60))
+            ranked = _refine_with_sentence_evidence(query, ranked, top_k=max(top_k * 2, 60))
+            ranked = _focus_ranked_memory_snippets(query, ranked, cap=max(top_k * 2, 60))
             if user_id.startswith("beam_"):
                 ranked = _role_diverse_ranking(query, ranked, top_k)
             if _should_abstain_from_retrieval(query, ranked):
@@ -453,10 +455,10 @@ class MapUMem0Client:
 
 
 def _lexical_score(query: str, text: str) -> float:
-    q_tokens = {t for t in query.lower().split() if len(t) > 2}
+    q_tokens = {t for t in _query_tokens(query) if len(t) > 2}
     if not q_tokens:
         return 0.0
-    t_tokens = {t for t in text.lower().split() if len(t) > 2}
+    t_tokens = {t for t in _query_tokens(text) if len(t) > 2}
     if not t_tokens:
         return 0.0
     overlap = len(q_tokens & t_tokens)
@@ -508,7 +510,7 @@ def _should_abstain_from_retrieval(query: str, ranked: list[dict[str, Any]]) -> 
 
 def _split_sentences(text: str) -> list[str]:
     parts = re.split(r"(?<=[\.\!\?\n])\s+", text.strip())
-    out = [p.strip() for p in parts if p and len(p.strip()) >= 24]
+    out = [p.strip() for p in parts if p and len(p.strip()) >= 16]
     return out
 
 
@@ -1201,6 +1203,27 @@ def _focus_memory_snippet(query: str, text: str) -> str:
     if len(snippet) < 140 and end < len(sentences):
         snippet = f"{snippet} {sentences[end]}".strip()
     return snippet[:550]
+
+
+def _focus_ranked_memory_snippets(
+    query: str,
+    ranked: list[dict[str, Any]],
+    cap: int,
+) -> list[dict[str, Any]]:
+    focused: list[dict[str, Any]] = []
+    for row in ranked:
+        mem = str(row.get("memory", ""))
+        focused.append({**row, "memory": _focus_memory_snippet(query, mem)})
+
+    dedup: dict[str, dict[str, Any]] = {}
+    for row in focused:
+        key = " ".join(str(row.get("memory", "")).lower().split())
+        prev = dedup.get(key)
+        if prev is None or float(row.get("score", 0.0)) > float(prev.get("score", 0.0)):
+            dedup[key] = row
+
+    out = sorted(dedup.values(), key=lambda x: float(x.get("score", 0.0)), reverse=True)
+    return out[:cap]
 
 
 _TS_PREFIX_RE = re.compile(r"\[ts:([^\]]+)\]")

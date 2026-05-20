@@ -11,6 +11,9 @@ adapter = importlib.import_module("mapu_mem0_adapter")
 _derive_beam_precise_hints = adapter._derive_beam_precise_hints
 _derive_fact_hints = adapter._derive_fact_hints
 _enrich_with_temporal_hints = adapter._enrich_with_temporal_hints
+_focus_ranked_memory_snippets = adapter._focus_ranked_memory_snippets
+_lexical_score = adapter._lexical_score
+_refine_with_sentence_evidence = adapter._refine_with_sentence_evidence
 
 
 def test_temporal_hints_skip_out_of_range_relative_years() -> None:
@@ -55,3 +58,54 @@ def test_beam_precise_hints_promote_common_identity_and_duration_facts() -> None
 
     assert "identity_hint: user's cat name is Luna" in hints
     assert "duration_hint: commute takes 45 minutes each way" in hints
+
+
+def test_lexical_score_ignores_punctuation_boundaries() -> None:
+    score = _lexical_score("cat name Luna", "My cat's name is Luna.")
+
+    assert score == 1.0
+
+
+def test_sentence_refinement_promotes_query_relevant_snippet() -> None:
+    ranked = [
+        {
+            "id": "chunk-1",
+            "memory": (
+                "We discussed unrelated setup details. "
+                "The setup notes covered package managers, temporary folders, "
+                "shell commands, and build warnings that do not answer the question. "
+                "My cat's name is Luna. "
+                "Then we changed topics to project planning, release audits, "
+                "and other material unrelated to the pet identity fact."
+            ),
+            "score": 0.30,
+        }
+    ]
+
+    refined = _refine_with_sentence_evidence("What is my cat's name?", ranked, top_k=5)
+
+    assert refined[0]["memory"] == "My cat's name is Luna."
+    assert float(refined[0]["score"]) > float(ranked[0]["score"])
+
+
+def test_focused_ranked_memory_snippets_trim_long_irrelevant_context() -> None:
+    long_memory = (
+        "First we reviewed a long unrelated deployment checklist. "
+        "It covered ports, retries, and logging. "
+        "The deployment checklist had many details about worker pools, retries, "
+        "socket timeouts, and observability dashboards. "
+        "The allergy plan says Jamie must avoid peanuts during the trip. "
+        "After that we discussed packaging and release notes. "
+        "The release notes included migration cleanup, command examples, "
+        "and several unrelated operator warnings."
+    )
+
+    focused = _focus_ranked_memory_snippets(
+        "What should Jamie avoid during the trip?",
+        [{"id": "chunk-1", "memory": long_memory, "score": 0.7}],
+        cap=3,
+    )
+
+    assert len(focused) == 1
+    assert "Jamie must avoid peanuts" in focused[0]["memory"]
+    assert len(focused[0]["memory"]) < len(long_memory)

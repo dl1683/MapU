@@ -51,7 +51,7 @@ class ExtractionSettings(BaseSettings):
     candidate_min: float = 0.3
     spacy_model: str = "en_core_web_sm"
 
-    gliner_enabled: bool = False
+    gliner_enabled: bool = True
     gliner_model: str = "urchade/gliner_small-v2.1"
     gliner_threshold: float = 0.5
     gliner_calibration: float = 0.75

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mapu.config import ExtractionSettings
 from mapu.evidence.chunking import SpanAwareChunker
 from mapu.evidence.ingest import IngestionService
 from mapu.evidence.parsers import ParserRegistry
@@ -149,6 +150,15 @@ class TestIngestionService:
         assert result.propositions_extracted == 2
         mock_extraction_cls.assert_called_once()
         mock_svc.extract_expression.assert_awaited_once()
+
+    def test_default_extractors_include_lightweight_relation_path(self) -> None:
+        extractors = get_default_extractors()
+        names = [ext.name for ext in extractors]
+        assert "rule_lightweight_relation" in names
+
+    def test_gliner_entity_extraction_is_default_enabled(self) -> None:
+        assert ExtractionSettings.model_fields["gliner_enabled"].default is True
+        assert ExtractionSettings.model_fields["gliner_relex_enabled"].default is False
 
     async def test_ingest_without_extractors_skips_extraction(
         self,

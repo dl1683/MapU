@@ -7,6 +7,7 @@ from mapu.extraction.rules import (
     CrossReferenceExtractor,
     DateExtractor,
     DefinedTermExtractor,
+    LightweightRelationExtractor,
 )
 from mapu.extraction.types import Extractor
 
@@ -20,6 +21,7 @@ def get_default_extractors() -> list[Extractor]:
         DateExtractor(),
         CrossReferenceExtractor(),
         DefinedTermExtractor(),
+        LightweightRelationExtractor(),
         AmendmentExtractor(),
     ]
 

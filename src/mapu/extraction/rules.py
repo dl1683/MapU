@@ -1,4 +1,4 @@
-"""Rule-based extractors: dates, cross-references, defined terms, amendments."""
+"""Rule-based extractors: dates, cross-references, definitions, relations, amendments."""
 
 from __future__ import annotations
 
@@ -54,6 +54,79 @@ _AMENDMENT_PATTERNS: tuple[re.Pattern[str], ...] = (
         re.IGNORECASE,
     ),
 )
+
+_SENTENCE_RE = re.compile(r"[^.!?]+(?:[.!?]|$)")
+_ENTITY_TOKEN_RE = re.compile(
+    r"(?:`[^`]{2,80}`|\"[^\"]{2,80}\"|"
+    r"[A-Z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*(?:\s+[A-Z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*){0,5}|"
+    r"[a-z]+(?:[-_][A-Za-z0-9]+)+|"
+    r"[A-Za-z]*[a-z][A-Za-z]*[A-Z][A-Za-z0-9]*|"
+    r"[A-Z]{2,})"
+)
+_RELATION_PATTERNS: tuple[tuple[re.Pattern[str], str, FrameType], ...] = (
+    (
+        re.compile(
+            rf"(?P<subject>{_ENTITY_TOKEN_RE.pattern})\s+"
+            r"(?i:(?:is|are|was|were)\s+owned\s+by)\s+"
+            rf"(?P<object>{_ENTITY_TOKEN_RE.pattern})",
+        ),
+        "owned_by",
+        FrameType.RELATIONSHIP,
+    ),
+    (
+        re.compile(
+            rf"(?P<subject>{_ENTITY_TOKEN_RE.pattern})\s+"
+            r"(?i:(?:uses?|using|depends\s+on|stores?|persists?|exposes?|supports?|"
+            r"creates?|returns?|includes?|logs?|ingests?|queries|answers?|requires?))\s+"
+            r"(?P<object>[^.;]{2,180})",
+        ),
+        "",
+        FrameType.RELATIONSHIP,
+    ),
+    (
+        re.compile(
+            rf"(?P<subject>{_ENTITY_TOKEN_RE.pattern})\s+"
+            r"(?i:(?:is|are|was|were)\s+(?:a|an|the)?\s*)"
+            r"(?P<object>[^.;]{2,180})",
+        ),
+        "is",
+        FrameType.CLASSIFICATION,
+    ),
+    (
+        re.compile(
+            rf"(?P<subject>{_ENTITY_TOKEN_RE.pattern})\s+"
+            r"(?i:(?:should|must|can)\s+sit\s+in\s+front\s+of)\s+"
+            r"(?P<object>[^.;]{2,180})",
+        ),
+        "sits_in_front_of",
+        FrameType.RELATIONSHIP,
+    ),
+)
+
+_RELATION_VERB_RE = re.compile(
+    r"\b(is|are|was|were|uses?|using|depends\s+on|stores?|persists?|exposes?|"
+    r"supports?|creates?|returns?|includes?|logs?|ingests?|queries|answers?|"
+    r"requires?|should\s+sit\s+in\s+front\s+of|must\s+sit\s+in\s+front\s+of|"
+    r"can\s+sit\s+in\s+front\s+of)\b",
+    re.IGNORECASE,
+)
+_OBJECT_CLAUSE_BOUNDARY_RE = re.compile(
+    r"\s+(?:before|after|when|while|unless|because|although|where|which|that)\s+",
+    re.IGNORECASE,
+)
+_RELATION_ENTITY_SKIP = frozenset({
+    "The",
+    "A",
+    "An",
+    "This",
+    "That",
+    "These",
+    "Those",
+    "It",
+    "They",
+    "We",
+    "You",
+})
 
 
 class DateExtractor:
@@ -147,6 +220,93 @@ class DefinedTermExtractor:
                 extraction_method=self.name,
                 extraction_confidence=0.95,
             ))
+        return ExtractorOutput(frames=tuple(frames))
+
+
+class LightweightRelationExtractor:
+    """Extracts common factual relations without ML or online LLM dependencies."""
+
+    def __init__(self, max_frames_per_span: int = 40) -> None:
+        self._max_frames_per_span = max_frames_per_span
+
+    @property
+    def name(self) -> str:
+        return "rule_lightweight_relation"
+
+    async def extract(self, ctx: ExtractionContext) -> ExtractorOutput:
+        frames: list[PropositionFrameCandidate] = []
+        seen: set[str] = set()
+
+        for sentence_match in _SENTENCE_RE.finditer(ctx.text):
+            sentence = sentence_match.group().strip()
+            if not sentence:
+                continue
+            for pattern, predicate_override, frame_type in _RELATION_PATTERNS:
+                for match in pattern.finditer(sentence):
+                    if len(frames) >= self._max_frames_per_span:
+                        return ExtractorOutput(frames=tuple(frames))
+                    subject_text = _clean_relation_entity(match.group("subject"))
+                    object_text = _clean_relation_object(match.group("object"))
+                    if not subject_text or not object_text:
+                        continue
+                    if subject_text in _RELATION_ENTITY_SKIP:
+                        continue
+                    if subject_text.lower() == object_text.lower():
+                        continue
+                    if predicate_override == "is" and object_text.lower().startswith((
+                        "owned by ",
+                        "used by ",
+                        "created by ",
+                        "managed by ",
+                    )):
+                        continue
+                    predicate = predicate_override or _normalize_relation_predicate(
+                        match.group(0),
+                    )
+                    if not predicate:
+                        continue
+                    normalized = f"{subject_text} {predicate} {object_text}"
+                    key = normalized.lower()
+                    if key in seen:
+                        continue
+                    seen.add(key)
+
+                    sentence_start = ctx.start_char + sentence_match.start()
+                    subject_start = sentence_start + match.start("subject")
+                    object_start = sentence_start + match.start("object")
+                    subject = EntityMention(
+                        text=subject_text,
+                        kind=_guess_relation_entity_kind(subject_text),
+                        start_char=subject_start,
+                        end_char=subject_start + len(match.group("subject")),
+                        confidence=0.9,
+                        source=self.name,
+                    )
+                    obj = EntityMention(
+                        text=object_text,
+                        kind=_guess_relation_entity_kind(object_text),
+                        start_char=object_start,
+                        end_char=object_start + len(match.group("object")),
+                        confidence=0.85,
+                        source=self.name,
+                    )
+                    frames.append(PropositionFrameCandidate(
+                        span_id=ctx.span_id,
+                        frame_type=frame_type,
+                        subject=subject,
+                        predicate=predicate,
+                        object=obj,
+                        value=None,
+                        polarity=True,
+                        modality=None,
+                        valid_range=None,
+                        normalized_text=normalized,
+                        qualifiers={},
+                        stance=Stance.ASSERTS,
+                        attestation_strength=AttestationStrength.DIRECT_STATEMENT,
+                        extraction_method=self.name,
+                        extraction_confidence=0.88,
+                    ))
         return ExtractorOutput(frames=tuple(frames))
 
 
@@ -278,3 +438,79 @@ def _find_sentence_end(text: str, start: int) -> int:
         if text[i] == "." and not _is_decimal_period(text, i):
             return i + 1
     return len(text)
+
+
+def _clean_relation_entity(raw: str) -> str:
+    text = raw.strip().strip("`\"'“”‘’()[]{}")
+    text = re.sub(r"^\s*(?:the|a|an)\s+", "", text, flags=re.IGNORECASE)
+    return " ".join(text.split()).strip(" ,:;")
+
+
+def _clean_relation_object(raw: str) -> str:
+    text = raw.strip().strip("`\"'“”‘’()[]{}")
+    text = _OBJECT_CLAUSE_BOUNDARY_RE.split(text, maxsplit=1)[0]
+    text = re.split(r"\s+(?:and|or)\s+(?:then|also)\s+", text, maxsplit=1)[0]
+    text = re.sub(r"^\s*(?:the|a|an)\s+", "", text, flags=re.IGNORECASE)
+    words = text.split()
+    if len(words) > 12:
+        text = " ".join(words[:12])
+    return " ".join(text.split()).strip(" ,:;")
+
+
+def _normalize_relation_predicate(text: str) -> str:
+    match = _RELATION_VERB_RE.search(text)
+    if not match:
+        return ""
+    verb = " ".join(match.group(1).lower().split())
+    mapping = {
+        "use": "uses",
+        "using": "uses",
+        "uses": "uses",
+        "depends on": "depends_on",
+        "store": "stores",
+        "stores": "stores",
+        "persist": "persists",
+        "persists": "persists",
+        "expose": "exposes",
+        "exposes": "exposes",
+        "support": "supports",
+        "supports": "supports",
+        "create": "creates",
+        "creates": "creates",
+        "return": "returns",
+        "returns": "returns",
+        "include": "includes",
+        "includes": "includes",
+        "log": "logs",
+        "logs": "logs",
+        "ingest": "ingests",
+        "ingests": "ingests",
+        "query": "queries",
+        "queries": "queries",
+        "answer": "answers",
+        "answers": "answers",
+        "require": "requires",
+        "requires": "requires",
+        "is": "is",
+        "are": "is",
+        "was": "is",
+        "were": "is",
+        "should sit in front of": "sits_in_front_of",
+        "must sit in front of": "sits_in_front_of",
+        "can sit in front of": "sits_in_front_of",
+    }
+    return mapping.get(verb, verb.replace(" ", "_"))
+
+
+def _guess_relation_entity_kind(text: str) -> str:
+    lowered = text.lower()
+    words = text.split()
+    if words and words[0].lower() in {"project", "system", "service", "api", "cli", "mcp"}:
+        return "system"
+    if any(token in lowered for token in ("api", "cli", "mcp", "server", "database")):
+        return "system"
+    if len(words) == 2 and all(part[:1].isupper() for part in words):
+        return "person"
+    if re.fullmatch(r"[A-Z]{2,}", text) or any(c.isupper() for c in text[1:]):
+        return "system"
+    return "entity"

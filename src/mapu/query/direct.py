@@ -42,7 +42,7 @@ class DirectLookupExecutor:
             hits = await self._lookup(
                 corpus_id=request.corpus_id,
                 entity_texts=plan.entities_extracted,
-                predicate_texts=(),
+                predicate_texts=plan.predicates_extracted,
                 limit=request.max_results,
                 relevance=1.0,
                 situation_id=request.situation_id,
@@ -142,17 +142,25 @@ class DirectLookupExecutor:
             ~superseded,
         )
 
-        filters = []
+        entity_filters = []
         for entity in entity_texts:
-            filters.append(
-                Handle.canonical_name.ilike(f"%{_escape_like(entity)}%")
+            escaped = _escape_like(entity)
+            entity_filters.append(
+                or_(
+                    Handle.canonical_name.ilike(f"%{escaped}%"),
+                    obj_handle.canonical_name.ilike(f"%{escaped}%"),
+                )
             )
+        if entity_filters:
+            stmt = stmt.where(or_(*entity_filters))
+
+        predicate_filters = []
         for pred in predicate_texts:
-            filters.append(
+            predicate_filters.append(
                 Proposition.predicate.ilike(f"%{_escape_like(pred)}%")
             )
-        if filters:
-            stmt = stmt.where(or_(*filters))
+        if predicate_filters:
+            stmt = stmt.where(or_(*predicate_filters))
 
         if as_of is not None:
             stmt = stmt.where(

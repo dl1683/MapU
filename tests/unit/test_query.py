@@ -255,6 +255,18 @@ class TestEntityExtraction:
         entities = _extract_query_entities("What does AWS do?")
         assert "AWS" in entities
 
+    def test_mixed_case_entity(self) -> None:
+        entities = _extract_query_entities("What does MapU use?")
+        assert "MapU" in entities
+
+    def test_pascal_case_technical_entity(self) -> None:
+        entities = _extract_query_entities("What does PostgreSQL store?")
+        assert "PostgreSQL" in entities
+
+    def test_hyphenated_project_entity(self) -> None:
+        entities = _extract_query_entities("How does legal-rlm relate to Kitanu?")
+        assert "legal-rlm" in entities
+
     def test_acronym_in_phrase(self) -> None:
         entities = _extract_query_entities("Tell me about the SEC filing for ACME LLC")
         assert "SEC" in entities
@@ -277,6 +289,14 @@ class TestPredicateExtraction:
     def test_verb_ing_form(self) -> None:
         predicates = _extract_query_predicates("Who is managing the project?")
         assert "managing" in predicates
+
+    def test_memory_relation_phrase(self) -> None:
+        predicates = _extract_query_predicates("What should MapU sit in front of?")
+        assert "sits_in_front_of" in predicates
+
+    def test_common_short_relation_verb(self) -> None:
+        predicates = _extract_query_predicates("What does MapU use?")
+        assert "uses" in predicates
 
     def test_no_predicates(self) -> None:
         predicates = _extract_query_predicates("Hello world")
@@ -562,6 +582,37 @@ class TestQueryService:
         assert result.structured_next_steps[1]["uncertainty_reason"] == "missing_evidence"
 
     @pytest.mark.asyncio
+    async def test_sufficient_query_does_not_append_open_gap_steps(self, monkeypatch) -> None:
+        gap_repo = AsyncMock()
+        gap_repo.open_gaps = AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    kind="knowledge",
+                    description="Unrelated open gap",
+                    severity="critical",
+                    status="open",
+                ),
+            ]
+        )
+        hit = _make_hit(confidence=0.88, predicate="sits_in_front_of", subject="MapU")
+        svc = self._make_service(direct_hits=(hit,))
+        svc._gap_repo = gap_repo
+        svc._build_next_steps = lambda **_: ("From query pipeline",)
+
+        from mapu.query import service as query_service
+
+        monkeypatch.setattr(
+            query_service,
+            "suggest_gap_based_next_steps",
+            lambda *_args, **_kwargs: ("Open a related gap study.",),
+        )
+
+        result = await svc.query(_make_request("What should MapU sit in front of?"))
+        assert result.epistemic_status == EpistemicStatus.SUFFICIENT
+        assert result.next_steps == ("From query pipeline",)
+        gap_repo.open_gaps.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_query_persists_insufficient_evidence_gap(self) -> None:
         class CaptureGapRepo:
             def __init__(self) -> None:
@@ -744,6 +795,56 @@ class TestProviderRegistry:
         del _PROVIDER_FACTORIES["custom"]
 
 
+class TestDirectLookupExecutor:
+    @pytest.mark.asyncio
+    async def test_entity_lookup_filters_subject_and_object_handles(self) -> None:
+        from mapu.query.direct import DirectLookupExecutor
+
+        session = AsyncMock()
+        empty_result = MagicMock()
+        empty_result.all.return_value = []
+        session.execute = AsyncMock(return_value=empty_result)
+        executor = DirectLookupExecutor(session)
+
+        await executor._lookup(  # noqa: SLF001 - verifies generated SQL contract.
+            corpus_id=uuid.uuid4(),
+            entity_texts=("Maya Chen",),
+            predicate_texts=(),
+            limit=10,
+            relevance=1.0,
+        )
+
+        stmt = session.execute.await_args.args[0]
+        sql = str(stmt)
+        assert "handle.canonical_name" in sql
+        assert "object_handle.canonical_name" in sql
+
+    @pytest.mark.asyncio
+    async def test_entity_and_predicate_lookup_are_conjoined(self) -> None:
+        from mapu.query.direct import DirectLookupExecutor
+
+        session = AsyncMock()
+        empty_result = MagicMock()
+        empty_result.all.return_value = []
+        session.execute = AsyncMock(return_value=empty_result)
+        executor = DirectLookupExecutor(session)
+
+        await executor._lookup(  # noqa: SLF001 - verifies generated SQL contract.
+            corpus_id=uuid.uuid4(),
+            entity_texts=("MapU",),
+            predicate_texts=("sits_in_front_of",),
+            limit=10,
+            relevance=1.0,
+        )
+
+        stmt = session.execute.await_args.args[0]
+        sql = str(stmt)
+        where_clause = sql.split("WHERE", maxsplit=1)[1]
+        assert "handle.canonical_name" in where_clause
+        assert "proposition.predicate" in where_clause
+        assert " AND " in where_clause
+
+
 class TestEmbeddingProviderRegistry:
     def test_register_and_lookup(self) -> None:
         from mapu.providers.embeddings import (
@@ -805,6 +906,20 @@ class TestEpistemicStatus:
         hits = [_make_hit(confidence=0.3)]
         result = _assess_epistemic_status(hits, [], plan)
         assert result == EpistemicStatus.INSUFFICIENT
+
+    def test_focused_direct_fact_yields_sufficient(self) -> None:
+        from mapu.query.service import _assess_epistemic_status
+        from mapu.query.types import EpistemicStatus, QueryPlan, Tier
+
+        plan = QueryPlan(
+            intent=QueryIntent.IDENTITY,
+            selected_tier=Tier.DIRECT,
+            entities_extracted=("MapU",),
+            predicates_extracted=("sits_in_front_of",),
+        )
+        hits = [_make_hit(confidence=0.88, predicate="sits_in_front_of")]
+        result = _assess_epistemic_status(hits, [], plan)
+        assert result == EpistemicStatus.SUFFICIENT
 
     def test_conflicting_truth_yields_conflicting(self) -> None:
         from mapu.query.service import _assess_epistemic_status

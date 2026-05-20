@@ -13,6 +13,7 @@ from mapu.extraction.rules import (
     CrossReferenceExtractor,
     DateExtractor,
     DefinedTermExtractor,
+    LightweightRelationExtractor,
 )
 from mapu.extraction.types import (
     EntityMention,
@@ -176,6 +177,69 @@ class TestDefinedTermExtractor:
         ctx = _make_ctx("This section has no defined terms.")
         result = await extractor.extract(ctx)
         assert len(result.frames) == 0
+
+
+class TestLightweightRelationExtractor:
+    @pytest.fixture
+    def extractor(self) -> LightweightRelationExtractor:
+        return LightweightRelationExtractor()
+
+    async def test_extracts_mixed_case_dependency(
+        self, extractor: LightweightRelationExtractor
+    ) -> None:
+        ctx = _make_ctx("MapU uses PostgreSQL for persistent storage.")
+        result = await extractor.extract(ctx)
+        assert len(result.frames) == 1
+        frame = result.frames[0]
+        assert frame.subject.text == "MapU"
+        assert frame.predicate == "uses"
+        assert frame.object is not None
+        assert frame.object.text == "PostgreSQL for persistent storage"
+        assert frame.extraction_method == "rule_lightweight_relation"
+        assert frame.extraction_confidence >= 0.85
+
+    async def test_extracts_owned_by_object_entity(
+        self, extractor: LightweightRelationExtractor
+    ) -> None:
+        ctx = _make_ctx("Project Orion is owned by Maya Chen.")
+        result = await extractor.extract(ctx)
+        assert len(result.frames) == 1
+        frame = result.frames[0]
+        assert frame.subject.text == "Project Orion"
+        assert frame.predicate == "owned_by"
+        assert frame.object is not None
+        assert frame.object.text == "Maya Chen"
+
+    async def test_extracts_cli_memory_contract(
+        self, extractor: LightweightRelationExtractor
+    ) -> None:
+        ctx = _make_ctx(
+            "MapU should sit in front of expensive agent context as the "
+            "persistent memory layer for CLI tools."
+        )
+        result = await extractor.extract(ctx)
+        assert len(result.frames) == 1
+        assert result.frames[0].predicate == "sits_in_front_of"
+        assert result.frames[0].object is not None
+        assert (
+            result.frames[0].object.text
+            == "expensive agent context as the persistent memory layer for CLI tools"
+        )
+
+    async def test_extracts_soft_wrapped_markdown_sentence(
+        self, extractor: LightweightRelationExtractor
+    ) -> None:
+        ctx = _make_ctx(
+            "MapU should sit in front of expensive agent context as the persistent memory\n"
+            "layer for CLI tools."
+        )
+        result = await extractor.extract(ctx)
+        assert len(result.frames) == 1
+        assert result.frames[0].object is not None
+        assert (
+            result.frames[0].object.text
+            == "expensive agent context as the persistent memory layer for CLI tools"
+        )
 
 
 class TestAmendmentExtractor:

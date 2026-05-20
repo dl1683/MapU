@@ -442,6 +442,12 @@ class QueryService:
     ) -> QueryResult:
         if not result.next_steps:
             return result
+        if result.epistemic_status not in {
+            EpistemicStatus.INSUFFICIENT,
+            EpistemicStatus.UNKNOWN,
+            EpistemicStatus.CONFLICTING,
+        }:
+            return result
 
         gap_repo = self._gap_repo
         if gap_repo is None:
@@ -679,6 +685,14 @@ def _assess_epistemic_status(
         )
         if len(obligation_hits) >= 2 and avg_auth >= 0.6:
             return EpistemicStatus.SUFFICIENT
+    if (
+        len(hits) == 1
+        and avg_confidence >= 0.85
+        and plan.selected_tier == Tier.DIRECT
+        and plan.entities_extracted
+        and plan.predicates_extracted
+    ):
+        return EpistemicStatus.SUFFICIENT
     if avg_confidence < 0.5 or len(hits) < 2:
         return EpistemicStatus.INSUFFICIENT
 

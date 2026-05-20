@@ -88,6 +88,28 @@ def test_sentence_refinement_promotes_query_relevant_snippet() -> None:
     assert float(refined[0]["score"]) > float(ranked[0]["score"])
 
 
+def test_sentence_refinement_preserves_recall_tail() -> None:
+    ranked = [
+        {
+            "id": "top",
+            "memory": (
+                "We discussed unrelated setup details. "
+                "My cat's name is Luna. "
+                "Then we changed topics to project planning."
+            ),
+            "score": 0.30,
+        }
+    ]
+    ranked.extend(
+        {"id": f"tail-{i}", "memory": f"Tail memory {i}", "score": 0.1}
+        for i in range(79)
+    )
+
+    refined = _refine_with_sentence_evidence("What is my cat's name?", ranked, top_k=100)
+
+    assert any(row["id"] == "tail-78" for row in refined)
+
+
 def test_focused_ranked_memory_snippets_trim_long_irrelevant_context() -> None:
     long_memory = (
         "First we reviewed a long unrelated deployment checklist. "
@@ -106,6 +128,24 @@ def test_focused_ranked_memory_snippets_trim_long_irrelevant_context() -> None:
         cap=3,
     )
 
-    assert len(focused) == 1
-    assert "Jamie must avoid peanuts" in focused[0]["memory"]
-    assert len(focused[0]["memory"]) < len(long_memory)
+    assert any(
+        "Jamie must avoid peanuts" in row["memory"] and len(row["memory"]) < len(long_memory)
+        for row in focused
+    )
+
+
+def test_focused_ranked_memory_snippets_preserve_original_memory() -> None:
+    long_memory = (
+        "First we reviewed a long unrelated deployment checklist. "
+        "It covered ports, retries, and logging. "
+        "The allergy plan says Jamie must avoid peanuts during the trip. "
+        "After that we discussed packaging and release notes."
+    )
+
+    focused = _focus_ranked_memory_snippets(
+        "What should Jamie avoid during the trip?",
+        [{"id": "chunk-1", "memory": long_memory, "score": 0.7}],
+        cap=3,
+    )
+
+    assert any(row["memory"] == long_memory for row in focused)

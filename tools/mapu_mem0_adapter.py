@@ -264,8 +264,9 @@ class MapUMem0Client:
             ranked = sorted(dedup.values(), key=lambda x: float(x.get("score", 0.0)), reverse=True)
             ranked = _apply_update_recency_bias(query, ranked)
             ranked = _deduplicate_near_duplicates(query, ranked, cap=max(top_k * 2, 60))
-            ranked = _refine_with_sentence_evidence(query, ranked, top_k=max(top_k * 2, 60))
-            ranked = _focus_ranked_memory_snippets(query, ranked, cap=max(top_k * 2, 60))
+            if top_k <= 50:
+                ranked = _refine_with_sentence_evidence(query, ranked, top_k=max(top_k * 2, 60))
+                ranked = _focus_ranked_memory_snippets(query, ranked, cap=max(top_k * 2, 60))
             if user_id.startswith("beam_"):
                 ranked = _role_diverse_ranking(query, ranked, top_k)
             if _should_abstain_from_retrieval(query, ranked):
@@ -544,8 +545,8 @@ def _refine_with_sentence_evidence(
             )
     if not refined:
         return ranked
-    # Keep originals too so we do not lose broader context.
-    refined.extend(base[:20])
+    # Keep originals too so we do not lose broader context or the recall tail.
+    refined.extend(ranked)
     dedup: dict[str, dict[str, Any]] = {}
     for r in refined:
         key = " ".join(str(r.get("memory", "")).lower().split())
@@ -1210,10 +1211,12 @@ def _focus_ranked_memory_snippets(
     ranked: list[dict[str, Any]],
     cap: int,
 ) -> list[dict[str, Any]]:
-    focused: list[dict[str, Any]] = []
+    focused: list[dict[str, Any]] = list(ranked)
     for row in ranked:
         mem = str(row.get("memory", ""))
-        focused.append({**row, "memory": _focus_memory_snippet(query, mem)})
+        snippet = _focus_memory_snippet(query, mem)
+        if snippet != mem:
+            focused.append({**row, "memory": snippet, "score": float(row.get("score", 0.0)) + 0.03})
 
     dedup: dict[str, dict[str, Any]] = {}
     for row in focused:

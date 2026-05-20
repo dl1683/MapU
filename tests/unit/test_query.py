@@ -650,6 +650,10 @@ class TestQueryService:
         result = await svc.query(_make_request("Who is Acme?"))
         assert result.synthesis is not None
         assert "Acme" in result.synthesis
+        assert result.metadata["cost_profile"]["cost_class"] == "zero_llm_memory_answer"
+        assert result.metadata["cost_profile"]["zero_llm_answer"] is True
+        assert result.metadata["cost_profile"]["memory_infrastructure_online_llm_required"] is False
+        assert result.metadata["cost_profile"]["estimated_context_tokens_reused"] == 4
 
     @pytest.mark.asyncio
     async def test_no_synthesis_for_empty_hits(self) -> None:
@@ -702,6 +706,9 @@ class TestQueryService:
         assert result.tier_used == Tier.SYNTHESIS
         llm_synth.assert_awaited_once()
         assert result.synthesis == "LLM synthesis result"
+        assert result.metadata["cost_profile"]["cost_class"] == "online_llm_synthesis"
+        assert result.metadata["cost_profile"]["online_llm_synthesis_used"] is True
+        assert result.metadata["cost_profile"]["zero_llm_answer"] is False
 
     @pytest.mark.asyncio
     async def test_metadata_contains_entities(self) -> None:

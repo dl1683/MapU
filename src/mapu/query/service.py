@@ -261,6 +261,7 @@ class QueryService:
         request: QueryRequest,
         result: QueryResult,
     ) -> QueryResult:
+        result = self._attach_cost_profile(result)
         result = await self._persist_result_gaps(request, result)
         result = await self._enrich_next_steps_with_gaps(request, result)
         if self._activity_repo is not None:
@@ -272,6 +273,58 @@ class QueryService:
             return result
         await self._log_query_activity(request, result)
         return result
+
+    def _attach_cost_profile(self, result: QueryResult) -> QueryResult:
+        llm_available = self._llm_synth is not None
+        llm_synthesis_used = (
+            result.tier_used == Tier.SYNTHESIS
+            and llm_available
+            and bool(result.hits)
+            and result.synthesis is not None
+        )
+        llm_investigation_used = result.tier_used == Tier.INVESTIGATION and llm_available
+        zero_llm_response = not llm_synthesis_used and not llm_investigation_used
+        zero_llm_answer = zero_llm_response and result.synthesis is not None
+
+        if llm_investigation_used:
+            cost_class = "online_llm_investigation"
+        elif llm_synthesis_used:
+            cost_class = "online_llm_synthesis"
+        elif result.synthesis is not None:
+            cost_class = "zero_llm_memory_answer"
+        else:
+            cost_class = "zero_llm_memory_gap"
+
+        metadata = dict(result.metadata)
+        metadata["cost_profile"] = {
+            "cost_class": cost_class,
+            "zero_llm_answer": zero_llm_answer,
+            "zero_llm_response": zero_llm_response,
+            "online_llm_available": llm_available,
+            "online_llm_synthesis_used": llm_synthesis_used,
+            "online_llm_investigation_used": llm_investigation_used,
+            "memory_infrastructure_online_llm_required": False,
+            "retrieved_proposition_count": len(result.hits),
+            "retrieved_chunk_count": len(result.chunk_hits),
+            "estimated_context_tokens_reused": _estimate_memory_context_tokens(
+                result.hits,
+                result.chunk_hits,
+            ),
+        }
+
+        return QueryResult(
+            request=result.request,
+            intent=result.intent,
+            tier_used=result.tier_used,
+            hits=result.hits,
+            epistemic_status=result.epistemic_status,
+            synthesis=result.synthesis,
+            gaps=result.gaps,
+            chunk_hits=result.chunk_hits,
+            metadata=metadata,
+            next_steps=result.next_steps,
+            structured_next_steps=result.structured_next_steps,
+        )
 
     async def _persist_result_gaps(
         self,
@@ -586,6 +639,18 @@ class QueryService:
             hits,
             plan.intent,
         )
+
+
+def _estimate_memory_context_tokens(
+    hits: Sequence[PropositionHit],
+    chunk_hits: Sequence[ChunkHit],
+) -> int:
+    texts: list[str] = []
+    for hit in hits:
+        texts.append(hit.source_span_text or hit.normalized_text)
+    for chunk in chunk_hits:
+        texts.append(chunk.text)
+    return sum(len(text.split()) for text in texts if text.strip())
 
 
 def _assess_epistemic_status(

@@ -58,6 +58,32 @@ Core tools exposed include:
 - `reset_all_corpora`
 - `handoff_context`
 
+## CLI cost-saving integration contract
+
+MapU should sit in front of expensive agent context as the persistent memory
+layer for CLI tools. A CLI integration should:
+
+1. Keep one durable corpus per repo or long-running project.
+2. Ingest stable handoffs, decisions, source notes, and evidence once.
+3. Start each new agent session with `mapu resume <corpus_id> --json`.
+4. Run targeted `mapu query ... --json` calls before broad repository rereads.
+5. Inspect `metadata.cost_profile` and only escalate to an external online LLM
+   when MapU reports insufficient, unknown, conflicting, or missing evidence.
+
+The query cost profile is intentionally exposed through CLI JSON, MCP, and REST:
+
+- `zero_llm_answer`: true when the answer was produced from persisted memory
+  without online LLM synthesis or investigation.
+- `zero_llm_response`: true when the query path completed without online LLM
+  synthesis or investigation, including explicit memory-gap responses.
+- `cost_class`: one of `zero_llm_memory_answer`, `zero_llm_memory_gap`,
+  `online_llm_synthesis`, or `online_llm_investigation`.
+- `estimated_context_tokens_reused`: approximate persisted-memory context
+  recovered for the caller.
+- `memory_infrastructure_online_llm_required`: always false for storage,
+  retrieval, handoff, activity, and gap inspection. Online LLMs are optional
+  answer-generation tools, not a dependency of the memory substrate.
+
 ## 3) Clean start / reset flows
 
 CLI:

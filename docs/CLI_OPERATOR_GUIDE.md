@@ -21,6 +21,27 @@ The resume output is the handoff entrypoint. Inspect `open_gaps`,
 `recent_activity`, and `priority_next_actions` before rereading the repository or
 starting a new investigation.
 
+## CLI inference-cost loop
+
+For coding agents, use MapU as persistent project memory before spending fresh
+model context on rediscovery:
+
+```powershell
+mapu resume <corpus_uuid> --json
+mapu query <corpus_uuid> "What do we already know about this task?" --json
+mapu activity <corpus_uuid> --event-type query --json
+mapu gaps <corpus_uuid> --json
+```
+
+`mapu query --json` includes `metadata.cost_profile` for automation. Direct,
+structured, template, and chunk-excerpt answers report `zero_llm_answer=true`;
+explicit gap responses still report `zero_llm_response=true`. Online LLM use is
+limited to optional synthesis or investigation. Memory storage, retrieval,
+handoff, activity, and gap inspection do not require an online LLM. Use
+`estimated_context_tokens_reused`, hit counts, and activity history to decide
+whether an external CLI should reuse MapU output, ask a targeted follow-up, or
+pay for a broader model call.
+
 ## Command roles
 
 - `mapu corpus create/list/delete/reset`: create and clean local memory corpora.

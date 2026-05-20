@@ -264,6 +264,44 @@ function Get-FileLength {
     return 0
 }
 
+function Resolve-CompletedBenchmarkArtifact {
+    param([pscustomobject]$Entry)
+
+    if (-not (Test-Path -LiteralPath $Entry.StdoutLog)) {
+        return $null
+    }
+
+    $stdout = Get-Content -LiteralPath $Entry.StdoutLog -Raw
+    if ($stdout -notmatch "(?m)^Results saved to:\s*(.+?)\s*$") {
+        return $null
+    }
+    $artifactPath = $Matches[1].Trim().Trim('"')
+    if ($stdout -notmatch "(?m)^Total questions (processed|evaluated):\s*\d+\s*$") {
+        return $null
+    }
+
+    if ([string]::IsNullOrWhiteSpace($artifactPath)) {
+        return $null
+    }
+    if (-not [System.IO.Path]::IsPathRooted($artifactPath)) {
+        $artifactPath = Join-Path $repoRoot $artifactPath
+    }
+    $artifactPath = [System.IO.Path]::GetFullPath($artifactPath)
+    if (-not (Test-Path -LiteralPath $artifactPath)) {
+        return $null
+    }
+
+    $artifact = Get-Item -LiteralPath $artifactPath
+    if ($artifact.Length -le 0) {
+        return $null
+    }
+    if ($artifact.LastWriteTime -lt $Entry.StartedAt.AddMinutes(-1)) {
+        return $null
+    }
+
+    return $artifactPath
+}
+
 function Get-ProcessCpuSeconds {
     param([System.Diagnostics.Process]$Process)
     $cpuSeconds = 0.0
@@ -292,7 +330,8 @@ function Write-LaneMetadata {
         [pscustomobject]$Entry,
         [datetime]$FinishedAt,
         [object]$ExitCode,
-        [string]$FailureReason = ""
+        [string]$FailureReason = "",
+        [string]$CompletedArtifact = ""
     )
 
     $meta = [ordered]@{
@@ -305,6 +344,7 @@ function Write-LaneMetadata {
         elapsed_seconds = [math]::Round(($FinishedAt - $Entry.StartedAt).TotalSeconds, 3)
         exit_code = $ExitCode
         failure_reason = $FailureReason
+        completed_artifact = $CompletedArtifact
         last_progress_at = $Entry.LastProgressAt.ToString("o")
         last_cpu_seconds = [math]::Round($Entry.LastCpuSeconds, 3)
         stdout_bytes = Get-FileLength -Path $Entry.StdoutLog
@@ -384,6 +424,15 @@ while (($queue.Count -gt 0) -or ($running.Count -gt 0)) {
         if ($entry.Process.HasExited) {
             $entry.Process.WaitForExit()
             $exitCode = $entry.Process.ExitCode
+            $completedArtifact = ""
+            if ($null -eq $exitCode) {
+                $resolvedArtifact = Resolve-CompletedBenchmarkArtifact -Entry $entry
+                if (-not [string]::IsNullOrWhiteSpace($resolvedArtifact)) {
+                    $completedArtifact = $resolvedArtifact
+                    $exitCode = 0
+                    Write-Output ("[{0}] {1} had null process exit code but wrote a completed result artifact: {2}" -f (Get-Date -Format "s"), $entry.Name, $completedArtifact)
+                }
+            }
             $exitCodeLabel = if ($null -eq $exitCode) { "<null>" } else { [string]$exitCode }
             $failureReason = if (($null -eq $exitCode) -or ($exitCode -ne 0)) {
                 "exited with code $exitCodeLabel"
@@ -391,7 +440,7 @@ while (($queue.Count -gt 0) -or ($running.Count -gt 0)) {
             else {
                 ""
             }
-            Write-LaneMetadata -Entry $entry -FinishedAt (Get-Date) -ExitCode $exitCode -FailureReason $failureReason
+            Write-LaneMetadata -Entry $entry -FinishedAt (Get-Date) -ExitCode $exitCode -FailureReason $failureReason -CompletedArtifact $completedArtifact
             Write-Output ("[{0}] {1} exited with code {2}; stdout={3}; stderr={4}" -f (Get-Date -Format "s"), $entry.Name, $exitCodeLabel, $entry.StdoutLog, $entry.StderrLog)
             if (($null -eq $exitCode) -or ($exitCode -ne 0)) {
                 $failures += $entry

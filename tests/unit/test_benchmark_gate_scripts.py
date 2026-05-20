@@ -2205,6 +2205,11 @@ def test_parallel_full_sweep_writes_failure_metadata() -> None:
     assert "[string]$ModelLabel" in script
     assert "mapu_fullsweep_${ModelLabel}_longmemeval_$projectSuffix" in script
     assert "exited with code $exitCodeLabel" in script
+    assert "Resolve-CompletedBenchmarkArtifact" in script
+    assert "Results saved to:" in script
+    assert "Total questions (processed|evaluated)" in script
+    assert "completed_artifact" in script
+    assert "had null process exit code but wrote a completed result artifact" in script
     assert "exceeded idle timeout" in script
     assert "exceeded lane timeout" in script
 

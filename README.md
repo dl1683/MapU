@@ -43,6 +43,10 @@ Main pipeline:
 4. Store + query over Postgres/pgvector
 5. Synthesize answers with epistemic metadata
 
+Default extraction uses local rule extractors plus GLiNER entity extraction.
+Online LLM extraction is disabled by default and remains an opt-in path for
+operators who explicitly configure it.
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full system detail.
 
 ## Why It Exists

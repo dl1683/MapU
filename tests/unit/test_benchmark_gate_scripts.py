@@ -2245,6 +2245,10 @@ def test_mem0_benchmark_wrapper_requires_nonblank_answer_contract() -> None:
     assert "DIRECT FACT HINTS FROM RETRIEVED MEMORIES" in script
     assert "OUTPUT FORMAT REQUIREMENT" in script
     assert "Use the retrieved memories first." in script
+    assert "select a compact evidence set" in script
+    assert "directly match the exact entity" in script
+    assert "other memories as recall tail" in script
+    assert "weak, off-topic, or noisy tail evidence" in script
     assert "fact_hint" in script
     assert "do not answer that the " in script
     assert "information is insufficient" in script

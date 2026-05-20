@@ -42,6 +42,10 @@ handoff, activity, and gap inspection do not require an online LLM. Use
 whether an external CLI should reuse MapU output, ask a targeted follow-up, or
 pay for a broader model call.
 
+By default, `mapu ingest` runs local rule extractors plus GLiNER entity
+extraction. Online LLM extraction stays disabled unless the operator explicitly
+enables it in the extraction settings.
+
 ## Command roles
 
 - `mapu corpus create/list/delete/reset`: create and clean local memory corpora.
